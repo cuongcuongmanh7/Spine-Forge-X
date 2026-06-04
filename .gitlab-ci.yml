@@ -22,8 +22,11 @@ release:windows:
       Write-Host "Building SpineForge X $version"
       npm ci
 
-      $nsisPluginSource = "$env:LOCALAPPDATA\tauri\NSIS\Plugins\x86-unicode\additional\nsis_tauri_utils.dll"
-      $nsisPluginTarget = "$env:LOCALAPPDATA\tauri\NSIS\Plugins\x86-unicode\nsis_tauri_utils.dll"
+      $runnerLocalAppData = "C:\GitLab-Runner\AppData\Local"
+      $env:LOCALAPPDATA = $runnerLocalAppData
+      $env:Path = "C:\Program Files\Git\cmd;C:\Program Files\Git\bin;C:\Program Files\nodejs;C:\Users\Admin\.cargo\bin;C:\GitLab-Runner;$runnerLocalAppData\tauri\NSIS;$runnerLocalAppData\tauri\NSIS\Bin;$env:Path"
+      $nsisPluginSource = "$runnerLocalAppData\tauri\NSIS\Plugins\x86-unicode\additional\nsis_tauri_utils.dll"
+      $nsisPluginTarget = "$runnerLocalAppData\tauri\NSIS\Plugins\x86-unicode\nsis_tauri_utils.dll"
       if ((Test-Path $nsisPluginSource) -and !(Test-Path $nsisPluginTarget)) {
         Copy-Item -Path $nsisPluginSource -Destination $nsisPluginTarget -Force
       }
