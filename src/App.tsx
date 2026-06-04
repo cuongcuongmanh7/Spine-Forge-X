@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { listen } from '@tauri-apps/api/event';
 import { invoke } from '@tauri-apps/api/core';
 import { getCurrentWindow } from '@tauri-apps/api/window';
-import { confirm, message, open } from '@tauri-apps/plugin-dialog';
+import { confirm, message, open, save } from '@tauri-apps/plugin-dialog';
 import { relaunch } from '@tauri-apps/plugin-process';
 import { check, type DownloadEvent, type Update } from '@tauri-apps/plugin-updater';
 import appIconUrl from '../src-tauri/icons/icon.ico';
@@ -14,6 +14,7 @@ import {
   CircleStop,
   FileText,
   FolderOpen,
+  Info,
   Minus,
   Play,
   RotateCw,
@@ -45,6 +46,18 @@ type ValidateResult = {
   ok: boolean;
   warnings: string[];
   errors: string[];
+  spineOk?: boolean;
+  spineWarning?: boolean;
+  outputOk?: boolean;
+  outputWarning?: boolean;
+};
+
+type ToastKind = 'success' | 'error' | 'info' | 'warning';
+
+type Toast = {
+  id: number;
+  message: string;
+  kind: ToastKind;
 };
 
 type CleanResult = {
@@ -270,6 +283,19 @@ const copy = {
     presetSaved: 'Đã lưu preset',
     presetDeleted: 'Đã xóa preset',
     presetImported: 'Đã import preset',
+    presetImportHelp: 'Import file .export.json để thêm preset (tự lưu vào thư mục preset). Chọn preset ở dropdown để xem nội dung.',
+    presetPreview: 'Nội dung preset (chỉ xem)',
+    presetNoneSelected: 'Chưa chọn preset. Import hoặc chọn preset ở dropdown để xem nội dung.',
+    outputExists: 'Output folder tồn tại.',
+    outputMissing: 'Output folder chưa tồn tại; app sẽ tạo khi chạy.',
+    executableEmpty: 'Chưa chọn Spine executable.',
+    executableValid: 'Spine executable hợp lệ.',
+    executableMissing: 'Spine executable không tồn tại.',
+    executableComWarning: 'Nên dùng Spine.com thay vì Spine.exe.',
+    maxMemoryInvalid: 'Định dạng không hợp lệ. Ví dụ: 512m, 1g, 2048.',
+    logSaved: 'Đã lưu log',
+    logSaveFailed: 'Lưu log thất bại',
+    logEmpty: 'Chưa có log để lưu.',
     invalidExportJsonFile: 'Chỉ chấp nhận file .export.json.',
     advancedRuntime: 'Advanced Runtime',
     parallelJobs: 'Parallel jobs',
@@ -427,6 +453,19 @@ const copy = {
     presetSaved: 'Preset saved',
     presetDeleted: 'Preset deleted',
     presetImported: 'Preset imported',
+    presetImportHelp: 'Import a .export.json file to add a preset (auto-saved to the preset folder). Pick a preset from the dropdown to preview it.',
+    presetPreview: 'Preset content (read-only)',
+    presetNoneSelected: 'No preset selected. Import or pick one from the dropdown to preview it.',
+    outputExists: 'Output folder exists.',
+    outputMissing: "Output folder doesn't exist yet; it will be created on run.",
+    executableEmpty: 'Spine executable not set.',
+    executableValid: 'Spine executable is valid.',
+    executableMissing: 'Spine executable not found.',
+    executableComWarning: 'Prefer Spine.com over Spine.exe.',
+    maxMemoryInvalid: 'Invalid format. Example: 512m, 1g, 2048.',
+    logSaved: 'Log saved',
+    logSaveFailed: 'Save log failed',
+    logEmpty: 'No log to save yet.',
     invalidExportJsonFile: 'Only .export.json files are accepted.',
     advancedRuntime: 'Advanced Runtime',
     parallelJobs: 'Parallel jobs',
@@ -559,9 +598,12 @@ function App() {
   const [isAutoDetecting, setIsAutoDetecting] = useState(false);
   const [isDetectingVersion, setIsDetectingVersion] = useState(false);
   const [exportPresets, setExportPresets] = useState<ExportPreset[]>([]);
-  const [presetDraftName, setPresetDraftName] = useState('');
-  const [presetDraftContent, setPresetDraftContent] = useState('');
+  const [presetPreview, setPresetPreview] = useState('');
   const [isPresetBusy, setIsPresetBusy] = useState(false);
+  const [presetImportedTick, setPresetImportedTick] = useState(false);
+  const [toasts, setToasts] = useState<Toast[]>([]);
+  const toastIdRef = useRef(0);
+  const presetTickTimerRef = useRef<number | null>(null);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [validation, setValidation] = useState<ValidateResult>({ ok: false, warnings: [], errors: [] });
   const [updateUi, setUpdateUi] = useState<UpdateUiState>(initialUpdateUi);
@@ -574,6 +616,7 @@ function App() {
   const canStart = useMemo(() => validation.ok && files.length > 0 && !isRunning, [files.length, isRunning, validation.ok]);
   const appWindow = getCurrentWindow();
   const outputRootMissingForSourceFolder = settings.outputPolicy === 'sourceFolderName' && !settings.outputPath.trim();
+  const maxMemoryValid = /^\d+[kKmMgG]?$/.test(settings.maxMemory.trim());
   const outputHelper =
     settings.outputPolicy === 'sourceFolderName'
       ? t.outputHelperSourceFolder
@@ -630,15 +673,8 @@ function App() {
   }, []);
 
   useEffect(() => {
-    if (!selectedExportPreset) {
-      setPresetDraftName('');
-      setPresetDraftContent('');
-      return;
-    }
-
-    setPresetDraftName(selectedExportPreset.name);
-    if (selectedExportPreset.builtIn) {
-      setPresetDraftContent('');
+    if (!selectedExportPreset || selectedExportPreset.builtIn) {
+      setPresetPreview('');
       return;
     }
 
@@ -650,12 +686,25 @@ function App() {
       if (updateStatusTimerRef.current !== null) {
         window.clearTimeout(updateStatusTimerRef.current);
       }
+      if (presetTickTimerRef.current !== null) {
+        window.clearTimeout(presetTickTimerRef.current);
+      }
     };
   }, []);
 
   function appendLog(message: string) {
     const timestamp = new Date().toLocaleTimeString();
     setLogs((items) => [...items, `${timestamp} - ${message}`]);
+  }
+
+  function dismissToast(id: number) {
+    setToasts((items) => items.filter((item) => item.id !== id));
+  }
+
+  function pushToast(message: string, kind: ToastKind = 'info') {
+    const id = (toastIdRef.current += 1);
+    setToasts((items) => [...items, { id, message, kind }]);
+    window.setTimeout(() => dismissToast(id), 3500);
   }
 
   function showTemporaryUpdateStatus(status: UpdateStatus, durationMs = 3000, message = '') {
@@ -790,10 +839,22 @@ function App() {
   async function loadUserPresetContent(name: string) {
     try {
       const content = await invoke<string>('read_user_export_preset', { name });
-      setPresetDraftContent(content);
+      setPresetPreview(content);
     } catch (error) {
       appendLog(`${t.presetLoadFailed}: ${String(error)}`);
+      pushToast(t.presetLoadFailed, 'error');
     }
+  }
+
+  function flashPresetTick() {
+    setPresetImportedTick(true);
+    if (presetTickTimerRef.current !== null) {
+      window.clearTimeout(presetTickTimerRef.current);
+    }
+    presetTickTimerRef.current = window.setTimeout(() => {
+      setPresetImportedTick(false);
+      presetTickTimerRef.current = null;
+    }, 2500);
   }
 
   async function chooseGlobalJsonFile() {
@@ -841,30 +902,13 @@ function App() {
       const preset = await invoke<ExportPreset>('import_user_export_preset', { sourcePath: selected });
       await loadExportPresets();
       updateSetting('globalJsonPath', preset.path);
-      setPresetDraftName(preset.name);
       await loadUserPresetContent(preset.name);
       appendLog(`${t.presetImported}: ${preset.name}`);
+      pushToast(`${t.presetImported}: ${preset.name}`, 'success');
+      flashPresetTick();
     } catch (error) {
       appendLog(`${t.presetImportFailed}: ${String(error)}`);
-    } finally {
-      setIsPresetBusy(false);
-    }
-  }
-
-  async function saveUserPreset() {
-    if (isPresetBusy) return;
-    setIsPresetBusy(true);
-
-    try {
-      const preset = await invoke<ExportPreset>('save_user_export_preset', {
-        name: presetDraftName,
-        content: presetDraftContent
-      });
-      await loadExportPresets();
-      updateSetting('globalJsonPath', preset.path);
-      appendLog(`${t.presetSaved}: ${preset.name}`);
-    } catch (error) {
-      appendLog(`${t.presetSaveFailed}: ${String(error)}`);
+      pushToast(t.presetImportFailed, 'error');
     } finally {
       setIsPresetBusy(false);
     }
@@ -879,12 +923,13 @@ function App() {
     try {
       await invoke('delete_user_export_preset', { name: selectedExportPreset.name });
       updateSetting('globalJsonPath', '');
-      setPresetDraftName('');
-      setPresetDraftContent('');
+      setPresetPreview('');
       await loadExportPresets();
       appendLog(`${t.presetDeleted}: ${selectedExportPreset.name}`);
+      pushToast(`${t.presetDeleted}: ${selectedExportPreset.name}`, 'success');
     } catch (error) {
       appendLog(`${t.presetDeleteFailed}: ${String(error)}`);
+      pushToast(t.presetDeleteFailed, 'error');
     } finally {
       setIsPresetBusy(false);
     }
@@ -910,9 +955,9 @@ function App() {
     setSkippedFiles([]);
     setCurrentIndex(0);
     setLastOutputFolders([]);
-    setPresetDraftName('');
-    setPresetDraftContent('');
+    setPresetPreview('');
     appendLog(t.resetDefaultsDone);
+    pushToast(t.resetDefaultsDone, 'success');
   }
 
   function updateGeneratedFormat(value: string) {
@@ -940,8 +985,10 @@ function App() {
       const version = await invoke<string>('detect_spine_version', { spinePath });
       addTargetVersion(version);
       appendLog(`${t.detectedVersion}: ${version}`);
+      pushToast(`${t.detectedVersion}: ${version}`, 'success');
     } catch (error) {
       appendLog(`${t.versionDetectFailed}: ${String(error)}`);
+      pushToast(t.versionDetectFailed, 'error');
     } finally {
       setIsDetectingVersion(false);
     }
@@ -954,9 +1001,13 @@ function App() {
       const detected = await invoke<string>('auto_detect_spine');
       updateSetting('spinePath', detected);
       appendLog(`${t.detectedSpine}: ${detected}`);
+      pushToast(`${t.detectedSpine}: ${detected}`, 'success');
       await detectVersion(detected);
     } catch (error) {
-      if (!silent) appendLog(`${t.autoDetectFailed}: ${String(error)}`);
+      if (!silent) {
+        appendLog(`${t.autoDetectFailed}: ${String(error)}`);
+        pushToast(t.autoDetectFailed, 'error');
+      }
     } finally {
       setIsAutoDetecting(false);
     }
@@ -1210,6 +1261,7 @@ function App() {
     const target = resolveOpenOutputTarget();
     if (!target) {
       appendLog(t.openOutputEmpty);
+      pushToast(t.openOutputEmpty, 'warning');
       return;
     }
 
@@ -1218,8 +1270,32 @@ function App() {
       await invoke('open_path', { path: target });
     } catch (error) {
       appendLog(`${t.openOutputFailed}: ${String(error)}`);
+      pushToast(`${t.openOutputFailed}: ${String(error)}`, 'error');
     } finally {
       setIsOpeningOutput(false);
+    }
+  }
+
+  async function saveLogToFile() {
+    if (logs.length === 0) {
+      pushToast(t.logEmpty, 'warning');
+      return;
+    }
+
+    try {
+      const target = await save({
+        title: t.save,
+        defaultPath: 'spineforge-log.txt',
+        filters: [{ name: 'Log', extensions: ['txt', 'log'] }]
+      });
+      if (typeof target !== 'string') return;
+
+      await invoke('write_text_file', { path: target, content: logs.join('\n') });
+      appendLog(`${t.logSaved}: ${target}`);
+      pushToast(t.logSaved, 'success');
+    } catch (error) {
+      appendLog(`${t.logSaveFailed}: ${String(error)}`);
+      pushToast(t.logSaveFailed, 'error');
     }
   }
 
@@ -1290,31 +1366,31 @@ function App() {
         </div>
       </div>
 
+      <div className="app-sticky-head">
+        <header className="app-header">
+          <div>
+            <h1>SpineForge X</h1>
+            <p>{t.subtitle}</p>
+          </div>
+          <div className={`status-pill ${validation.ok ? 'ready' : 'needs-setup'}`}>
+            {validation.ok ? <CheckCircle2 size={16} /> : <AlertTriangle size={16} />}
+            {validation.ok ? t.ready : t.needsSetup}
+          </div>
+        </header>
+
+        <nav className="tab-bar">
+          <button className={activeTab === 'main' ? 'active' : ''} onClick={() => setActiveTab('main')}>
+            <Play size={16} />
+            {t.mainTab}
+          </button>
+          <button className={activeTab === 'settings' ? 'active' : ''} onClick={() => setActiveTab('settings')}>
+            <Settings size={16} />
+            {t.settingsTab}
+          </button>
+        </nav>
+      </div>
+
       <main className="app-shell">
-        <div className="app-sticky-head">
-          <header className="app-header">
-            <div>
-              <h1>SpineForge X</h1>
-              <p>{t.subtitle}</p>
-            </div>
-            <div className={`status-pill ${validation.ok ? 'ready' : 'needs-setup'}`}>
-              {validation.ok ? <CheckCircle2 size={16} /> : <AlertTriangle size={16} />}
-              {validation.ok ? t.ready : t.needsSetup}
-            </div>
-          </header>
-
-          <nav className="tab-bar">
-            <button className={activeTab === 'main' ? 'active' : ''} onClick={() => setActiveTab('main')}>
-              <Play size={16} />
-              {t.mainTab}
-            </button>
-            <button className={activeTab === 'settings' ? 'active' : ''} onClick={() => setActiveTab('settings')}>
-              <Settings size={16} />
-              {t.settingsTab}
-            </button>
-          </nav>
-        </div>
-
         {activeTab === 'main' && (
           <div className="tab-panel">
             <Section title={t.inputFiles}>
@@ -1359,146 +1435,6 @@ function App() {
                   ))}
                 </div>
               )}
-            </Section>
-
-            <Section title={t.outputDirectory}>
-              <div className="form-row">
-                <label>{t.outputRoot}</label>
-                <input
-                  className={outputRootMissingForSourceFolder ? 'field-invalid' : undefined}
-                  value={settings.outputPath}
-                  onChange={(event) => updateOutputPath(event.target.value)}
-                  placeholder="Optional: D:\Project\Output"
-                />
-                <FieldStatus
-                  ok={Boolean(settings.outputPath.trim())}
-                  warning={!settings.outputPath.trim() && !outputRootMissingForSourceFolder}
-                  message={outputHelper}
-                />
-                <button className="icon-button" title={t.browseOutput} disabled={isChoosingOutputFolder} onClick={chooseOutputFolder}>
-                  {isChoosingOutputFolder ? <RotateCw className="spin" size={18} /> : <FolderOpen size={18} />}
-                </button>
-              </div>
-              <div className="form-row">
-                <label>{t.outputPolicy}</label>
-                <div className="mode-grid output-policy-grid">
-                  {([
-                    ['timestamp', t.timestampPolicy, t.timestampPolicyHelp],
-                    ['sourceFolderName', t.sourceFolderPolicy, t.sourceFolderPolicyHelp]
-                  ] as [OutputPolicy, string, string][]).map(([value, label, description]) => (
-                    <label className="mode-option detailed" key={value}>
-                      <input
-                        type="radio"
-                        checked={settings.outputPolicy === value}
-                        onChange={() => updateSetting('outputPolicy', value)}
-                      />
-                      <span className="mode-option-content">
-                        <strong>{label}</strong>
-                        <small>{description}</small>
-                      </span>
-                    </label>
-                  ))}
-                </div>
-              </div>
-              <p className="helper-text">{outputHelper}</p>
-            </Section>
-
-            <Section title={t.run}>
-              {validation.errors.length > 0 && (
-                <div className="notice danger">
-                  <XCircle size={18} />
-                  <span>{validation.errors.join(' ')}</span>
-                </div>
-              )}
-              {validation.warnings.length > 0 && (
-                <div className="notice warning">
-                  <AlertTriangle size={18} />
-                  <span>{validation.warnings.join(' ')}</span>
-                </div>
-              )}
-              <div className="run-actions">
-                <button className="primary-button" disabled={!canStart || isRunning} onClick={startExport}>
-                  {isRunning ? <RotateCw className="spin" size={18} /> : <Play size={18} />}
-                  {isRunning ? t.running : t.start}
-                </button>
-                <button className="secondary-button" disabled={!isRunning || isStopping} onClick={stopExport}>
-                  {isStopping ? <RotateCw className="spin" size={18} /> : <CircleStop size={18} />}
-                  {t.stop}
-                </button>
-                <button className="secondary-button" disabled={!resolveOpenOutputTarget() || isOpeningOutput} onClick={openOutputFolder}>
-                  {isOpeningOutput ? <RotateCw className="spin" size={18} /> : <FolderOpen size={18} />}
-                  {t.openOutput}
-                </button>
-                <button className="secondary-button" disabled={!settings.inputPath || isCleaningTimestamp} onClick={cleanTimestampExports}>
-                  {isCleaningTimestamp ? <RotateCw className="spin" size={18} /> : <Trash2 size={18} />}
-                  {t.cleanTimestamp}
-                </button>
-              </div>
-              <div className="progress-row">
-                <progress value={progress} max={100} />
-                <span>{currentIndex} / {files.length}</span>
-              </div>
-              {currentFile && <div className="current-file">{currentFile}</div>}
-            </Section>
-
-            <Section title={t.logResults} defaultOpen>
-              <div className="log-toolbar">
-                <span><Terminal size={16} /> {t.conversionLog}</span>
-                <div>
-                  <button className="ghost-button" onClick={() => setLogs([])}>{t.clear}</button>
-                  <button className="ghost-button" onClick={() => appendLog(t.pendingSave)}>
-                    <Save size={14} />
-                    {t.save}
-                  </button>
-                </div>
-              </div>
-              <pre className="log-view">{logs.join('\n')}</pre>
-            </Section>
-          </div>
-        )}
-
-        {activeTab === 'settings' && (
-          <div className="tab-panel">
-            <Section title={t.settingsTab}>
-              <div className="header-controls settings-controls">
-                <label className="segmented-label">
-                  <span>{t.language}</span>
-                  <span className="segmented-control">
-                    <button className={language === 'vi' ? 'active' : ''} onClick={() => setLanguage('vi')}>VI</button>
-                    <button className={language === 'en' ? 'active' : ''} onClick={() => setLanguage('en')}>EN</button>
-                  </span>
-                </label>
-                <label className="segmented-label">
-                  <span>{t.theme}</span>
-                  <span className="segmented-control">
-                    <button className={theme === 'light' ? 'active' : ''} onClick={() => setTheme('light')}>{t.light}</button>
-                    <button className={theme === 'dark' ? 'active' : ''} onClick={() => setTheme('dark')}>{t.dark}</button>
-                  </span>
-                </label>
-                <button className="secondary-button" onClick={resetDefaultConfig}>
-                  <RotateCw size={16} />
-                  {t.resetDefaults}
-                </button>
-              </div>
-            </Section>
-
-            <Section title={t.executable}>
-              <div className="notice warning">
-                <AlertTriangle size={18} />
-                <span>{t.executableNotice}</span>
-              </div>
-              <div className="form-row">
-                <label>{t.executablePath}</label>
-                <input
-                  value={settings.spinePath}
-                  onChange={(event) => updateSetting('spinePath', event.target.value)}
-                  placeholder="C:\Program Files\Spine\Spine.com"
-                />
-                <FieldStatus ok={Boolean(settings.spinePath) && validation.errors.length === 0} message="Spine executable path" />
-                <button className="icon-button" title={t.autoDetect} disabled={isAutoDetecting} onClick={() => autoDetectSpine(false)}>
-                  {isAutoDetecting ? <RotateCw className="spin" size={18} /> : <Search size={18} />}
-                </button>
-              </div>
             </Section>
 
             <Section title={t.exportStrategy}>
@@ -1555,10 +1491,6 @@ function App() {
                       <label className="checkbox-line">
                         <input type="checkbox" checked={settings.generatedNonessential} onChange={(event) => updateSetting('generatedNonessential', event.target.checked)} />
                         {t.generatedNonessential}
-                      </label>
-                      <label className="checkbox-line">
-                        <input type="checkbox" checked={settings.clean} onChange={(event) => updateSetting('clean', event.target.checked)} />
-                        {t.cleanAnimation}
                       </label>
                       <label className="checkbox-line">
                         <input type="checkbox" checked={settings.generatedWarnings} onChange={(event) => updateSetting('generatedWarnings', event.target.checked)} />
@@ -1780,39 +1712,149 @@ function App() {
               <div className="preset-manager">
                 <div className="preset-toolbar">
                   <button className="secondary-button" disabled={isPresetBusy} onClick={importGlobalJsonPreset}>
-                    <Upload size={16} />
+                    {isPresetBusy ? <RotateCw className="spin" size={16} /> : <Upload size={16} />}
                     {t.importPreset}
-                  </button>
-                  <button className="secondary-button" disabled={isPresetBusy || !presetDraftName.trim() || !presetDraftContent.trim()} onClick={saveUserPreset}>
-                    <Save size={16} />
-                    {t.savePreset}
                   </button>
                   <button className="secondary-button" disabled={isPresetBusy || !selectedExportPreset || selectedExportPreset.builtIn} onClick={deleteUserPreset}>
                     <Trash2 size={16} />
                     {t.deletePreset}
                   </button>
+                  {presetImportedTick && (
+                    <span className="preset-tick" role="status">
+                      <CheckCircle2 size={16} />
+                      {t.presetImported}
+                    </span>
+                  )}
                 </div>
-                <div className="form-grid">
+                <p className="helper-text">{t.presetImportHelp}</p>
+                {selectedExportPreset ? (
                   <label>
-                    {t.presetName}
-                    <input
-                      value={presetDraftName}
-                      disabled={Boolean(selectedExportPreset?.builtIn)}
-                      placeholder="enemy.export.json"
-                      onChange={(event) => setPresetDraftName(event.target.value)}
-                    />
-                  </label>
-                  <label>
-                    {selectedExportPreset?.builtIn ? t.presetReadOnly : t.presetContent}
+                    {`${t.presetPreview} — ${selectedExportPreset.builtIn ? t.builtInPreset : t.userPreset}: ${selectedExportPreset.name}`}
                     <textarea
-                      value={presetDraftContent}
-                      disabled={Boolean(selectedExportPreset?.builtIn)}
+                      value={selectedExportPreset.builtIn ? '' : presetPreview}
+                      readOnly
                       rows={8}
                       spellCheck={false}
-                      onChange={(event) => setPresetDraftContent(event.target.value)}
+                      placeholder={selectedExportPreset.builtIn ? t.presetReadOnly : ''}
                     />
                   </label>
+                ) : (
+                  <p className="helper-text">{t.presetNoneSelected}</p>
+                )}
+              </div>
+            </Section>
+
+            <Section title={t.outputDirectory}>
+              <div className="form-row">
+                <label>{t.outputRoot}</label>
+                <input
+                  className={outputRootMissingForSourceFolder ? 'field-invalid' : undefined}
+                  value={settings.outputPath}
+                  onChange={(event) => updateOutputPath(event.target.value)}
+                  placeholder="Optional: D:\Project\Output"
+                />
+                <FieldStatus
+                  ok={Boolean(validation.outputOk)}
+                  warning={Boolean(validation.outputWarning)}
+                  message={settings.outputPath.trim() ? (validation.outputOk ? t.outputExists : t.outputMissing) : outputHelper}
+                />
+                <button className="icon-button" title={t.browseOutput} disabled={isChoosingOutputFolder} onClick={chooseOutputFolder}>
+                  {isChoosingOutputFolder ? <RotateCw className="spin" size={18} /> : <FolderOpen size={18} />}
+                </button>
+              </div>
+              <div className="form-row">
+                <label>{t.outputPolicy}</label>
+                <div className="mode-grid output-policy-grid">
+                  {([
+                    ['timestamp', t.timestampPolicy, t.timestampPolicyHelp],
+                    ['sourceFolderName', t.sourceFolderPolicy, t.sourceFolderPolicyHelp]
+                  ] as [OutputPolicy, string, string][]).map(([value, label, description]) => (
+                    <label className="mode-option detailed" key={value}>
+                      <input
+                        type="radio"
+                        checked={settings.outputPolicy === value}
+                        onChange={() => updateSetting('outputPolicy', value)}
+                      />
+                      <span className="mode-option-content">
+                        <strong>{label}</strong>
+                        <small>{description}</small>
+                      </span>
+                    </label>
+                  ))}
                 </div>
+              </div>
+              <p className="helper-text">{outputHelper}</p>
+            </Section>
+
+            <Section title={t.logResults} defaultOpen={false}>
+              <div className="log-toolbar">
+                <span><Terminal size={16} /> {t.conversionLog}</span>
+                <div>
+                  <button className="ghost-button" onClick={() => setLogs([])}>{t.clear}</button>
+                  <button className="ghost-button" onClick={saveLogToFile}>
+                    <Save size={14} />
+                    {t.save}
+                  </button>
+                </div>
+              </div>
+              <pre className="log-view">{logs.join('\n')}</pre>
+            </Section>
+          </div>
+        )}
+
+        {activeTab === 'settings' && (
+          <div className="tab-panel">
+            <Section title={t.settingsTab}>
+              <div className="header-controls settings-controls">
+                <label className="segmented-label">
+                  <span>{t.language}</span>
+                  <span className="segmented-control">
+                    <button className={language === 'vi' ? 'active' : ''} onClick={() => setLanguage('vi')}>VI</button>
+                    <button className={language === 'en' ? 'active' : ''} onClick={() => setLanguage('en')}>EN</button>
+                  </span>
+                </label>
+                <label className="segmented-label">
+                  <span>{t.theme}</span>
+                  <span className="segmented-control">
+                    <button className={theme === 'light' ? 'active' : ''} onClick={() => setTheme('light')}>{t.light}</button>
+                    <button className={theme === 'dark' ? 'active' : ''} onClick={() => setTheme('dark')}>{t.dark}</button>
+                  </span>
+                </label>
+                <button className="secondary-button" onClick={resetDefaultConfig}>
+                  <RotateCw size={16} />
+                  {t.resetDefaults}
+                </button>
+              </div>
+            </Section>
+
+            <Section title={t.executable}>
+              <div className="notice warning">
+                <AlertTriangle size={18} />
+                <span>{t.executableNotice}</span>
+              </div>
+              <div className="form-row">
+                <label>{t.executablePath}</label>
+                <input
+                  value={settings.spinePath}
+                  onChange={(event) => updateSetting('spinePath', event.target.value)}
+                  placeholder="C:\Program Files\Spine\Spine.com"
+                />
+                <FieldStatus
+                  ok={Boolean(validation.spineOk)}
+                  warning={Boolean(validation.spineWarning)}
+                  message={
+                    !settings.spinePath.trim()
+                      ? t.executableEmpty
+                      : validation.spineOk
+                        ? t.executableValid
+                        : validation.spineWarning
+                          ? t.executableComWarning
+                          : t.executableMissing
+                  }
+                />
+                <button className="icon-button" title={t.autoDetect} disabled={isAutoDetecting} onClick={() => autoDetectSpine(false)}>
+                  {isAutoDetecting ? <RotateCw className="spin" size={18} /> : <Search size={18} />}
+                </button>
               </div>
             </Section>
 
@@ -1830,7 +1872,13 @@ function App() {
                 </label>
                 <label>
                   {t.maxMemory}
-                  <input value={settings.maxMemory} onChange={(event) => updateSetting('maxMemory', event.target.value)} />
+                  <input
+                    className={maxMemoryValid ? undefined : 'field-invalid'}
+                    value={settings.maxMemory}
+                    placeholder="512m"
+                    onChange={(event) => updateSetting('maxMemory', event.target.value)}
+                  />
+                  {!maxMemoryValid && <small className="field-error-text">{t.maxMemoryInvalid}</small>}
                 </label>
                 <label>
                   {t.timeoutSeconds}
@@ -1859,6 +1907,60 @@ function App() {
           </div>
         )}
       </main>
+      {activeTab === 'main' && (
+        <div className="run-dock">
+          <div className="run-dock-inner">
+            {validation.errors.length > 0 && (
+              <div className="notice danger">
+                <XCircle size={18} />
+                <span>{validation.errors.join(' ')}</span>
+              </div>
+            )}
+            {validation.warnings.length > 0 && (
+              <div className="notice warning">
+                <AlertTriangle size={18} />
+                <span>{validation.warnings.join(' ')}</span>
+              </div>
+            )}
+            <div className="run-actions">
+              <button className="primary-button" disabled={!canStart || isRunning} onClick={startExport}>
+                {isRunning ? <RotateCw className="spin" size={18} /> : <Play size={18} />}
+                {isRunning ? t.running : t.start}
+              </button>
+              <button className="secondary-button" disabled={!isRunning || isStopping} onClick={stopExport}>
+                {isStopping ? <RotateCw className="spin" size={18} /> : <CircleStop size={18} />}
+                {t.stop}
+              </button>
+              <button className="secondary-button" disabled={!resolveOpenOutputTarget() || isOpeningOutput} onClick={openOutputFolder}>
+                {isOpeningOutput ? <RotateCw className="spin" size={18} /> : <FolderOpen size={18} />}
+                {t.openOutput}
+              </button>
+              <button className="secondary-button" disabled={!settings.inputPath || isCleaningTimestamp} onClick={cleanTimestampExports}>
+                {isCleaningTimestamp ? <RotateCw className="spin" size={18} /> : <Trash2 size={18} />}
+                {t.cleanTimestamp}
+              </button>
+            </div>
+            <div className="progress-row">
+              <progress value={progress} max={100} />
+              <span>{currentIndex} / {files.length}</span>
+            </div>
+            {currentFile && <div className="current-file">{currentFile}</div>}
+          </div>
+        </div>
+      )}
+      {toasts.length > 0 && (
+        <div className="toast-stack">
+          {toasts.map((toast) => (
+            <div key={toast.id} className={`toast toast-${toast.kind}`} role="status" onClick={() => dismissToast(toast.id)}>
+              {toast.kind === 'success' && <CheckCircle2 size={18} />}
+              {toast.kind === 'error' && <XCircle size={18} />}
+              {toast.kind === 'warning' && <AlertTriangle size={18} />}
+              {toast.kind === 'info' && <Info size={18} />}
+              <span>{toast.message}</span>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

@@ -121,10 +121,15 @@ struct ScanResult {
 }
 
 #[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
 struct ValidateResult {
     ok: bool,
     warnings: Vec<String>,
     errors: Vec<String>,
+    spine_ok: bool,
+    spine_warning: bool,
+    output_ok: bool,
+    output_warning: bool,
 }
 
 #[derive(Debug, Serialize)]
@@ -249,30 +254,44 @@ fn validate_settings(
 ) -> ValidateResult {
     let mut warnings = Vec::new();
     let mut errors = Vec::new();
+    let mut spine_ok = false;
+    let mut spine_warning = false;
+    let mut output_ok = false;
+    let mut output_warning = false;
 
     let spine = PathBuf::from(spine_path.trim_matches('"'));
     if spine_path.trim().is_empty() {
         errors.push("Chưa chọn Spine executable.".to_string());
     } else if !spine.exists() {
         errors.push("Spine executable không tồn tại.".to_string());
-    } else if cfg!(windows) {
-        let file_name = spine
-            .file_name()
-            .and_then(|name| name.to_str())
-            .unwrap_or_default()
-            .to_ascii_lowercase();
-        if file_name == "spine.exe" {
-            warnings.push("Windows CLI nên dùng Spine.com thay vì Spine.exe.".to_string());
+    } else {
+        spine_ok = true;
+        if cfg!(windows) {
+            let file_name = spine
+                .file_name()
+                .and_then(|name| name.to_str())
+                .unwrap_or_default()
+                .to_ascii_lowercase();
+            if file_name == "spine.exe" {
+                spine_ok = false;
+                spine_warning = true;
+                warnings.push("Windows CLI nên dùng Spine.com thay vì Spine.exe.".to_string());
+            }
         }
     }
 
     if !output_path.trim().is_empty() {
         let output = PathBuf::from(output_path.trim_matches('"'));
         if !output.exists() {
+            output_warning = true;
             warnings.push("Output directory chưa tồn tại; app sẽ thử tạo khi chạy.".to_string());
+        } else {
+            output_ok = true;
         }
     } else if output_policy == "sourceFolderName" {
         errors.push("Policy folder theo tên source cần chọn output root.".to_string());
+    } else {
+        output_warning = true;
     }
 
     if (export_mode == "globalJson" || export_mode == "perProjectJson")
@@ -292,6 +311,10 @@ fn validate_settings(
         ok: errors.is_empty(),
         warnings,
         errors,
+        spine_ok,
+        spine_warning,
+        output_ok,
+        output_warning,
     }
 }
 
@@ -399,20 +422,12 @@ fn read_user_export_preset(app: AppHandle, name: String) -> Result<String, Strin
 }
 
 #[tauri::command]
-fn save_user_export_preset(app: AppHandle, name: String, content: String) -> Result<ExportPreset, String> {
-    let safe_name = validate_preset_file_name(&name)?;
-    validate_export_json_content(&content)?;
-
-    let user_dir = user_preset_dir(&app)?;
-    fs::create_dir_all(&user_dir).map_err(|e| e.to_string())?;
-    let path = user_dir.join(&safe_name);
-    fs::write(&path, content).map_err(|e| e.to_string())?;
-
-    Ok(ExportPreset {
-        name: safe_name,
-        path: path_to_string(&path),
-        built_in: false,
-    })
+fn write_text_file(path: String, content: String) -> Result<(), String> {
+    let target = PathBuf::from(path.trim_matches('"'));
+    if let Some(parent) = target.parent() {
+        fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+    }
+    fs::write(&target, content).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -1093,8 +1108,8 @@ pub fn run() {
             list_export_presets,
             import_user_export_preset,
             read_user_export_preset,
-            save_user_export_preset,
             delete_user_export_preset,
+            write_text_file,
             clean_timestamp_exports,
             open_path,
             start_batch_export,
