@@ -1,0 +1,113 @@
+import type { ExportMode, FallbackMode, OutputPolicy, UpdateUiState } from './types';
+
+/**
+ * App-wide configuration — shared across every session. Edited in the Settings popup.
+ */
+export const defaultAppConfig = {
+  spinePath: '',
+  clean: false,
+  parallelJobs: 1,
+  maxMemory: '512m',
+  timeoutSeconds: 300,
+  preserveRelativePaths: true
+};
+
+export type AppConfig = typeof defaultAppConfig;
+
+/**
+ * Per-session configuration — every session in the Recents column is fully independent.
+ */
+export const defaultSessionConfig = {
+  inputPath: '',
+  inputFiles: [] as string[],
+  outputPath: '',
+  outputPolicy: 'timestamp' as OutputPolicy,
+  targetVersion: '4.3.xx',
+  exportMode: 'perProjectJson' as ExportMode,
+  fallbackMode: 'builtIn' as FallbackMode,
+  globalJsonPath: '',
+  builtInExport: 'binary+pack',
+  generatedFormat: 'json',
+  generatedSkeletonExtension: '.json',
+  generatedPackAtlas: true,
+  generatedMaxWidth: 2048,
+  generatedMaxHeight: 2048,
+  generatedPremultiplyAlpha: false,
+  generatedPot: true,
+  generatedPaddingX: 2,
+  generatedPaddingY: 2,
+  generatedPrettyPrint: true,
+  generatedNonessential: true,
+  generatedStripWhitespaceX: true,
+  generatedStripWhitespaceY: true,
+  generatedRotation: true,
+  generatedAlias: true,
+  generatedIgnoreBlankImages: false,
+  generatedAlphaThreshold: 3,
+  generatedMinWidth: 16,
+  generatedMinHeight: 16,
+  generatedMultipleOfFour: false,
+  generatedSquare: false,
+  generatedOutputFormat: 'png',
+  generatedJpegQuality: 0.9,
+  generatedBleed: true,
+  generatedBleedIterations: 2,
+  generatedEdgePadding: true,
+  generatedDuplicatePadding: false,
+  generatedFilterMin: 'Linear',
+  generatedFilterMag: 'Linear',
+  generatedWrapX: 'ClampToEdge',
+  generatedWrapY: 'ClampToEdge',
+  generatedTextureFormat: 'RGBA8888',
+  generatedAtlasExtension: '.atlas',
+  generatedCombineSubdirectories: false,
+  generatedFlattenPaths: false,
+  generatedUseIndexes: false,
+  generatedFast: false,
+  generatedLimitMemory: true,
+  generatedPacking: 'polygons',
+  generatedPackSource: 'attachments',
+  generatedPackTarget: 'perskeleton',
+  generatedWarnings: true,
+  generatedForceAll: false
+};
+
+export type SessionConfig = typeof defaultSessionConfig;
+
+/** Flat shape consumed by the workspace UI and the Tauri export request (AppConfig + SessionConfig). */
+export type MergedConfig = AppConfig & SessionConfig;
+
+export type Session = {
+  id: string;
+  name: string;
+  /** true until the user renames it — lets a folder pick keep updating the auto name. */
+  autoNamed: boolean;
+  config: SessionConfig;
+  createdAt: number;
+  updatedAt: number;
+};
+
+/** Ephemeral, never persisted. Reset on app restart. */
+export type SessionRuntime = {
+  files: string[];
+  skippedFiles: string[];
+  logs: string[];
+  lastOutputFolders: string[];
+  currentIndex: number;
+};
+
+export function emptyRuntime(): SessionRuntime {
+  return { files: [], skippedFiles: [], logs: [], lastOutputFolders: [], currentIndex: 0 };
+}
+
+export const targetVersionPresets = ['3.8.99', '4.3.11', 'lateststable'];
+
+export const initialUpdateUi: UpdateUiState = {
+  status: 'idle',
+  version: '',
+  progress: 0,
+  progressKnown: false,
+  message: ''
+};
+
+export const appVersionLabel = `v${__APP_VERSION__}`;
