@@ -84,7 +84,11 @@ release:windows:
       }
 
       $latestJson = $latest | ConvertTo-Json -Depth 8
-      Set-Content -Path latest.json -Value $latestJson -Encoding UTF8
+      [System.IO.File]::WriteAllText(
+        (Join-Path (Get-Location) "latest.json"),
+        $latestJson,
+        [System.Text.UTF8Encoding]::new($false)
+      )
 
       $headers = @{ "PRIVATE-TOKEN" = $env:GITLAB_TOKEN }
 
