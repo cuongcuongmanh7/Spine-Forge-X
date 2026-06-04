@@ -22,6 +22,7 @@ import {
   Settings,
   Terminal,
   Trash2,
+  Upload,
   Square,
   X,
   XCircle
@@ -51,6 +52,12 @@ type CleanResult = {
   failed: string[];
 };
 
+type ExportPreset = {
+  name: string;
+  path: string;
+  builtIn: boolean;
+};
+
 type BatchExportResult = {
   completed: number;
   total: number;
@@ -78,7 +85,7 @@ type UpdateUiState = {
   message: string;
 };
 
-const targetVersionPresets = ['3.8.99', '4.0.xx', '4.1.xx', '4.2.xx', '4.3.xx', 'lateststable'];
+const targetVersionPresets = ['3.8.99', '4.3.11', 'lateststable'];
 const appVersionLabel = `v${__APP_VERSION__}`;
 const initialUpdateUi: UpdateUiState = {
   status: 'idle',
@@ -246,6 +253,24 @@ const copy = {
     useGlobalJson: 'Dùng global JSON',
     skipFile: 'Bỏ qua file',
     globalExportJson: 'Global .export.json',
+    globalPreset: 'Preset global',
+    noPreset: 'Không dùng preset',
+    builtInPreset: 'Built-in',
+    userPreset: 'User',
+    importPreset: 'Import preset',
+    presetName: 'Tên user preset',
+    presetContent: 'Nội dung .export.json',
+    savePreset: 'Lưu preset',
+    deletePreset: 'Xóa preset',
+    presetReadOnly: 'Built-in preset read-only.',
+    presetLoadFailed: 'Load preset thất bại',
+    presetSaveFailed: 'Lưu preset thất bại',
+    presetDeleteFailed: 'Xóa preset thất bại',
+    presetImportFailed: 'Import preset thất bại',
+    presetSaved: 'Đã lưu preset',
+    presetDeleted: 'Đã xóa preset',
+    presetImported: 'Đã import preset',
+    invalidExportJsonFile: 'Chỉ chấp nhận file .export.json.',
     advancedRuntime: 'Advanced Runtime',
     parallelJobs: 'Parallel jobs',
     maxMemory: 'Max memory',
@@ -281,6 +306,9 @@ const copy = {
     theme: 'Theme',
     light: 'Light',
     dark: 'Dark',
+    resetDefaults: 'Set config default',
+    resetDefaultsConfirm: 'Đưa config tool về mặc định?',
+    resetDefaultsDone: 'Đã reset config mặc định',
     exportSuccessTitle: 'Export thành công',
     exportSuccessBody: 'Đã export {completed}/{total} file.',
     exportFailedTitle: 'Export thất bại',
@@ -382,6 +410,24 @@ const copy = {
     useGlobalJson: 'Use global JSON',
     skipFile: 'Skip file',
     globalExportJson: 'Global .export.json',
+    globalPreset: 'Global preset',
+    noPreset: 'No preset',
+    builtInPreset: 'Built-in',
+    userPreset: 'User',
+    importPreset: 'Import preset',
+    presetName: 'User preset name',
+    presetContent: '.export.json content',
+    savePreset: 'Save preset',
+    deletePreset: 'Delete preset',
+    presetReadOnly: 'Built-in presets are read-only.',
+    presetLoadFailed: 'Preset load failed',
+    presetSaveFailed: 'Preset save failed',
+    presetDeleteFailed: 'Preset delete failed',
+    presetImportFailed: 'Preset import failed',
+    presetSaved: 'Preset saved',
+    presetDeleted: 'Preset deleted',
+    presetImported: 'Preset imported',
+    invalidExportJsonFile: 'Only .export.json files are accepted.',
     advancedRuntime: 'Advanced Runtime',
     parallelJobs: 'Parallel jobs',
     maxMemory: 'Max memory',
@@ -417,6 +463,9 @@ const copy = {
     theme: 'Theme',
     light: 'Light',
     dark: 'Dark',
+    resetDefaults: 'Set config default',
+    resetDefaultsConfirm: 'Reset tool config to defaults?',
+    resetDefaultsDone: 'Default config applied',
     exportSuccessTitle: 'Export completed',
     exportSuccessBody: 'Exported {completed}/{total} files.',
     exportFailedTitle: 'Export failed',
@@ -503,11 +552,16 @@ function App() {
   const [isChoosingInputFolder, setIsChoosingInputFolder] = useState(false);
   const [isChoosingInputFiles, setIsChoosingInputFiles] = useState(false);
   const [isChoosingOutputFolder, setIsChoosingOutputFolder] = useState(false);
+  const [isChoosingGlobalJson, setIsChoosingGlobalJson] = useState(false);
   const [isCleaningTimestamp, setIsCleaningTimestamp] = useState(false);
   const [isStopping, setIsStopping] = useState(false);
   const [isOpeningOutput, setIsOpeningOutput] = useState(false);
   const [isAutoDetecting, setIsAutoDetecting] = useState(false);
   const [isDetectingVersion, setIsDetectingVersion] = useState(false);
+  const [exportPresets, setExportPresets] = useState<ExportPreset[]>([]);
+  const [presetDraftName, setPresetDraftName] = useState('');
+  const [presetDraftContent, setPresetDraftContent] = useState('');
+  const [isPresetBusy, setIsPresetBusy] = useState(false);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [validation, setValidation] = useState<ValidateResult>({ ok: false, warnings: [], errors: [] });
   const [updateUi, setUpdateUi] = useState<UpdateUiState>(initialUpdateUi);
@@ -526,6 +580,10 @@ function App() {
       : settings.outputPath
         ? t.outputHelperSelected
         : t.outputHelperAuto;
+  const selectedExportPreset = useMemo(
+    () => exportPresets.find((preset) => preset.path === settings.globalJsonPath),
+    [exportPresets, settings.globalJsonPath]
+  );
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
@@ -566,6 +624,26 @@ function App() {
   useEffect(() => {
     void checkForAppUpdate();
   }, []);
+
+  useEffect(() => {
+    void loadExportPresets();
+  }, []);
+
+  useEffect(() => {
+    if (!selectedExportPreset) {
+      setPresetDraftName('');
+      setPresetDraftContent('');
+      return;
+    }
+
+    setPresetDraftName(selectedExportPreset.name);
+    if (selectedExportPreset.builtIn) {
+      setPresetDraftContent('');
+      return;
+    }
+
+    void loadUserPresetContent(selectedExportPreset.name);
+  }, [selectedExportPreset?.name, selectedExportPreset?.builtIn]);
 
   useEffect(() => {
     return () => {
@@ -698,6 +776,143 @@ function App() {
     if (!value.trim()) {
       setLastOutputFolders([]);
     }
+  }
+
+  async function loadExportPresets() {
+    try {
+      const presets = await invoke<ExportPreset[]>('list_export_presets');
+      setExportPresets(presets);
+    } catch (error) {
+      appendLog(`${t.presetLoadFailed}: ${String(error)}`);
+    }
+  }
+
+  async function loadUserPresetContent(name: string) {
+    try {
+      const content = await invoke<string>('read_user_export_preset', { name });
+      setPresetDraftContent(content);
+    } catch (error) {
+      appendLog(`${t.presetLoadFailed}: ${String(error)}`);
+    }
+  }
+
+  async function chooseGlobalJsonFile() {
+    if (isChoosingGlobalJson) return;
+    setIsChoosingGlobalJson(true);
+
+    try {
+      const selected = await open({
+        directory: false,
+        multiple: false,
+        title: t.globalExportJson,
+        filters: [{ name: 'Spine export settings', extensions: ['export.json'] }]
+      });
+
+      if (typeof selected !== 'string') return;
+      if (!selected.toLowerCase().endsWith('.export.json')) {
+        appendLog(t.invalidExportJsonFile);
+        return;
+      }
+
+      updateSetting('globalJsonPath', selected);
+    } finally {
+      setIsChoosingGlobalJson(false);
+    }
+  }
+
+  async function importGlobalJsonPreset() {
+    if (isPresetBusy) return;
+    setIsPresetBusy(true);
+
+    try {
+      const selected = await open({
+        directory: false,
+        multiple: false,
+        title: t.importPreset,
+        filters: [{ name: 'Spine export settings', extensions: ['export.json'] }]
+      });
+
+      if (typeof selected !== 'string') return;
+      if (!selected.toLowerCase().endsWith('.export.json')) {
+        appendLog(t.invalidExportJsonFile);
+        return;
+      }
+
+      const preset = await invoke<ExportPreset>('import_user_export_preset', { sourcePath: selected });
+      await loadExportPresets();
+      updateSetting('globalJsonPath', preset.path);
+      setPresetDraftName(preset.name);
+      await loadUserPresetContent(preset.name);
+      appendLog(`${t.presetImported}: ${preset.name}`);
+    } catch (error) {
+      appendLog(`${t.presetImportFailed}: ${String(error)}`);
+    } finally {
+      setIsPresetBusy(false);
+    }
+  }
+
+  async function saveUserPreset() {
+    if (isPresetBusy) return;
+    setIsPresetBusy(true);
+
+    try {
+      const preset = await invoke<ExportPreset>('save_user_export_preset', {
+        name: presetDraftName,
+        content: presetDraftContent
+      });
+      await loadExportPresets();
+      updateSetting('globalJsonPath', preset.path);
+      appendLog(`${t.presetSaved}: ${preset.name}`);
+    } catch (error) {
+      appendLog(`${t.presetSaveFailed}: ${String(error)}`);
+    } finally {
+      setIsPresetBusy(false);
+    }
+  }
+
+  async function deleteUserPreset() {
+    if (isPresetBusy || !selectedExportPreset || selectedExportPreset.builtIn) return;
+    const ok = await confirm(`${t.deletePreset}: ${selectedExportPreset.name}?`, { title: t.deletePreset });
+    if (!ok) return;
+
+    setIsPresetBusy(true);
+    try {
+      await invoke('delete_user_export_preset', { name: selectedExportPreset.name });
+      updateSetting('globalJsonPath', '');
+      setPresetDraftName('');
+      setPresetDraftContent('');
+      await loadExportPresets();
+      appendLog(`${t.presetDeleted}: ${selectedExportPreset.name}`);
+    } catch (error) {
+      appendLog(`${t.presetDeleteFailed}: ${String(error)}`);
+    } finally {
+      setIsPresetBusy(false);
+    }
+  }
+
+  async function resetDefaultConfig() {
+    const ok = await confirm(t.resetDefaultsConfirm, { title: t.resetDefaults });
+    if (!ok) return;
+
+    setLanguage('en');
+    setTheme('dark');
+    setSettings({
+      ...defaultState,
+      spinePath: settings.spinePath,
+      inputPath: '',
+      outputPath: 'C:\\Users\\Admin\\Desktop\\export',
+      outputPolicy: 'sourceFolderName',
+      targetVersion: '3.8.99',
+      exportMode: 'globalJson',
+      globalJsonPath: ''
+    });
+    setFiles([]);
+    setSkippedFiles([]);
+    setCurrentIndex(0);
+    setLastOutputFolders([]);
+    setPresetDraftName('');
+    setPresetDraftContent('');
+    appendLog(t.resetDefaultsDone);
   }
 
   function updateGeneratedFormat(value: string) {
@@ -1260,6 +1475,10 @@ function App() {
                     <button className={theme === 'dark' ? 'active' : ''} onClick={() => setTheme('dark')}>{t.dark}</button>
                   </span>
                 </label>
+                <button className="secondary-button" onClick={resetDefaultConfig}>
+                  <RotateCw size={16} />
+                  {t.resetDefaults}
+                </button>
               </div>
             </Section>
 
@@ -1539,8 +1758,61 @@ function App() {
                 </label>
                 <label>
                   {t.globalExportJson}
-                  <input value={settings.globalJsonPath} onChange={(event) => updateSetting('globalJsonPath', event.target.value)} />
+                  <div className="inline-field">
+                    <input value={settings.globalJsonPath} onChange={(event) => updateSetting('globalJsonPath', event.target.value)} />
+                    <button className="icon-button" title={t.globalExportJson} disabled={isChoosingGlobalJson} onClick={chooseGlobalJsonFile}>
+                      <FolderOpen size={16} />
+                    </button>
+                  </div>
                 </label>
+                <label>
+                  {t.globalPreset}
+                  <select value={selectedExportPreset?.path ?? ''} onChange={(event) => updateSetting('globalJsonPath', event.target.value)}>
+                    <option value="">{t.noPreset}</option>
+                    {exportPresets.map((preset) => (
+                      <option key={`${preset.builtIn ? 'built-in' : 'user'}:${preset.name}`} value={preset.path}>
+                        {preset.builtIn ? t.builtInPreset : t.userPreset}: {preset.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+              <div className="preset-manager">
+                <div className="preset-toolbar">
+                  <button className="secondary-button" disabled={isPresetBusy} onClick={importGlobalJsonPreset}>
+                    <Upload size={16} />
+                    {t.importPreset}
+                  </button>
+                  <button className="secondary-button" disabled={isPresetBusy || !presetDraftName.trim() || !presetDraftContent.trim()} onClick={saveUserPreset}>
+                    <Save size={16} />
+                    {t.savePreset}
+                  </button>
+                  <button className="secondary-button" disabled={isPresetBusy || !selectedExportPreset || selectedExportPreset.builtIn} onClick={deleteUserPreset}>
+                    <Trash2 size={16} />
+                    {t.deletePreset}
+                  </button>
+                </div>
+                <div className="form-grid">
+                  <label>
+                    {t.presetName}
+                    <input
+                      value={presetDraftName}
+                      disabled={Boolean(selectedExportPreset?.builtIn)}
+                      placeholder="enemy.export.json"
+                      onChange={(event) => setPresetDraftName(event.target.value)}
+                    />
+                  </label>
+                  <label>
+                    {selectedExportPreset?.builtIn ? t.presetReadOnly : t.presetContent}
+                    <textarea
+                      value={presetDraftContent}
+                      disabled={Boolean(selectedExportPreset?.builtIn)}
+                      rows={8}
+                      spellCheck={false}
+                      onChange={(event) => setPresetDraftContent(event.target.value)}
+                    />
+                  </label>
+                </div>
               </div>
             </Section>
 

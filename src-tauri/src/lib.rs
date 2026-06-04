@@ -11,7 +11,7 @@ use std::{
     },
     time::Duration,
 };
-use tauri::{Emitter, Manager, State, Window};
+use tauri::{AppHandle, Emitter, Manager, State, Window};
 use tokio::{
     io::{AsyncBufReadExt, BufReader},
     process::Command,
@@ -140,6 +140,14 @@ struct BatchExportResult {
     total: usize,
     output_folders: Vec<String>,
     stopped: bool,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ExportPreset {
+    name: String,
+    path: String,
+    built_in: bool,
 }
 
 #[derive(Debug, Serialize, Clone)]
@@ -332,6 +340,89 @@ fn clean_timestamp_exports(input_path: String) -> Result<CleanResult, String> {
     failed.sort();
 
     Ok(CleanResult { deleted, failed })
+}
+
+#[tauri::command]
+fn list_export_presets(app: AppHandle) -> Result<Vec<ExportPreset>, String> {
+    let mut presets = Vec::new();
+
+    for dir in built_in_preset_dirs(&app) {
+        collect_presets_from_dir(&dir, true, &mut presets);
+    }
+
+    let user_dir = user_preset_dir(&app)?;
+    fs::create_dir_all(&user_dir).map_err(|e| e.to_string())?;
+    collect_presets_from_dir(&user_dir, false, &mut presets);
+
+    presets.sort_by(|a, b| {
+        b.built_in
+            .cmp(&a.built_in)
+            .then_with(|| a.name.to_ascii_lowercase().cmp(&b.name.to_ascii_lowercase()))
+    });
+    presets.dedup_by(|a, b| a.built_in == b.built_in && a.name.eq_ignore_ascii_case(&b.name));
+
+    Ok(presets)
+}
+
+#[tauri::command]
+fn import_user_export_preset(app: AppHandle, source_path: String) -> Result<ExportPreset, String> {
+    let source = PathBuf::from(source_path.trim_matches('"'));
+    if !source.is_file() {
+        return Err("Preset source không tồn tại.".to_string());
+    }
+
+    let name = source
+        .file_name()
+        .and_then(|value| value.to_str())
+        .ok_or_else(|| "Không đọc được tên preset.".to_string())?;
+    let safe_name = validate_preset_file_name(name)?;
+    let content = fs::read_to_string(&source).map_err(|e| e.to_string())?;
+    validate_export_json_content(&content)?;
+
+    let user_dir = user_preset_dir(&app)?;
+    fs::create_dir_all(&user_dir).map_err(|e| e.to_string())?;
+    let target = user_dir.join(&safe_name);
+    fs::write(&target, content).map_err(|e| e.to_string())?;
+
+    Ok(ExportPreset {
+        name: safe_name,
+        path: path_to_string(&target),
+        built_in: false,
+    })
+}
+
+#[tauri::command]
+fn read_user_export_preset(app: AppHandle, name: String) -> Result<String, String> {
+    let safe_name = validate_preset_file_name(&name)?;
+    let path = user_preset_dir(&app)?.join(safe_name);
+    fs::read_to_string(path).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn save_user_export_preset(app: AppHandle, name: String, content: String) -> Result<ExportPreset, String> {
+    let safe_name = validate_preset_file_name(&name)?;
+    validate_export_json_content(&content)?;
+
+    let user_dir = user_preset_dir(&app)?;
+    fs::create_dir_all(&user_dir).map_err(|e| e.to_string())?;
+    let path = user_dir.join(&safe_name);
+    fs::write(&path, content).map_err(|e| e.to_string())?;
+
+    Ok(ExportPreset {
+        name: safe_name,
+        path: path_to_string(&path),
+        built_in: false,
+    })
+}
+
+#[tauri::command]
+fn delete_user_export_preset(app: AppHandle, name: String) -> Result<(), String> {
+    let safe_name = validate_preset_file_name(&name)?;
+    let path = user_preset_dir(&app)?.join(safe_name);
+    if path.exists() {
+        fs::remove_file(path).map_err(|e| e.to_string())?;
+    }
+    Ok(())
 }
 
 #[tauri::command]
@@ -875,22 +966,87 @@ fn path_to_string(path: &Path) -> String {
     path.to_string_lossy().to_string()
 }
 
-fn parse_spine_version(output: &str) -> Option<String> {
-    let mut found = None;
+fn built_in_preset_dirs(app: &AppHandle) -> Vec<PathBuf> {
+    let mut dirs = Vec::new();
 
+    if let Ok(resource_dir) = app.path().resource_dir() {
+        dirs.push(resource_dir.join("export-presets"));
+    }
+
+    dirs.push(PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("export-presets"));
+    dirs
+}
+
+fn user_preset_dir(app: &AppHandle) -> Result<PathBuf, String> {
+    app.path()
+        .app_data_dir()
+        .map(|path| path.join("export-presets"))
+        .map_err(|e| e.to_string())
+}
+
+fn collect_presets_from_dir(dir: &Path, built_in: bool, presets: &mut Vec<ExportPreset>) {
+    let Ok(entries) = fs::read_dir(dir) else {
+        return;
+    };
+
+    for entry in entries.filter_map(Result::ok) {
+        let path = entry.path();
+        let Some(name) = path.file_name().and_then(|value| value.to_str()) else {
+            continue;
+        };
+
+        if path.is_file() && name.ends_with(".export.json") {
+            presets.push(ExportPreset {
+                name: name.to_string(),
+                path: path_to_string(&path),
+                built_in,
+            });
+        }
+    }
+}
+
+fn validate_preset_file_name(name: &str) -> Result<String, String> {
+    let trimmed = name.trim();
+    if !trimmed.ends_with(".export.json") {
+        return Err("Preset phải có đuôi .export.json.".to_string());
+    }
+
+    if trimmed.is_empty()
+        || trimmed.contains('/')
+        || trimmed.contains('\\')
+        || trimmed.contains(':')
+        || trimmed == ".export.json"
+    {
+        return Err("Tên preset không hợp lệ.".to_string());
+    }
+
+    Ok(trimmed.to_string())
+}
+
+fn validate_export_json_content(content: &str) -> Result<(), String> {
+    let value: serde_json::Value = serde_json::from_str(content)
+        .map_err(|e| format!("Preset không phải JSON hợp lệ: {e}"))?;
+    let class = value
+        .get("class")
+        .and_then(|value| value.as_str())
+        .unwrap_or_default();
+
+    if !class.starts_with("export-") {
+        return Err("Preset không giống Spine export settings JSON: thiếu class export-*.".to_string());
+    }
+
+    Ok(())
+}
+
+fn parse_spine_version(output: &str) -> Option<String> {
     for token in output.split(|ch: char| !(ch.is_ascii_alphanumeric() || ch == '.')) {
         let cleaned = token.trim_matches('.');
-        if cleaned.chars().filter(|ch| *ch == '.').count() >= 1
-            && cleaned.chars().any(|ch| ch.is_ascii_digit())
-            && cleaned
-                .chars()
-                .all(|ch| ch.is_ascii_digit() || ch == '.' || ch.eq_ignore_ascii_case(&'x'))
-        {
-            found = Some(cleaned.to_string());
+        if matches!(cleaned, "3.8.99" | "4.3.11") {
+            return Some(cleaned.to_string());
         }
     }
 
-    found
+    None
 }
 
 async fn kill_process(pid: u32) {
@@ -934,6 +1090,11 @@ pub fn run() {
             detect_spine_version,
             scan_spine_files,
             validate_settings,
+            list_export_presets,
+            import_user_export_preset,
+            read_user_export_preset,
+            save_user_export_preset,
+            delete_user_export_preset,
             clean_timestamp_exports,
             open_path,
             start_batch_export,

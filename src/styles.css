@@ -121,16 +121,15 @@ body {
   place-items: center;
   width: 24px;
   height: 24px;
-  border: 1px solid var(--border-strong);
-  border-radius: 999px;
-  background: var(--surface-soft);
+  border: 0;
+  border-radius: 0;
+  background: transparent;
   color: var(--text-muted);
   cursor: pointer;
 }
 
 .titlebar-update-check:hover:not(:disabled) {
   color: var(--text-strong);
-  border-color: var(--primary);
 }
 
 .titlebar-update-note {
@@ -209,7 +208,8 @@ body {
 
 button,
 input,
-select {
+select,
+textarea {
   font: inherit;
 }
 
@@ -445,7 +445,8 @@ select {
 }
 
 input,
-select {
+select,
+textarea {
   width: 100%;
   min-height: 36px;
   border: 1px solid var(--border-strong);
@@ -456,9 +457,18 @@ select {
 }
 
 input:focus,
-select:focus {
+select:focus,
+textarea:focus {
   outline: 2px solid #7aa7ff;
   outline-offset: 1px;
+}
+
+textarea {
+  min-height: 150px;
+  resize: vertical;
+  font-family: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace;
+  font-size: 12px;
+  line-height: 1.5;
 }
 
 input.field-invalid {
@@ -672,6 +682,18 @@ input.field-invalid:focus {
 .inline-field {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+}
+
+.preset-manager {
+  display: grid;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.preset-toolbar {
+  display: flex;
+  flex-wrap: wrap;
   gap: 8px;
 }
 
