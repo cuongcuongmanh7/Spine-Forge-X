@@ -31,9 +31,29 @@ release:windows:
         Copy-Item -Path $nsisPluginSource -Destination $nsisPluginTarget -Force
       }
 
-      npm run tauri build -- --bundles nsis 2>&1 | Tee-Object -FilePath tauri-build.log
-      if ($LASTEXITCODE -ne 0) {
-        throw "Tauri build failed with exit code $LASTEXITCODE"
+      npm run tauri build -- --bundles nsis *> tauri-build.log
+      $tauriBuildExitCode = $LASTEXITCODE
+      Get-Content tauri-build.log
+
+      if ($tauriBuildExitCode -ne 0) {
+        Write-Host "Tauri bundler failed with exit code $tauriBuildExitCode. Trying NSIS fallback."
+        $nsiPath = "src-tauri/target/release/nsis/x64/installer.nsi"
+        $nsisOutputPath = "src-tauri/target/release/nsis/x64/nsis-output.exe"
+        if (!(Test-Path $nsiPath)) {
+          throw "Tauri build failed and NSIS script was not generated: $nsiPath"
+        }
+
+        & "$runnerLocalAppData\tauri\NSIS\makensis.exe" $nsiPath
+        if ($LASTEXITCODE -ne 0) {
+          throw "NSIS fallback failed with exit code $LASTEXITCODE"
+        }
+
+        New-Item -ItemType Directory -Force -Path "src-tauri/target/release/bundle/nsis" | Out-Null
+        Move-Item -Path $nsisOutputPath -Destination "src-tauri/target/release/bundle/nsis/$installerName" -Force
+        npm run tauri signer sign -- "src-tauri/target/release/bundle/nsis/$installerName"
+        if ($LASTEXITCODE -ne 0) {
+          throw "Updater signature fallback failed with exit code $LASTEXITCODE"
+        }
       }
 
       $installerPath = "src-tauri/target/release/bundle/nsis/$installerName"
