@@ -21,7 +21,7 @@ release:windows:
 
       Write-Host "Building SpineForge X $version"
       npm ci
-      npm run tauri build
+      npm run tauri build -- --bundles nsis
 
       $installerPath = "src-tauri/target/release/bundle/nsis/$installerName"
       $signaturePath = "$installerPath.sig"
