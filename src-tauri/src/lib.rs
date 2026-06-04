@@ -1,0 +1,907 @@
+#![recursion_limit = "256"]
+
+use serde::{Deserialize, Serialize};
+use std::{
+    fs,
+    path::{Path, PathBuf},
+    process::Stdio,
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc,
+    },
+    time::Duration,
+};
+use tauri::{Emitter, Manager, State, Window};
+use tokio::{
+    io::{AsyncBufReadExt, BufReader},
+    process::Command,
+    sync::Mutex,
+    time,
+};
+use walkdir::WalkDir;
+
+#[derive(Default)]
+struct AppState {
+    stop_requested: AtomicBool,
+    running_children: Mutex<Vec<u32>>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+enum ExportMode {
+    PerProjectJson,
+    InternalExperimental,
+    GlobalJson,
+    BuiltIn,
+    GeneratedSettings,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+enum FallbackMode {
+    BuiltIn,
+    GlobalJson,
+    Skip,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct BatchExportRequest {
+    spine_path: String,
+    input_root: String,
+    files: Vec<String>,
+    output_path: String,
+    target_version: String,
+    export_mode: ExportMode,
+    fallback_mode: FallbackMode,
+    global_json_path: Option<String>,
+    built_in_export: String,
+    generated_format: String,
+    generated_skeleton_extension: String,
+    generated_pack_atlas: bool,
+    generated_max_width: i32,
+    generated_max_height: i32,
+    generated_premultiply_alpha: bool,
+    generated_pot: bool,
+    generated_padding_x: i32,
+    generated_padding_y: i32,
+    generated_pretty_print: bool,
+    generated_nonessential: bool,
+    generated_strip_whitespace_x: bool,
+    generated_strip_whitespace_y: bool,
+    generated_rotation: bool,
+    generated_alias: bool,
+    generated_ignore_blank_images: bool,
+    generated_alpha_threshold: i32,
+    generated_min_width: i32,
+    generated_min_height: i32,
+    generated_multiple_of_four: bool,
+    generated_square: bool,
+    generated_output_format: String,
+    generated_jpeg_quality: f64,
+    generated_bleed: bool,
+    generated_bleed_iterations: i32,
+    generated_edge_padding: bool,
+    generated_duplicate_padding: bool,
+    generated_filter_min: String,
+    generated_filter_mag: String,
+    generated_wrap_x: String,
+    generated_wrap_y: String,
+    generated_texture_format: String,
+    generated_atlas_extension: String,
+    generated_combine_subdirectories: bool,
+    generated_flatten_paths: bool,
+    generated_use_indexes: bool,
+    generated_fast: bool,
+    generated_limit_memory: bool,
+    generated_packing: String,
+    generated_pack_source: String,
+    generated_pack_target: String,
+    generated_warnings: bool,
+    generated_force_all: bool,
+    clean: bool,
+    parallel_jobs: usize,
+    max_memory: String,
+    timeout_seconds: u64,
+    preserve_relative_paths: bool,
+}
+
+#[derive(Debug, Serialize)]
+struct ScanResult {
+    files: Vec<String>,
+    skipped: Vec<String>,
+}
+
+#[derive(Debug, Serialize)]
+struct ValidateResult {
+    ok: bool,
+    warnings: Vec<String>,
+    errors: Vec<String>,
+}
+
+#[derive(Debug, Serialize)]
+struct CleanResult {
+    deleted: Vec<String>,
+    failed: Vec<String>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct BatchExportResult {
+    completed: usize,
+    total: usize,
+    output_folders: Vec<String>,
+    stopped: bool,
+}
+
+#[derive(Debug, Serialize, Clone)]
+struct ProgressPayload {
+    current: usize,
+    total: usize,
+    file: String,
+}
+
+struct ExportPlan {
+    arg: Option<String>,
+    temp_file: Option<PathBuf>,
+}
+
+#[tauri::command]
+fn auto_detect_spine() -> Result<String, String> {
+    spine_candidates()
+        .into_iter()
+        .find(|path| path.exists())
+        .map(|path| path.to_string_lossy().to_string())
+        .ok_or_else(|| "Không tìm thấy Spine executable trong các path phổ biến.".to_string())
+}
+
+#[tauri::command]
+async fn detect_spine_version(spine_path: String) -> Result<String, String> {
+    let path = PathBuf::from(spine_path.trim_matches('"'));
+    if !path.exists() {
+        return Err("Spine executable không tồn tại.".to_string());
+    }
+
+    let output = Command::new(path)
+        .arg("--version")
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .output()
+        .await
+        .map_err(|e| e.to_string())?;
+
+    let mut text = String::new();
+    text.push_str(&String::from_utf8_lossy(&output.stdout));
+    text.push_str(&String::from_utf8_lossy(&output.stderr));
+
+    parse_spine_version(&text).ok_or_else(|| {
+        if text.trim().is_empty() {
+            "Không đọc được version từ Spine CLI.".to_string()
+        } else {
+            format!("Không parse được version từ output: {}", text.trim())
+        }
+    })
+}
+
+#[tauri::command]
+fn scan_spine_files(input_path: String) -> Result<ScanResult, String> {
+    let path = PathBuf::from(input_path.trim_matches('"'));
+    if !path.exists() {
+        return Err("Input path không tồn tại.".to_string());
+    }
+
+    let mut files = Vec::new();
+    let mut skipped = Vec::new();
+
+    if path.is_file() {
+        if is_spine_file(&path) && !is_temp_spine_file(&path) {
+            files.push(path_to_string(&path));
+        } else {
+            skipped.push(path_to_string(&path));
+        }
+        return Ok(ScanResult { files, skipped });
+    }
+
+    for entry in WalkDir::new(&path).into_iter().filter_map(Result::ok) {
+        let entry_path = entry.path();
+        if !entry_path.is_file() {
+            continue;
+        }
+
+        if is_spine_file(entry_path) {
+            if is_temp_spine_file(entry_path) {
+                skipped.push(path_to_string(entry_path));
+            } else {
+                files.push(path_to_string(entry_path));
+            }
+        }
+    }
+
+    files.sort();
+    skipped.sort();
+
+    Ok(ScanResult { files, skipped })
+}
+
+#[tauri::command]
+fn validate_settings(
+    spine_path: String,
+    output_path: String,
+    export_mode: String,
+    global_json_path: String,
+) -> ValidateResult {
+    let mut warnings = Vec::new();
+    let mut errors = Vec::new();
+
+    let spine = PathBuf::from(spine_path.trim_matches('"'));
+    if spine_path.trim().is_empty() {
+        errors.push("Chưa chọn Spine executable.".to_string());
+    } else if !spine.exists() {
+        errors.push("Spine executable không tồn tại.".to_string());
+    } else if cfg!(windows) {
+        let file_name = spine
+            .file_name()
+            .and_then(|name| name.to_str())
+            .unwrap_or_default()
+            .to_ascii_lowercase();
+        if file_name == "spine.exe" {
+            warnings.push("Windows CLI nên dùng Spine.com thay vì Spine.exe.".to_string());
+        }
+    }
+
+    if !output_path.trim().is_empty() {
+        let output = PathBuf::from(output_path.trim_matches('"'));
+        if !output.exists() {
+            warnings.push("Output directory chưa tồn tại; app sẽ thử tạo khi chạy.".to_string());
+        }
+    }
+
+    if (export_mode == "globalJson" || export_mode == "perProjectJson")
+        && !global_json_path.trim().is_empty()
+    {
+        let global = PathBuf::from(global_json_path.trim_matches('"'));
+        if !global.exists() {
+            errors.push("Global .export.json không tồn tại.".to_string());
+        }
+    }
+
+    if export_mode == "internalExperimental" {
+        errors.push("Use internal project settings đã bị tắt vì Spine CLI cần --export/-e để export.".to_string());
+    }
+
+    ValidateResult {
+        ok: errors.is_empty(),
+        warnings,
+        errors,
+    }
+}
+
+#[tauri::command]
+fn clean_timestamp_exports(input_path: String) -> Result<CleanResult, String> {
+    let root = PathBuf::from(input_path.trim_matches('"'));
+    if !root.exists() {
+        return Err("Input path không tồn tại.".to_string());
+    }
+
+    let scan_root = if root.is_file() {
+        root.parent()
+            .map(Path::to_path_buf)
+            .ok_or_else(|| "Không xác định được folder input.".to_string())?
+    } else {
+        root
+    };
+
+    let mut deleted = Vec::new();
+    let mut failed = Vec::new();
+
+    for entry in WalkDir::new(&scan_root)
+        .min_depth(1)
+        .into_iter()
+        .filter_map(Result::ok)
+        .filter(|entry| entry.file_type().is_dir())
+    {
+        let path = entry.path();
+        let should_delete = path
+            .file_name()
+            .and_then(|name| name.to_str())
+            .map(is_timestamp_export_folder)
+            .unwrap_or(false);
+
+        if !should_delete {
+            continue;
+        }
+
+        match fs::remove_dir_all(path) {
+            Ok(_) => deleted.push(path_to_string(path)),
+            Err(error) => failed.push(format!("{}: {}", path_to_string(path), error)),
+        }
+    }
+
+    deleted.sort();
+    failed.sort();
+
+    Ok(CleanResult { deleted, failed })
+}
+
+#[tauri::command]
+async fn start_batch_export(
+    window: Window,
+    state: State<'_, Arc<AppState>>,
+    request: BatchExportRequest,
+) -> Result<BatchExportResult, String> {
+    state.stop_requested.store(false, Ordering::SeqCst);
+
+    if request.files.is_empty() {
+        return Err("Không có file .spine để export.".to_string());
+    }
+
+    let parallel_jobs = request.parallel_jobs.clamp(1, 8);
+    if parallel_jobs > 1 {
+        let _ = window.emit(
+            "spine-log",
+            format!(
+                "Parallel jobs hiện đang chạy tuần tự ở skeleton đầu tiên. Requested: {parallel_jobs}."
+            ),
+        );
+    }
+
+    let total = request.files.len();
+    let mut completed = 0;
+    let mut output_folders = Vec::new();
+    let mut stopped = false;
+    let run_folder_name = make_export_folder_name(&request.target_version);
+    let _ = window.emit("spine-log", format!("Timestamp export folder: {run_folder_name}"));
+    let shared_request = Arc::new(request);
+
+    for (index, file) in shared_request.files.iter().enumerate() {
+        if state.stop_requested.load(Ordering::SeqCst) {
+            let _ = window.emit("spine-log", "Batch stopped by user.");
+            stopped = true;
+            break;
+        }
+
+        let payload = ProgressPayload {
+            current: index + 1,
+            total,
+            file: file.clone(),
+        };
+        let _ = window.emit("spine-progress", payload);
+
+        let output_dir = export_one_file(&window, &state, shared_request.as_ref(), file, &run_folder_name).await?;
+        completed += 1;
+        output_folders.push(output_dir);
+    }
+
+    output_folders.sort();
+    output_folders.dedup();
+
+    Ok(BatchExportResult {
+        completed,
+        total,
+        output_folders,
+        stopped,
+    })
+}
+
+#[tauri::command]
+async fn stop_batch_export(state: State<'_, Arc<AppState>>) -> Result<(), String> {
+    state.stop_requested.store(true, Ordering::SeqCst);
+
+    let child_ids = {
+        let children = state.running_children.lock().await;
+        children.clone()
+    };
+
+    for pid in child_ids {
+        kill_process(pid).await;
+    }
+
+    Ok(())
+}
+
+#[tauri::command]
+async fn open_path(path: String) -> Result<(), String> {
+    let target = PathBuf::from(path.trim_matches('"'));
+    if !target.exists() {
+        return Err("Path không tồn tại.".to_string());
+    }
+
+    #[cfg(windows)]
+    {
+        Command::new("explorer")
+            .arg(target)
+            .spawn()
+            .map_err(|e| e.to_string())?;
+    }
+
+    #[cfg(target_os = "macos")]
+    {
+        Command::new("open")
+            .arg(target)
+            .spawn()
+            .map_err(|e| e.to_string())?;
+    }
+
+    #[cfg(all(not(windows), not(target_os = "macos")))]
+    {
+        Command::new("xdg-open")
+            .arg(target)
+            .spawn()
+            .map_err(|e| e.to_string())?;
+    }
+
+    Ok(())
+}
+
+async fn export_one_file(
+    window: &Window,
+    state: &State<'_, Arc<AppState>>,
+    request: &BatchExportRequest,
+    file: &str,
+    run_folder_name: &str,
+) -> Result<String, String> {
+    let input_file = PathBuf::from(file);
+    let output_dir = resolve_timestamp_output_dir(request, &input_file, run_folder_name)?;
+    let export_plan = resolve_export_plan(request, &input_file, &output_dir)?;
+
+    if !output_dir.trim().is_empty() {
+        fs::create_dir_all(&output_dir).map_err(|e| e.to_string())?;
+    }
+    let _ = window.emit("spine-log", format!("Output: {output_dir}"));
+    let _ = window.emit(
+        "spine-log",
+        format!(
+            "Export action: {}",
+            export_plan.arg.as_deref().unwrap_or("none")
+        ),
+    );
+
+    let mut cmd = Command::new(&request.spine_path);
+    cmd.arg(format!("-Xmx{}", request.max_memory))
+        .arg("--update")
+        .arg(&request.target_version)
+        .arg("--input")
+        .arg(file)
+        .arg("--output")
+        .arg(&output_dir);
+
+    if request.clean {
+        cmd.arg("--clean");
+    }
+
+    if let Some(export_arg) = &export_plan.arg {
+        cmd.arg("--export").arg(export_arg);
+    }
+
+    cmd.stdout(Stdio::piped()).stderr(Stdio::piped());
+
+    let command_line = format!("{cmd:?}");
+    let _ = window.emit("spine-log", format!("Running: {command_line}"));
+
+    let mut child = cmd.spawn().map_err(|e| e.to_string())?;
+    if let Some(pid) = child.id() {
+        state.running_children.lock().await.push(pid);
+    }
+
+    let stdout_task = child.stdout.take().map(|stdout| {
+        let window = window.clone();
+        tokio::spawn(async move {
+            let mut lines = BufReader::new(stdout).lines();
+            while let Ok(Some(line)) = lines.next_line().await {
+                let _ = window.emit("spine-log", line);
+            }
+        })
+    });
+
+    let stderr_task = child.stderr.take().map(|stderr| {
+        let window = window.clone();
+        tokio::spawn(async move {
+            let mut lines = BufReader::new(stderr).lines();
+            while let Ok(Some(line)) = lines.next_line().await {
+                let _ = window.emit("spine-error", line);
+            }
+        })
+    });
+
+    let timeout = Duration::from_secs(request.timeout_seconds.max(30));
+    let status = match time::timeout(timeout, child.wait()).await {
+        Ok(result) => result.map_err(|e| e.to_string())?,
+        Err(_) => {
+            let _ = child.kill().await;
+            return Err(format!("Timeout khi export: {file}"));
+        }
+    };
+
+    if let Some(pid) = child.id() {
+        state.running_children.lock().await.retain(|value| *value != pid);
+    }
+
+    if let Some(task) = stdout_task {
+        let _ = task.await;
+    }
+    if let Some(task) = stderr_task {
+        let _ = task.await;
+    }
+
+    if !status.success() {
+        if let Some(temp_file) = export_plan.temp_file {
+            let _ = fs::remove_file(temp_file);
+        }
+        return Err(format!("Spine CLI failed for {file} with status {status}."));
+    }
+
+    if let Some(temp_file) = export_plan.temp_file {
+        let _ = fs::remove_file(temp_file);
+    }
+
+    let _ = window.emit("spine-log", format!("Completed: {file}"));
+
+    Ok(output_dir)
+}
+
+fn resolve_timestamp_output_dir(
+    request: &BatchExportRequest,
+    input_file: &Path,
+    run_folder_name: &str,
+) -> Result<String, String> {
+    let parent = input_file
+        .parent()
+        .ok_or_else(|| "Không xác định được output directory.".to_string())?;
+
+    let output_root = request.output_path.trim();
+    if output_root.is_empty() {
+        return Ok(path_to_string(&parent.join(run_folder_name)));
+    }
+
+    let mut output_dir = PathBuf::from(output_root.trim_matches('"'));
+
+    if request.preserve_relative_paths {
+        let input_root = PathBuf::from(request.input_root.trim_matches('"'));
+        let relative_base = if input_root.is_file() {
+            input_root
+                .parent()
+                .and_then(|root_parent| parent.strip_prefix(root_parent).ok())
+        } else {
+            parent.strip_prefix(&input_root).ok()
+        };
+
+        if let Some(relative) = relative_base {
+            if !relative.as_os_str().is_empty() {
+                output_dir.push(relative);
+            }
+        }
+    }
+
+    output_dir.push(run_folder_name);
+    Ok(path_to_string(&output_dir))
+}
+
+fn resolve_export_plan(
+    request: &BatchExportRequest,
+    input_file: &Path,
+    output_dir: &str,
+) -> Result<ExportPlan, String> {
+    if matches!(request.export_mode, ExportMode::GeneratedSettings) {
+        let temp_file = create_generated_export_settings(request, input_file, output_dir)?;
+        return Ok(ExportPlan {
+            arg: Some(path_to_string(&temp_file)),
+            temp_file: Some(temp_file),
+        });
+    }
+
+    let arg = resolve_export_arg(request, input_file)?;
+    Ok(ExportPlan {
+        arg,
+        temp_file: None,
+    })
+}
+
+fn create_generated_export_settings(
+    request: &BatchExportRequest,
+    input_file: &Path,
+    output_dir: &str,
+) -> Result<PathBuf, String> {
+    let format = if request.generated_format.eq_ignore_ascii_case("binary") {
+        "Binary"
+    } else {
+        "JSON"
+    };
+    let extension = normalize_skeleton_extension(&request.generated_skeleton_extension, format);
+    let class_name = if format == "Binary" {
+        "export-binary"
+    } else {
+        "export-json"
+    };
+
+    let pack_atlas = if request.generated_pack_atlas {
+        serde_json::json!({
+            "stripWhitespaceX": request.generated_strip_whitespace_x,
+            "stripWhitespaceY": request.generated_strip_whitespace_y,
+            "rotation": request.generated_rotation,
+            "alias": request.generated_alias,
+            "ignoreBlankImages": request.generated_ignore_blank_images,
+            "alphaThreshold": request.generated_alpha_threshold.clamp(0, 255),
+            "minWidth": request.generated_min_width.max(1),
+            "minHeight": request.generated_min_height.max(1),
+            "maxWidth": request.generated_max_width.max(16),
+            "maxHeight": request.generated_max_height.max(16),
+            "pot": request.generated_pot,
+            "multipleOfFour": request.generated_multiple_of_four,
+            "square": request.generated_square,
+            "outputFormat": request.generated_output_format,
+            "jpegQuality": request.generated_jpeg_quality.clamp(0.0, 1.0),
+            "premultiplyAlpha": request.generated_premultiply_alpha,
+            "bleed": request.generated_bleed,
+            "scale": [1],
+            "scaleSuffix": [""],
+            "scaleResampling": ["bicubic"],
+            "paddingX": request.generated_padding_x.max(0),
+            "paddingY": request.generated_padding_y.max(0),
+            "edgePadding": request.generated_edge_padding,
+            "duplicatePadding": request.generated_duplicate_padding,
+            "filterMin": request.generated_filter_min,
+            "filterMag": request.generated_filter_mag,
+            "wrapX": request.generated_wrap_x,
+            "wrapY": request.generated_wrap_y,
+            "format": request.generated_texture_format,
+            "atlasExtension": request.generated_atlas_extension,
+            "combineSubdirectories": request.generated_combine_subdirectories,
+            "flattenPaths": request.generated_flatten_paths,
+            "useIndexes": request.generated_use_indexes,
+            "debug": false,
+            "fast": request.generated_fast,
+            "limitMemory": request.generated_limit_memory,
+            "currentProject": true,
+            "packing": request.generated_packing,
+            "prettyPrint": request.generated_pretty_print,
+            "legacyOutput": false,
+            "webp": null,
+            "bleedIterations": request.generated_bleed_iterations.max(0),
+            "ignore": false,
+            "separator": "_",
+            "silent": false
+        })
+    } else {
+        serde_json::Value::Null
+    };
+
+    let settings = serde_json::json!({
+        "class": class_name,
+        "extension": extension,
+        "format": format,
+        "prettyPrint": request.generated_pretty_print,
+        "nonessential": request.generated_nonessential,
+        "cleanUp": request.clean,
+        "packAtlas": pack_atlas,
+        "packSource": request.generated_pack_source,
+        "packTarget": request.generated_pack_target,
+        "warnings": request.generated_warnings,
+        "version": null,
+        "output": output_dir,
+        "forceAll": request.generated_force_all,
+        "input": path_to_string(input_file),
+        "open": false
+    });
+
+    let temp_file = std::env::temp_dir().join(format!(
+        "spineforge-x-{}-{}.export.json",
+        chrono::Local::now().format("%Y%m%d%H%M%S%3f"),
+        std::process::id()
+    ));
+    let json = serde_json::to_string_pretty(&settings).map_err(|e| e.to_string())?;
+    fs::write(&temp_file, json).map_err(|e| e.to_string())?;
+    Ok(temp_file)
+}
+
+fn resolve_export_arg(request: &BatchExportRequest, input_file: &Path) -> Result<Option<String>, String> {
+    match request.export_mode {
+        ExportMode::InternalExperimental => Err(
+            "Use internal project settings đã bị tắt vì Spine CLI cần --export/-e để export."
+                .to_string(),
+        ),
+        ExportMode::GlobalJson => request
+            .global_json_path
+            .clone()
+            .filter(|value| !value.trim().is_empty())
+            .map(Some)
+            .ok_or_else(|| "Force global settings cần global .export.json.".to_string()),
+        ExportMode::BuiltIn => Ok(Some(request.built_in_export.clone())),
+        ExportMode::GeneratedSettings => Ok(Some(request.built_in_export.clone())),
+        ExportMode::PerProjectJson => {
+            if let Some(per_project) = find_per_project_export_json(input_file) {
+                return Ok(Some(path_to_string(&per_project)));
+            }
+
+            match request.fallback_mode {
+                FallbackMode::BuiltIn => Ok(Some(request.built_in_export.clone())),
+                FallbackMode::GlobalJson => request
+                    .global_json_path
+                    .clone()
+                    .filter(|value| !value.trim().is_empty())
+                    .map(Some)
+                    .ok_or_else(|| "Fallback global JSON được chọn nhưng path trống.".to_string()),
+                FallbackMode::Skip => Err(format!(
+                    "Không tìm thấy .export.json cạnh {}",
+                    path_to_string(input_file)
+                )),
+            }
+        }
+    }
+}
+
+fn find_per_project_export_json(input_file: &Path) -> Option<PathBuf> {
+    let parent = input_file.parent()?;
+    let mut candidates = fs::read_dir(parent)
+        .ok()?
+        .filter_map(Result::ok)
+        .map(|entry| entry.path())
+        .filter(|path| {
+            path.is_file()
+                && path
+                    .file_name()
+                    .and_then(|name| name.to_str())
+                    .map(|name| name.ends_with(".export.json"))
+                    .unwrap_or(false)
+        })
+        .collect::<Vec<_>>();
+
+    candidates.sort();
+    candidates.into_iter().next()
+}
+
+fn make_export_folder_name(target_version: &str) -> String {
+    let version = sanitize_folder_part(target_version);
+    let now = chrono::Local::now();
+    format!("export_{}_{}", version, now.format("%d%m%Y_%H%M%S"))
+}
+
+fn sanitize_folder_part(value: &str) -> String {
+    let sanitized = value
+        .trim()
+        .chars()
+        .map(|ch| {
+            if ch.is_ascii_alphanumeric() || ch == '.' || ch == '-' {
+                ch
+            } else {
+                '-'
+            }
+        })
+        .collect::<String>();
+
+    if sanitized.is_empty() {
+        "unknown".to_string()
+    } else {
+        sanitized
+    }
+}
+
+fn normalize_skeleton_extension(value: &str, format: &str) -> String {
+    let fallback = if format == "Binary" { ".skel" } else { ".json" };
+    let trimmed = value.trim();
+
+    if trimmed.is_empty()
+        || !trimmed.starts_with('.')
+        || trimmed.contains(['/', '\\', ':', '*', '?', '"', '<', '>', '|'])
+    {
+        fallback.to_string()
+    } else {
+        trimmed.to_string()
+    }
+}
+
+fn is_timestamp_export_folder(name: &str) -> bool {
+    let parts = name.split('_').collect::<Vec<_>>();
+    parts.len() == 4
+        && parts[0] == "export"
+        && !parts[1].is_empty()
+        && parts[2].len() == 8
+        && parts[2].chars().all(|ch| ch.is_ascii_digit())
+        && parts[3].len() == 6
+        && parts[3].chars().all(|ch| ch.is_ascii_digit())
+}
+
+fn spine_candidates() -> Vec<PathBuf> {
+    let mut candidates = Vec::new();
+
+    if let Ok(spine_path) = std::env::var("SPINE_PATH") {
+        let path = PathBuf::from(spine_path);
+        candidates.push(path.clone());
+        candidates.push(path.join("Spine.com"));
+        candidates.push(path.join("Spine.exe"));
+    }
+
+    if cfg!(windows) {
+        candidates.push(PathBuf::from(r"C:\Program Files\Spine\Spine.com"));
+        candidates.push(PathBuf::from(r"C:\Program Files (x86)\Spine\Spine.com"));
+        candidates.push(PathBuf::from(r"C:\Program Files\Spine\Spine.exe"));
+        candidates.push(PathBuf::from(r"C:\Program Files (x86)\Spine\Spine.exe"));
+    } else if cfg!(target_os = "macos") {
+        candidates.push(PathBuf::from("/Applications/Spine.app/Contents/MacOS/Spine"));
+    }
+
+    candidates
+}
+
+fn is_spine_file(path: &Path) -> bool {
+    path.extension()
+        .and_then(|extension| extension.to_str())
+        .map(|extension| extension.eq_ignore_ascii_case("spine"))
+        .unwrap_or(false)
+}
+
+fn is_temp_spine_file(path: &Path) -> bool {
+    path.file_name()
+        .and_then(|name| name.to_str())
+        .map(|name| name.starts_with(".~") || name.starts_with('~'))
+        .unwrap_or(false)
+}
+
+fn path_to_string(path: &Path) -> String {
+    path.to_string_lossy().to_string()
+}
+
+fn parse_spine_version(output: &str) -> Option<String> {
+    let mut found = None;
+
+    for token in output.split(|ch: char| !(ch.is_ascii_alphanumeric() || ch == '.')) {
+        let cleaned = token.trim_matches('.');
+        if cleaned.chars().filter(|ch| *ch == '.').count() >= 1
+            && cleaned.chars().any(|ch| ch.is_ascii_digit())
+            && cleaned
+                .chars()
+                .all(|ch| ch.is_ascii_digit() || ch == '.' || ch.eq_ignore_ascii_case(&'x'))
+        {
+            found = Some(cleaned.to_string());
+        }
+    }
+
+    found
+}
+
+async fn kill_process(pid: u32) {
+    #[cfg(windows)]
+    {
+        let _ = Command::new("taskkill")
+            .arg("/PID")
+            .arg(pid.to_string())
+            .arg("/T")
+            .arg("/F")
+            .output()
+            .await;
+    }
+
+    #[cfg(not(windows))]
+    {
+        let _ = Command::new("kill")
+            .arg("-TERM")
+            .arg(pid.to_string())
+            .output()
+            .await;
+    }
+}
+
+pub fn run() {
+    let state = Arc::new(AppState::default());
+
+    tauri::Builder::default()
+        .plugin(tauri_plugin_dialog::init())
+        .manage(state)
+        .setup(|app| {
+            if let Some(window) = app.get_webview_window("main") {
+                let _ = window.emit("spine-log", "SpineForge X ready.");
+            }
+            Ok(())
+        })
+        .invoke_handler(tauri::generate_handler![
+            auto_detect_spine,
+            detect_spine_version,
+            scan_spine_files,
+            validate_settings,
+            clean_timestamp_exports,
+            open_path,
+            start_batch_export,
+            stop_batch_export
+        ])
+        .run(tauri::generate_context!())
+        .expect("error while running tauri application");
+}
