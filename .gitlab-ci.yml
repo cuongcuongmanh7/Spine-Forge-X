@@ -31,8 +31,10 @@ release:windows:
         Copy-Item -Path $nsisPluginSource -Destination $nsisPluginTarget -Force
       }
 
+      $ErrorActionPreference = "Continue"
       npm run tauri build -- --bundles nsis *> tauri-build.log
       $tauriBuildExitCode = $LASTEXITCODE
+      $ErrorActionPreference = "Stop"
       Get-Content tauri-build.log
 
       if ($tauriBuildExitCode -ne 0) {
