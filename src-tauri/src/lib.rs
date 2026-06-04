@@ -46,11 +46,19 @@ enum FallbackMode {
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
+enum OutputPolicy {
+    Timestamp,
+    SourceFolderName,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
 struct BatchExportRequest {
     spine_path: String,
     input_root: String,
     files: Vec<String>,
     output_path: String,
+    output_policy: OutputPolicy,
     target_version: String,
     export_mode: ExportMode,
     fallback_mode: FallbackMode,
@@ -227,6 +235,7 @@ fn scan_spine_files(input_path: String) -> Result<ScanResult, String> {
 fn validate_settings(
     spine_path: String,
     output_path: String,
+    output_policy: String,
     export_mode: String,
     global_json_path: String,
 ) -> ValidateResult {
@@ -254,6 +263,8 @@ fn validate_settings(
         if !output.exists() {
             warnings.push("Output directory chưa tồn tại; app sẽ thử tạo khi chạy.".to_string());
         }
+    } else if output_policy == "sourceFolderName" {
+        errors.push("Policy folder theo tên source cần chọn output root.".to_string());
     }
 
     if (export_mode == "globalJson" || export_mode == "perProjectJson")
@@ -350,7 +361,14 @@ async fn start_batch_export(
     let mut output_folders = Vec::new();
     let mut stopped = false;
     let run_folder_name = make_export_folder_name(&request.target_version);
-    let _ = window.emit("spine-log", format!("Timestamp export folder: {run_folder_name}"));
+    match request.output_policy {
+        OutputPolicy::Timestamp => {
+            let _ = window.emit("spine-log", format!("Timestamp export folder: {run_folder_name}"));
+        }
+        OutputPolicy::SourceFolderName => {
+            let _ = window.emit("spine-log", "Output policy: source folder name");
+        }
+    }
     let shared_request = Arc::new(request);
 
     for (index, file) in shared_request.files.iter().enumerate() {
@@ -441,7 +459,7 @@ async fn export_one_file(
     run_folder_name: &str,
 ) -> Result<String, String> {
     let input_file = PathBuf::from(file);
-    let output_dir = resolve_timestamp_output_dir(request, &input_file, run_folder_name)?;
+    let output_dir = resolve_output_dir(request, &input_file, run_folder_name)?;
     let export_plan = resolve_export_plan(request, &input_file, &output_dir)?;
 
     if !output_dir.trim().is_empty() {
@@ -539,7 +557,7 @@ async fn export_one_file(
     Ok(output_dir)
 }
 
-fn resolve_timestamp_output_dir(
+fn resolve_output_dir(
     request: &BatchExportRequest,
     input_file: &Path,
     run_folder_name: &str,
@@ -549,31 +567,48 @@ fn resolve_timestamp_output_dir(
         .ok_or_else(|| "Không xác định được output directory.".to_string())?;
 
     let output_root = request.output_path.trim();
-    if output_root.is_empty() {
-        return Ok(path_to_string(&parent.join(run_folder_name)));
-    }
 
-    let mut output_dir = PathBuf::from(output_root.trim_matches('"'));
-
-    if request.preserve_relative_paths {
-        let input_root = PathBuf::from(request.input_root.trim_matches('"'));
-        let relative_base = if input_root.is_file() {
-            input_root
-                .parent()
-                .and_then(|root_parent| parent.strip_prefix(root_parent).ok())
-        } else {
-            parent.strip_prefix(&input_root).ok()
-        };
-
-        if let Some(relative) = relative_base {
-            if !relative.as_os_str().is_empty() {
-                output_dir.push(relative);
+    match request.output_policy {
+        OutputPolicy::Timestamp => {
+            if output_root.is_empty() {
+                return Ok(path_to_string(&parent.join(run_folder_name)));
             }
+
+            let mut output_dir = PathBuf::from(output_root.trim_matches('"'));
+
+            if request.preserve_relative_paths {
+                let input_root = PathBuf::from(request.input_root.trim_matches('"'));
+                let relative_base = if input_root.is_file() {
+                    input_root
+                        .parent()
+                        .and_then(|root_parent| parent.strip_prefix(root_parent).ok())
+                } else {
+                    parent.strip_prefix(&input_root).ok()
+                };
+
+                if let Some(relative) = relative_base {
+                    if !relative.as_os_str().is_empty() {
+                        output_dir.push(relative);
+                    }
+                }
+            }
+
+            output_dir.push(run_folder_name);
+            Ok(path_to_string(&output_dir))
+        }
+        OutputPolicy::SourceFolderName => {
+            if output_root.is_empty() {
+                return Err("Policy folder theo tên source cần output root.".to_string());
+            }
+
+            let source_folder_name = parent
+                .file_name()
+                .ok_or_else(|| "Không xác định được tên folder chứa file .spine.".to_string())?;
+            let mut output_dir = PathBuf::from(output_root.trim_matches('"'));
+            output_dir.push(source_folder_name);
+            Ok(path_to_string(&output_dir))
         }
     }
-
-    output_dir.push(run_folder_name);
-    Ok(path_to_string(&output_dir))
 }
 
 fn resolve_export_plan(
@@ -885,6 +920,8 @@ pub fn run() {
 
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_process::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .manage(state)
         .setup(|app| {
             if let Some(window) = app.get_webview_window("main") {

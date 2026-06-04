@@ -1,0 +1,119 @@
+stages:
+  - release
+
+release:windows:
+  stage: release
+  tags: []
+  rules:
+    - if: '$CI_COMMIT_TAG =~ /^v\d+\.\d+\.\d+.*$/'
+  variables:
+    GIT_STRATEGY: fetch
+    GIT_DEPTH: "0"
+  script:
+    - |
+      $ErrorActionPreference = "Stop"
+
+      $version = $env:CI_COMMIT_TAG.TrimStart("v")
+      $packageName = "spineforge-x"
+      $installerName = "SpineForge X_${version}_x64-setup.exe"
+      $releaseAssetName = "spineforge-x_${version}_x64-setup.exe"
+      $packageBaseUrl = "$env:CI_API_V4_URL/projects/$env:CI_PROJECT_ID/packages/generic/$packageName/$version"
+
+      Write-Host "Building SpineForge X $version"
+      npm ci
+      npm run tauri build
+
+      $installerPath = "src-tauri/target/release/bundle/nsis/$installerName"
+      $signaturePath = "$installerPath.sig"
+
+      if (!(Test-Path $installerPath)) {
+        throw "Installer not found: $installerPath"
+      }
+      if (!(Test-Path $signaturePath)) {
+        throw "Signature not found: $signaturePath"
+      }
+
+      $signature = (Get-Content $signaturePath -Raw).Trim()
+      $downloadUrl = "https://gitlab.com/cuongondi/spineforge-x/-/releases/permalink/latest/downloads/$releaseAssetName"
+
+      $latest = [ordered]@{
+        version = $version
+        notes = "SpineForge X $version"
+        pub_date = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
+        platforms = [ordered]@{
+          "windows-x86_64" = [ordered]@{
+            signature = $signature
+            url = $downloadUrl
+          }
+        }
+      }
+
+      $latestJson = $latest | ConvertTo-Json -Depth 8
+      Set-Content -Path latest.json -Value $latestJson -Encoding UTF8
+
+      $headers = @{ "PRIVATE-TOKEN" = $env:GITLAB_TOKEN }
+
+      Write-Host "Uploading installer to Generic Package Registry"
+      Invoke-RestMethod `
+        -Method Put `
+        -Headers $headers `
+        -InFile $installerPath `
+        -Uri "$packageBaseUrl/$releaseAssetName"
+
+      Write-Host "Uploading latest.json to Generic Package Registry"
+      Invoke-RestMethod `
+        -Method Put `
+        -Headers $headers `
+        -InFile "latest.json" `
+        -Uri "$packageBaseUrl/latest.json"
+
+      $releasePayload = @{
+        name = "SpineForge X $env:CI_COMMIT_TAG"
+        tag_name = $env:CI_COMMIT_TAG
+        description = "SpineForge X $version"
+        assets = @{
+          links = @(
+            @{
+              name = $releaseAssetName
+              url = "$packageBaseUrl/$releaseAssetName"
+              direct_asset_path = "/$releaseAssetName"
+              link_type = "package"
+            },
+            @{
+              name = "latest.json"
+              url = "$packageBaseUrl/latest.json"
+              direct_asset_path = "/latest.json"
+              link_type = "other"
+            }
+          )
+        }
+      } | ConvertTo-Json -Depth 8
+
+      Write-Host "Creating GitLab Release"
+      try {
+        Invoke-RestMethod `
+          -Method Post `
+          -Headers $headers `
+          -ContentType "application/json" `
+          -Body $releasePayload `
+          -Uri "$env:CI_API_V4_URL/projects/$env:CI_PROJECT_ID/releases"
+      } catch {
+        if ($_.Exception.Response.StatusCode.value__ -ne 409) {
+          throw
+        }
+
+        Write-Host "Release already exists, updating asset links"
+        Invoke-RestMethod `
+          -Method Put `
+          -Headers $headers `
+          -ContentType "application/json" `
+          -Body $releasePayload `
+          -Uri "$env:CI_API_V4_URL/projects/$env:CI_PROJECT_ID/releases/$env:CI_COMMIT_TAG"
+      }
+  artifacts:
+    when: always
+    expire_in: 7 days
+    paths:
+      - latest.json
+      - src-tauri/target/release/bundle/nsis/*.exe
+      - src-tauri/target/release/bundle/nsis/*.sig

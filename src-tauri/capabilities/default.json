@@ -12,6 +12,8 @@
     "core:window:allow-set-shadow",
     "dialog:allow-open",
     "dialog:allow-message",
-    "dialog:allow-confirm"
+    "dialog:allow-confirm",
+    "updater:default",
+    "process:default"
   ]
 }

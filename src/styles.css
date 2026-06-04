@@ -95,15 +95,87 @@ body {
 }
 
 .titlebar-mark {
+  display: block;
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  object-fit: contain;
+}
+
+.titlebar-version {
+  display: inline-flex;
+  align-items: center;
+  height: 20px;
+  padding: 0 7px;
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  background: var(--surface-soft);
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.titlebar-update-check {
   display: inline-grid;
   place-items: center;
   width: 24px;
   height: 24px;
-  border-radius: 6px;
-  background: var(--primary);
-  color: var(--primary-text);
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  background: var(--surface-soft);
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.titlebar-update-check:hover:not(:disabled) {
+  color: var(--text-strong);
+  border-color: var(--primary);
+}
+
+.titlebar-update-note {
+  color: var(--text-muted);
   font-size: 11px;
-  letter-spacing: 0;
+  font-weight: 800;
+}
+
+.titlebar-update {
+  display: inline-grid;
+  grid-template-columns: auto 80px auto;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  height: 24px;
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.titlebar-update span:first-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.titlebar-update progress {
+  width: 80px;
+  height: 8px;
+}
+
+.titlebar-update-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 24px;
+  padding: 0 9px;
+  border: 1px solid #22c55e;
+  border-radius: 999px;
+  background: #22c55e;
+  color: #052e16;
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1;
 }
 
 .titlebar-controls {
@@ -385,6 +457,15 @@ select:focus {
   outline-offset: 1px;
 }
 
+input.field-invalid {
+  border-color: #d92d37;
+  box-shadow: 0 0 0 1px #d92d37;
+}
+
+input.field-invalid:focus {
+  outline-color: #f04438;
+}
+
 .icon-button,
 .ghost-icon,
 .ghost-button,
@@ -508,6 +589,34 @@ select:focus {
   background: var(--surface-control);
   font-size: 13px;
   font-weight: 600;
+}
+
+.mode-option.detailed {
+  align-items: flex-start;
+  min-height: 74px;
+}
+
+.mode-option-content {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.mode-option-content strong {
+  color: var(--text-strong);
+  font-size: 13px;
+  line-height: 1.25;
+}
+
+.mode-option-content small {
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.4;
+}
+
+.output-policy-grid {
+  margin-bottom: 0;
 }
 
 .mode-option input {

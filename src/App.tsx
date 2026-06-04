@@ -1,8 +1,11 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { listen } from '@tauri-apps/api/event';
 import { invoke } from '@tauri-apps/api/core';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { confirm, message, open } from '@tauri-apps/plugin-dialog';
+import { relaunch } from '@tauri-apps/plugin-process';
+import { check, type DownloadEvent, type Update } from '@tauri-apps/plugin-updater';
+import appIconUrl from '../src-tauri/icons/icon.ico';
 import {
   AlertTriangle,
   CheckCircle2,
@@ -26,9 +29,11 @@ import {
 
 type ExportMode = 'perProjectJson' | 'globalJson' | 'builtIn' | 'generatedSettings';
 type FallbackMode = 'builtIn' | 'globalJson' | 'skip';
+type OutputPolicy = 'timestamp' | 'sourceFolderName';
 type Language = 'vi' | 'en';
 type ThemeMode = 'light' | 'dark';
 type TabKey = 'main' | 'settings';
+type UpdateStatus = 'idle' | 'checking' | 'downloading' | 'ready' | 'upToDate' | 'error';
 
 type ScanResult = {
   files: string[];
@@ -65,12 +70,27 @@ type FieldStatusProps = {
   message: string;
 };
 
+type UpdateUiState = {
+  status: UpdateStatus;
+  version: string;
+  progress: number;
+  progressKnown: boolean;
+};
+
 const targetVersionPresets = ['3.8.99', '4.0.xx', '4.1.xx', '4.2.xx', '4.3.xx', 'lateststable'];
+const appVersionLabel = `v${__APP_VERSION__}`;
+const initialUpdateUi: UpdateUiState = {
+  status: 'idle',
+  version: '',
+  progress: 0,
+  progressKnown: false
+};
 
 const defaultState = {
   spinePath: '',
   inputPath: '',
   outputPath: '',
+  outputPolicy: 'timestamp' as OutputPolicy,
   targetVersion: '4.3.xx',
   exportMode: 'perProjectJson' as ExportMode,
   fallbackMode: 'builtIn' as FallbackMode,
@@ -146,9 +166,13 @@ const copy = {
     outputDirectory: 'Output',
     outputRoot: 'Output root',
     outputPolicy: 'Cơ chế output',
-    timestampPolicy: 'Timestamped folder: export_<Spine version>_DDMMYYYY_HHMMSS',
+    timestampPolicy: 'Timestamped export',
+    sourceFolderPolicy: 'Folder theo tên source',
+    timestampPolicyHelp: 'Tạo folder export_<Spine version>_DDMMYYYY_HHMMSS. Nếu có output root, app có thể mirror relative path trước khi tạo folder timestamp.',
+    sourceFolderPolicyHelp: 'Chọn một output root tổng; mỗi file export vào outputRoot/<tên folder chứa file .spine>, ví dụ outputRoot/4001.',
     outputHelperAuto: 'Để trống: mỗi folder chứa .spine sẽ có folder timestamp riêng.',
     outputHelperSelected: 'Có output root: app mirror cấu trúc từ input path và tạo folder timestamp bên trong.',
+    outputHelperSourceFolder: 'Policy này cần output root. Output con được đặt theo tên folder chứa file .spine.',
     browseOutput: 'Chọn output',
     cleanTimestamp: 'Xóa timestamp exports',
     cleanConfirmTitle: 'Xác nhận xóa',
@@ -225,7 +249,7 @@ const copy = {
     maxMemory: 'Max memory',
     timeoutSeconds: 'Timeout seconds',
     cleanAnimation: 'Clean animation',
-    preserveRelativePaths: 'Mirror relative folders into output root',
+    preserveRelativePaths: 'Mirror relative folders into output root (chỉ Timestamped export)',
     run: 'Chạy export',
     start: 'Bắt đầu',
     running: 'Đang chạy...',
@@ -277,9 +301,13 @@ const copy = {
     outputDirectory: 'Output',
     outputRoot: 'Output root',
     outputPolicy: 'Policy',
-    timestampPolicy: 'Timestamped folder: export_<Spine version>_DDMMYYYY_HHMMSS',
+    timestampPolicy: 'Timestamped export',
+    sourceFolderPolicy: 'Source folder name',
+    timestampPolicyHelp: 'Creates export_<Spine version>_DDMMYYYY_HHMMSS. With an output root, the app can mirror relative folders before creating the timestamp folder.',
+    sourceFolderPolicyHelp: 'Choose one output root; each file exports to outputRoot/<source .spine parent folder name>, for example outputRoot/4001.',
     outputHelperAuto: 'Empty: each source .spine folder gets its own timestamp folder.',
     outputHelperSelected: 'With output root: the app mirrors input folders and creates a timestamp folder inside.',
+    outputHelperSourceFolder: 'This policy requires an output root. Child output folders use the parent folder name of each .spine file.',
     browseOutput: 'Browse Output',
     cleanTimestamp: 'Clean timestamp exports',
     cleanConfirmTitle: 'Confirm cleanup',
@@ -356,7 +384,7 @@ const copy = {
     maxMemory: 'Max memory',
     timeoutSeconds: 'Timeout seconds',
     cleanAnimation: 'Clean animation',
-    preserveRelativePaths: 'Mirror relative folders into output root',
+    preserveRelativePaths: 'Mirror relative folders into output root (Timestamped export only)',
     run: 'Run',
     start: 'Start',
     running: 'Running...',
@@ -470,12 +498,22 @@ function App() {
   const [isDetectingVersion, setIsDetectingVersion] = useState(false);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [validation, setValidation] = useState<ValidateResult>({ ok: false, warnings: [], errors: [] });
+  const [updateUi, setUpdateUi] = useState<UpdateUiState>(initialUpdateUi);
+  const pendingUpdateRef = useRef<Update | null>(null);
+  const updateStatusTimerRef = useRef<number | null>(null);
 
   const t = copy[language];
   const progress = files.length === 0 ? 0 : Math.round((currentIndex / files.length) * 100);
   const currentFile = files[Math.max(0, currentIndex - 1)] ?? '';
   const canStart = useMemo(() => validation.ok && files.length > 0 && !isRunning, [files.length, isRunning, validation.ok]);
   const appWindow = getCurrentWindow();
+  const outputRootMissingForSourceFolder = settings.outputPolicy === 'sourceFolderName' && !settings.outputPath.trim();
+  const outputHelper =
+    settings.outputPolicy === 'sourceFolderName'
+      ? t.outputHelperSourceFolder
+      : settings.outputPath
+        ? t.outputHelperSelected
+        : t.outputHelperAuto;
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
@@ -507,15 +545,115 @@ function App() {
 
   useEffect(() => {
     void validateSettings();
-  }, [settings.spinePath, settings.outputPath, settings.exportMode, settings.globalJsonPath]);
+  }, [settings.spinePath, settings.outputPath, settings.outputPolicy, settings.exportMode, settings.globalJsonPath]);
 
   useEffect(() => {
     void autoDetectSpine(true);
   }, []);
 
+  useEffect(() => {
+    void checkForAppUpdate();
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (updateStatusTimerRef.current !== null) {
+        window.clearTimeout(updateStatusTimerRef.current);
+      }
+    };
+  }, []);
+
   function appendLog(message: string) {
     const timestamp = new Date().toLocaleTimeString();
     setLogs((items) => [...items, `${timestamp} - ${message}`]);
+  }
+
+  function showTemporaryUpdateStatus(status: UpdateStatus, durationMs = 3000) {
+    if (updateStatusTimerRef.current !== null) {
+      window.clearTimeout(updateStatusTimerRef.current);
+    }
+
+    setUpdateUi({ ...initialUpdateUi, status });
+    updateStatusTimerRef.current = window.setTimeout(() => {
+      setUpdateUi(initialUpdateUi);
+      updateStatusTimerRef.current = null;
+    }, durationMs);
+  }
+
+  async function checkForAppUpdate(manual = false) {
+    try {
+      setUpdateUi((current) => ({ ...current, status: 'checking' }));
+      const update = await check({ timeout: 30000 });
+      if (!update) {
+        if (manual) {
+          showTemporaryUpdateStatus('upToDate');
+        } else {
+          setUpdateUi(initialUpdateUi);
+        }
+        return;
+      }
+
+      pendingUpdateRef.current = update;
+      let downloaded = 0;
+      let contentLength = 0;
+
+      setUpdateUi({
+        status: 'downloading',
+        version: update.version,
+        progress: 0,
+        progressKnown: false
+      });
+
+      await update.download((event: DownloadEvent) => {
+        if (event.event === 'Started') {
+          downloaded = 0;
+          contentLength = event.data.contentLength ?? 0;
+          setUpdateUi({
+            status: 'downloading',
+            version: update.version,
+            progress: 0,
+            progressKnown: contentLength > 0
+          });
+          return;
+        }
+
+        if (event.event === 'Progress') {
+          downloaded += event.data.chunkLength;
+          const progress = contentLength > 0 ? Math.min(100, Math.round((downloaded / contentLength) * 100)) : 0;
+          setUpdateUi({
+            status: 'downloading',
+            version: update.version,
+            progress,
+            progressKnown: contentLength > 0
+          });
+          return;
+        }
+
+        setUpdateUi({
+          status: 'ready',
+          version: update.version,
+          progress: 100,
+          progressKnown: true
+        });
+      });
+    } catch (error) {
+      pendingUpdateRef.current = null;
+      console.warn('Update check failed:', error);
+      setUpdateUi(initialUpdateUi);
+    }
+  }
+
+  async function installPendingUpdate() {
+    const update = pendingUpdateRef.current;
+    if (!update) return;
+
+    try {
+      await update.install();
+      await relaunch();
+    } catch (error) {
+      setUpdateUi({ ...initialUpdateUi, status: 'error' });
+      appendLog(`Update install failed: ${String(error)}`);
+    }
   }
 
   function updateSetting<K extends keyof typeof settings>(key: K, value: (typeof settings)[K]) {
@@ -656,6 +794,7 @@ function App() {
       const result = await invoke<ValidateResult>('validate_settings', {
         spinePath: settings.spinePath,
         outputPath: settings.outputPath,
+        outputPolicy: settings.outputPolicy,
         exportMode: settings.exportMode,
         globalJsonPath: settings.globalJsonPath
       });
@@ -679,6 +818,7 @@ function App() {
           inputRoot: settings.inputPath,
           files,
           outputPath: settings.outputPath,
+          outputPolicy: settings.outputPolicy,
           targetVersion: settings.targetVersion,
           exportMode: settings.exportMode,
           fallbackMode: settings.fallbackMode,
@@ -801,8 +941,35 @@ function App() {
           onDoubleClick={() => void appWindow.toggleMaximize()}
         >
           <div className="titlebar-brand">
-            <span className="titlebar-mark">SF</span>
+            <img className="titlebar-mark" src={appIconUrl} alt="" aria-hidden="true" />
             <span>SpineForge X</span>
+            <span className="titlebar-version">{appVersionLabel}</span>
+            <button
+              className="titlebar-update-check"
+              title="Check for update"
+              disabled={updateUi.status === 'checking' || updateUi.status === 'downloading' || updateUi.status === 'ready'}
+              onMouseDown={(event) => event.stopPropagation()}
+              onClick={() => void checkForAppUpdate(true)}
+            >
+              <RotateCw className={updateUi.status === 'checking' ? 'spin' : undefined} size={13} />
+            </button>
+            {updateUi.status === 'upToDate' && <span className="titlebar-update-note">Up to date</span>}
+            {updateUi.status === 'downloading' && (
+              <span className="titlebar-update" title={`Downloading new version (v${updateUi.version})`}>
+                <span>Downloading new version (v{updateUi.version})</span>
+                <progress value={updateUi.progressKnown ? updateUi.progress : undefined} max={100} />
+                <span>{updateUi.progressKnown ? `${updateUi.progress}%` : '...'}</span>
+              </span>
+            )}
+            {updateUi.status === 'ready' && (
+              <button
+                className="titlebar-update-button"
+                onMouseDown={(event) => event.stopPropagation()}
+                onClick={() => void installPendingUpdate()}
+              >
+                Relaunch for v{updateUi.version}
+              </button>
+            )}
           </div>
         </div>
         <div className="titlebar-controls">
@@ -894,25 +1061,43 @@ function App() {
               <div className="form-row">
                 <label>{t.outputRoot}</label>
                 <input
+                  className={outputRootMissingForSourceFolder ? 'field-invalid' : undefined}
                   value={settings.outputPath}
                   onChange={(event) => updateSetting('outputPath', event.target.value)}
                   placeholder="Optional: D:\Project\Output"
                   readOnly
                 />
-                <FieldStatus ok={Boolean(settings.outputPath)} warning={!settings.outputPath} message={settings.outputPath ? t.outputHelperSelected : t.outputHelperAuto} />
+                <FieldStatus
+                  ok={Boolean(settings.outputPath)}
+                  warning={!settings.outputPath && !outputRootMissingForSourceFolder}
+                  message={outputHelper}
+                />
                 <button className="icon-button" title={t.browseOutput} onClick={chooseOutputFolder}>
                   <FolderOpen size={18} />
                 </button>
               </div>
               <div className="form-row">
                 <label>{t.outputPolicy}</label>
-                <input value={t.timestampPolicy} readOnly />
-                <span />
-                <button className="icon-button danger-icon" title={t.cleanTimestamp} onClick={cleanTimestampExports}>
-                  <Trash2 size={18} />
-                </button>
+                <div className="mode-grid output-policy-grid">
+                  {([
+                    ['timestamp', t.timestampPolicy, t.timestampPolicyHelp],
+                    ['sourceFolderName', t.sourceFolderPolicy, t.sourceFolderPolicyHelp]
+                  ] as [OutputPolicy, string, string][]).map(([value, label, description]) => (
+                    <label className="mode-option detailed" key={value}>
+                      <input
+                        type="radio"
+                        checked={settings.outputPolicy === value}
+                        onChange={() => updateSetting('outputPolicy', value)}
+                      />
+                      <span className="mode-option-content">
+                        <strong>{label}</strong>
+                        <small>{description}</small>
+                      </span>
+                    </label>
+                  ))}
+                </div>
               </div>
-              <p className="helper-text">{settings.outputPath ? t.outputHelperSelected : t.outputHelperAuto}</p>
+              <p className="helper-text">{outputHelper}</p>
             </Section>
 
             <Section title={t.run}>
@@ -1304,6 +1489,7 @@ function App() {
                   <input
                     type="checkbox"
                     checked={settings.preserveRelativePaths}
+                    disabled={settings.outputPolicy !== 'timestamp'}
                     onChange={(event) => updateSetting('preserveRelativePaths', event.target.checked)}
                   />
                   {t.preserveRelativePaths}
