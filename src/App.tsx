@@ -75,6 +75,7 @@ type UpdateUiState = {
   version: string;
   progress: number;
   progressKnown: boolean;
+  message: string;
 };
 
 const targetVersionPresets = ['3.8.99', '4.0.xx', '4.1.xx', '4.2.xx', '4.3.xx', 'lateststable'];
@@ -83,7 +84,8 @@ const initialUpdateUi: UpdateUiState = {
   status: 'idle',
   version: '',
   progress: 0,
-  progressKnown: false
+  progressKnown: false,
+  message: ''
 };
 
 const defaultState = {
@@ -578,12 +580,12 @@ function App() {
     setLogs((items) => [...items, `${timestamp} - ${message}`]);
   }
 
-  function showTemporaryUpdateStatus(status: UpdateStatus, durationMs = 3000) {
+  function showTemporaryUpdateStatus(status: UpdateStatus, durationMs = 3000, message = '') {
     if (updateStatusTimerRef.current !== null) {
       window.clearTimeout(updateStatusTimerRef.current);
     }
 
-    setUpdateUi({ ...initialUpdateUi, status });
+    setUpdateUi({ ...initialUpdateUi, status, message });
     updateStatusTimerRef.current = window.setTimeout(() => {
       setUpdateUi(initialUpdateUi);
       updateStatusTimerRef.current = null;
@@ -592,11 +594,13 @@ function App() {
 
   async function checkForAppUpdate(manual = false) {
     try {
-      setUpdateUi((current) => ({ ...current, status: 'checking' }));
+      setUpdateUi((current) => ({ ...current, status: 'checking', message: '' }));
+      if (manual) appendLog('Checking for app update...');
       const update = await check({ timeout: 30000 });
       if (!update) {
         if (manual) {
           showTemporaryUpdateStatus('upToDate');
+          appendLog('App is up to date.');
         } else {
           setUpdateUi(initialUpdateUi);
         }
@@ -611,8 +615,10 @@ function App() {
         status: 'downloading',
         version: update.version,
         progress: 0,
-        progressKnown: false
+        progressKnown: false,
+        message: ''
       });
+      appendLog(`Downloading app update v${update.version}...`);
 
       await update.download((event: DownloadEvent) => {
         if (event.event === 'Started') {
@@ -622,7 +628,8 @@ function App() {
             status: 'downloading',
             version: update.version,
             progress: 0,
-            progressKnown: contentLength > 0
+            progressKnown: contentLength > 0,
+            message: ''
           });
           return;
         }
@@ -634,7 +641,8 @@ function App() {
             status: 'downloading',
             version: update.version,
             progress,
-            progressKnown: contentLength > 0
+            progressKnown: contentLength > 0,
+            message: ''
           });
           return;
         }
@@ -643,13 +651,17 @@ function App() {
           status: 'ready',
           version: update.version,
           progress: 100,
-          progressKnown: true
+          progressKnown: true,
+          message: ''
         });
+        appendLog(`App update v${update.version} is ready to install.`);
       });
     } catch (error) {
+      const body = String(error);
       pendingUpdateRef.current = null;
       console.warn('Update check failed:', error);
-      setUpdateUi(initialUpdateUi);
+      appendLog(`Update check failed: ${body}`);
+      showTemporaryUpdateStatus('error', 6000, body);
     }
   }
 
@@ -661,8 +673,10 @@ function App() {
       await update.install();
       await relaunch();
     } catch (error) {
-      setUpdateUi({ ...initialUpdateUi, status: 'error' });
-      appendLog(`Update install failed: ${String(error)}`);
+      const body = String(error);
+      setUpdateUi({ ...initialUpdateUi, status: 'error', message: body });
+      appendLog(`Update install failed: ${body}`);
+      showTemporaryUpdateStatus('error', 6000, body);
     }
   }
 
@@ -1023,7 +1037,13 @@ function App() {
             >
               <RotateCw className={updateUi.status === 'checking' ? 'spin' : undefined} size={13} />
             </button>
+            {updateUi.status === 'checking' && <span className="titlebar-update-note">Checking...</span>}
             {updateUi.status === 'upToDate' && <span className="titlebar-update-note">Up to date</span>}
+            {updateUi.status === 'error' && (
+              <span className="titlebar-update-note error" title={updateUi.message || 'Update failed'}>
+                Update failed
+              </span>
+            )}
             {updateUi.status === 'downloading' && (
               <span className="titlebar-update" title={`Downloading new version (v${updateUi.version})`}>
                 <span>Downloading new version (v{updateUi.version})</span>

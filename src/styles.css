@@ -139,6 +139,10 @@ body {
   font-weight: 800;
 }
 
+.titlebar-update-note.error {
+  color: var(--danger);
+}
+
 .titlebar-update {
   display: inline-grid;
   grid-template-columns: auto 80px auto;
