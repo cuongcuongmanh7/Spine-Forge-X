@@ -21,6 +21,13 @@ release:windows:
 
       Write-Host "Building SpineForge X $version"
       npm ci
+
+      $nsisPluginSource = "$env:LOCALAPPDATA\tauri\NSIS\Plugins\x86-unicode\additional\nsis_tauri_utils.dll"
+      $nsisPluginTarget = "$env:LOCALAPPDATA\tauri\NSIS\Plugins\x86-unicode\nsis_tauri_utils.dll"
+      if ((Test-Path $nsisPluginSource) -and !(Test-Path $nsisPluginTarget)) {
+        Copy-Item -Path $nsisPluginSource -Destination $nsisPluginTarget -Force
+      }
+
       npm run tauri build -- --bundles nsis
 
       $installerPath = "src-tauri/target/release/bundle/nsis/$installerName"
