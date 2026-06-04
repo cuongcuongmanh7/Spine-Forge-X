@@ -166,10 +166,10 @@ const copy = {
     outputDirectory: 'Output',
     outputRoot: 'Output root',
     outputPolicy: 'Cơ chế output',
-    timestampPolicy: 'Timestamped export',
-    sourceFolderPolicy: 'Folder theo tên source',
-    timestampPolicyHelp: 'Tạo folder export_<Spine version>_DDMMYYYY_HHMMSS. Nếu có output root, app có thể mirror relative path trước khi tạo folder timestamp.',
-    sourceFolderPolicyHelp: 'Chọn một output root tổng; mỗi file export vào outputRoot/<tên folder chứa file .spine>, ví dụ outputRoot/4001.',
+    timestampPolicy: 'Folder timestamp',
+    sourceFolderPolicy: 'Folder theo source',
+    timestampPolicyHelp: 'Xuất vào folder export_<Spine version>_DDMMYYYY_HHMMSS. Khi có output root, app có thể mirror relative path trước.',
+    sourceFolderPolicyHelp: 'Chọn output root tổng; mỗi file xuất vào outputRoot/<tên folder chứa file .spine>, ví dụ outputRoot/4001.',
     outputHelperAuto: 'Để trống: mỗi folder chứa .spine sẽ có folder timestamp riêng.',
     outputHelperSelected: 'Có output root: app mirror cấu trúc từ input path và tạo folder timestamp bên trong.',
     outputHelperSourceFolder: 'Policy này cần output root. Output con được đặt theo tên folder chứa file .spine.',
@@ -265,6 +265,7 @@ const copy = {
     versionDetectFailed: 'Detect version thất bại',
     inputEmpty: 'Input path đang trống.',
     scanFailed: 'Scan thất bại',
+    scanning: 'Đang scan',
     scanned: 'Đã scan',
     starting: 'Bắt đầu batch export',
     finished: 'Batch export hoàn tất.',
@@ -301,9 +302,9 @@ const copy = {
     outputDirectory: 'Output',
     outputRoot: 'Output root',
     outputPolicy: 'Policy',
-    timestampPolicy: 'Timestamped export',
-    sourceFolderPolicy: 'Source folder name',
-    timestampPolicyHelp: 'Creates export_<Spine version>_DDMMYYYY_HHMMSS. With an output root, the app can mirror relative folders before creating the timestamp folder.',
+    timestampPolicy: 'Timestamp folder',
+    sourceFolderPolicy: 'Source folder',
+    timestampPolicyHelp: 'Exports into export_<Spine version>_DDMMYYYY_HHMMSS. With an output root, the app can mirror relative folders first.',
     sourceFolderPolicyHelp: 'Choose one output root; each file exports to outputRoot/<source .spine parent folder name>, for example outputRoot/4001.',
     outputHelperAuto: 'Empty: each source .spine folder gets its own timestamp folder.',
     outputHelperSelected: 'With output root: the app mirrors input folders and creates a timestamp folder inside.',
@@ -400,6 +401,7 @@ const copy = {
     versionDetectFailed: 'Version detect failed',
     inputEmpty: 'Input path is empty.',
     scanFailed: 'Scan failed',
+    scanning: 'Scanning',
     scanned: 'Scanned',
     starting: 'Starting batch export',
     finished: 'Batch export finished.',
@@ -495,6 +497,14 @@ function App() {
   const [logs, setLogs] = useState<string[]>([]);
   const [lastOutputFolders, setLastOutputFolders] = useState<string[]>([]);
   const [isRunning, setIsRunning] = useState(false);
+  const [isScanning, setIsScanning] = useState(false);
+  const [isChoosingInputFolder, setIsChoosingInputFolder] = useState(false);
+  const [isChoosingInputFiles, setIsChoosingInputFiles] = useState(false);
+  const [isChoosingOutputFolder, setIsChoosingOutputFolder] = useState(false);
+  const [isCleaningTimestamp, setIsCleaningTimestamp] = useState(false);
+  const [isStopping, setIsStopping] = useState(false);
+  const [isOpeningOutput, setIsOpeningOutput] = useState(false);
+  const [isAutoDetecting, setIsAutoDetecting] = useState(false);
   const [isDetectingVersion, setIsDetectingVersion] = useState(false);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [validation, setValidation] = useState<ValidateResult>({ ok: false, warnings: [], errors: [] });
@@ -660,6 +670,22 @@ function App() {
     setSettings((current) => ({ ...current, [key]: value }));
   }
 
+  function updateInputPath(value: string) {
+    updateSetting('inputPath', value);
+    if (!value.trim()) {
+      setFiles([]);
+      setSkippedFiles([]);
+      setCurrentIndex(0);
+    }
+  }
+
+  function updateOutputPath(value: string) {
+    updateSetting('outputPath', value);
+    if (!value.trim()) {
+      setLastOutputFolders([]);
+    }
+  }
+
   function updateGeneratedFormat(value: string) {
     setSettings((current) => ({
       ...current,
@@ -674,6 +700,7 @@ function App() {
   }
 
   async function detectVersion(spinePath = settings.spinePath) {
+    if (isDetectingVersion) return;
     if (!spinePath.trim()) {
       appendLog(`${t.versionDetectFailed}: Spine executable path is empty.`);
       return;
@@ -692,6 +719,8 @@ function App() {
   }
 
   async function autoDetectSpine(silent = false) {
+    if (isAutoDetecting) return;
+    setIsAutoDetecting(true);
     try {
       const detected = await invoke<string>('auto_detect_spine');
       updateSetting('spinePath', detected);
@@ -699,6 +728,8 @@ function App() {
       await detectVersion(detected);
     } catch (error) {
       if (!silent) appendLog(`${t.autoDetectFailed}: ${String(error)}`);
+    } finally {
+      setIsAutoDetecting(false);
     }
   }
 
@@ -711,68 +742,97 @@ function App() {
   }
 
   async function scanInput() {
+    if (isScanning) return;
     if (!settings.inputPath.trim()) {
       appendLog(t.inputEmpty);
       return;
     }
 
+    setIsScanning(true);
+    appendLog(`${t.scanning}: ${settings.inputPath}`);
     try {
       await scanPath(settings.inputPath);
     } catch (error) {
       appendLog(`${t.scanFailed}: ${String(error)}`);
+    } finally {
+      setIsScanning(false);
     }
   }
 
   async function chooseInputFolder() {
-    const selected = await open({
-      directory: true,
-      multiple: false,
-      title: t.browseFolder
-    });
-
-    if (typeof selected !== 'string') return;
-    updateSetting('inputPath', selected);
+    if (isChoosingInputFolder || isScanning) return;
+    setIsChoosingInputFolder(true);
 
     try {
+      const selected = await open({
+        directory: true,
+        multiple: false,
+        title: t.browseFolder
+      });
+
+      if (typeof selected !== 'string') return;
+      updateInputPath(selected);
+
+      setIsScanning(true);
+      appendLog(`${t.scanning}: ${selected}`);
       await scanPath(selected);
     } catch (error) {
       appendLog(`${t.scanFailed}: ${String(error)}`);
+    } finally {
+      setIsScanning(false);
+      setIsChoosingInputFolder(false);
     }
   }
 
   async function chooseInputFiles() {
-    const selected = await open({
-      directory: false,
-      multiple: true,
-      title: t.browseFiles,
-      filters: [{ name: 'Spine Project', extensions: ['spine'] }]
-    });
+    if (isChoosingInputFiles) return;
+    setIsChoosingInputFiles(true);
 
-    if (!Array.isArray(selected)) return;
-    const spineFiles = selected.filter((path) => path.toLowerCase().endsWith('.spine'));
-    setFiles((items) => Array.from(new Set([...items, ...spineFiles])).sort());
-    setSkippedFiles([]);
-    setCurrentIndex(0);
-    appendLog(`${t.scanned} ${spineFiles.length} Spine files.`);
+    try {
+      const selected = await open({
+        directory: false,
+        multiple: true,
+        title: t.browseFiles,
+        filters: [{ name: 'Spine Project', extensions: ['spine'] }]
+      });
+
+      if (!Array.isArray(selected)) return;
+      const spineFiles = selected.filter((path) => path.toLowerCase().endsWith('.spine'));
+      setFiles((items) => Array.from(new Set([...items, ...spineFiles])).sort());
+      setSkippedFiles([]);
+      setCurrentIndex(0);
+      appendLog(`${t.scanned} ${spineFiles.length} Spine files.`);
+    } finally {
+      setIsChoosingInputFiles(false);
+    }
   }
 
   async function chooseOutputFolder() {
-    const selected = await open({
-      directory: true,
-      multiple: false,
-      title: t.browseOutput
-    });
+    if (isChoosingOutputFolder) return;
+    setIsChoosingOutputFolder(true);
 
-    if (typeof selected !== 'string') return;
-    updateSetting('outputPath', selected);
+    try {
+      const selected = await open({
+        directory: true,
+        multiple: false,
+        title: t.browseOutput
+      });
+
+      if (typeof selected !== 'string') return;
+      updateOutputPath(selected);
+    } finally {
+      setIsChoosingOutputFolder(false);
+    }
   }
 
   async function cleanTimestampExports() {
+    if (isCleaningTimestamp) return;
     if (!settings.inputPath.trim()) {
       appendLog(t.inputEmpty);
       return;
     }
 
+    setIsCleaningTimestamp(true);
     try {
       const accepted = await confirm(t.cleanConfirmBody, { title: t.cleanConfirmTitle, kind: 'warning' });
       if (!accepted) return;
@@ -786,6 +846,8 @@ function App() {
       const body = String(error);
       appendLog(`${t.cleanFailed}: ${body}`);
       await message(body, { title: t.cleanFailed, kind: 'error' });
+    } finally {
+      setIsCleaningTimestamp(false);
     }
   }
 
@@ -805,7 +867,7 @@ function App() {
   }
 
   async function startExport() {
-    if (!canStart) return;
+    if (!canStart || isRunning) return;
 
     setIsRunning(true);
     setCurrentIndex(0);
@@ -894,11 +956,15 @@ function App() {
   }
 
   async function stopExport() {
+    if (isStopping) return;
+    setIsStopping(true);
     try {
       await invoke('stop_batch_export');
       appendLog(t.stopRequested);
     } catch (error) {
       appendLog(`${t.stopFailed}: ${String(error)}`);
+    } finally {
+      setIsStopping(false);
     }
   }
 
@@ -911,16 +977,20 @@ function App() {
   }
 
   async function openOutputFolder() {
+    if (isOpeningOutput) return;
     const target = resolveOpenOutputTarget();
     if (!target) {
       appendLog(t.openOutputEmpty);
       return;
     }
 
+    setIsOpeningOutput(true);
     try {
       await invoke('open_path', { path: target });
     } catch (error) {
       appendLog(`${t.openOutputFailed}: ${String(error)}`);
+    } finally {
+      setIsOpeningOutput(false);
     }
   }
 
@@ -1017,24 +1087,23 @@ function App() {
                 <label>{t.inputPath}</label>
                 <input
                   value={settings.inputPath}
-                  onChange={(event) => updateSetting('inputPath', event.target.value)}
+                  onChange={(event) => updateInputPath(event.target.value)}
                   placeholder="D:\Project\SpineAssets"
-                  readOnly
                 />
-                <button className="icon-button" title={t.browseFolder} onClick={chooseInputFolder}>
-                  <FolderOpen size={18} />
+                <button className="icon-button" title={t.browseFolder} disabled={isChoosingInputFolder || isScanning} onClick={chooseInputFolder}>
+                  {isChoosingInputFolder ? <RotateCw className="spin" size={18} /> : <FolderOpen size={18} />}
                 </button>
-                <button className="icon-button" title={t.scan} onClick={scanInput}>
-                  <RotateCw size={18} />
+                <button className="icon-button" title={t.scan} disabled={isScanning || !settings.inputPath.trim()} onClick={scanInput}>
+                  <RotateCw className={isScanning ? 'spin' : undefined} size={18} />
                 </button>
               </div>
               <div className="button-row offset-row">
-                <button className="secondary-button" onClick={chooseInputFolder}>
-                  <FolderOpen size={18} />
+                <button className="secondary-button" disabled={isChoosingInputFolder || isScanning} onClick={chooseInputFolder}>
+                  {isChoosingInputFolder ? <RotateCw className="spin" size={18} /> : <FolderOpen size={18} />}
                   {t.browseFolder}
                 </button>
-                <button className="secondary-button" onClick={chooseInputFiles}>
-                  <FileText size={18} />
+                <button className="secondary-button" disabled={isChoosingInputFiles} onClick={chooseInputFiles}>
+                  {isChoosingInputFiles ? <RotateCw className="spin" size={18} /> : <FileText size={18} />}
                   {t.browseFiles}
                 </button>
               </div>
@@ -1063,17 +1132,16 @@ function App() {
                 <input
                   className={outputRootMissingForSourceFolder ? 'field-invalid' : undefined}
                   value={settings.outputPath}
-                  onChange={(event) => updateSetting('outputPath', event.target.value)}
+                  onChange={(event) => updateOutputPath(event.target.value)}
                   placeholder="Optional: D:\Project\Output"
-                  readOnly
                 />
                 <FieldStatus
-                  ok={Boolean(settings.outputPath)}
-                  warning={!settings.outputPath && !outputRootMissingForSourceFolder}
+                  ok={Boolean(settings.outputPath.trim())}
+                  warning={!settings.outputPath.trim() && !outputRootMissingForSourceFolder}
                   message={outputHelper}
                 />
-                <button className="icon-button" title={t.browseOutput} onClick={chooseOutputFolder}>
-                  <FolderOpen size={18} />
+                <button className="icon-button" title={t.browseOutput} disabled={isChoosingOutputFolder} onClick={chooseOutputFolder}>
+                  {isChoosingOutputFolder ? <RotateCw className="spin" size={18} /> : <FolderOpen size={18} />}
                 </button>
               </div>
               <div className="form-row">
@@ -1114,20 +1182,20 @@ function App() {
                 </div>
               )}
               <div className="run-actions">
-                <button className="primary-button" disabled={!canStart} onClick={startExport}>
-                  <Play size={18} />
+                <button className="primary-button" disabled={!canStart || isRunning} onClick={startExport}>
+                  {isRunning ? <RotateCw className="spin" size={18} /> : <Play size={18} />}
                   {isRunning ? t.running : t.start}
                 </button>
-                <button className="secondary-button" disabled={!isRunning} onClick={stopExport}>
-                  <CircleStop size={18} />
+                <button className="secondary-button" disabled={!isRunning || isStopping} onClick={stopExport}>
+                  {isStopping ? <RotateCw className="spin" size={18} /> : <CircleStop size={18} />}
                   {t.stop}
                 </button>
-                <button className="secondary-button" disabled={!resolveOpenOutputTarget()} onClick={openOutputFolder}>
-                  <FolderOpen size={18} />
+                <button className="secondary-button" disabled={!resolveOpenOutputTarget() || isOpeningOutput} onClick={openOutputFolder}>
+                  {isOpeningOutput ? <RotateCw className="spin" size={18} /> : <FolderOpen size={18} />}
                   {t.openOutput}
                 </button>
-                <button className="secondary-button" disabled={!settings.inputPath} onClick={cleanTimestampExports}>
-                  <Trash2 size={18} />
+                <button className="secondary-button" disabled={!settings.inputPath || isCleaningTimestamp} onClick={cleanTimestampExports}>
+                  {isCleaningTimestamp ? <RotateCw className="spin" size={18} /> : <Trash2 size={18} />}
                   {t.cleanTimestamp}
                 </button>
               </div>
@@ -1188,8 +1256,8 @@ function App() {
                   placeholder="C:\Program Files\Spine\Spine.com"
                 />
                 <FieldStatus ok={Boolean(settings.spinePath) && validation.errors.length === 0} message="Spine executable path" />
-                <button className="icon-button" title={t.autoDetect} onClick={() => autoDetectSpine(false)}>
-                  <Search size={18} />
+                <button className="icon-button" title={t.autoDetect} disabled={isAutoDetecting} onClick={() => autoDetectSpine(false)}>
+                  {isAutoDetecting ? <RotateCw className="spin" size={18} /> : <Search size={18} />}
                 </button>
               </div>
             </Section>
