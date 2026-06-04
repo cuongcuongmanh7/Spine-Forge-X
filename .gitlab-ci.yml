@@ -31,7 +31,10 @@ release:windows:
         Copy-Item -Path $nsisPluginSource -Destination $nsisPluginTarget -Force
       }
 
-      npm run tauri build -- --bundles nsis
+      npm run tauri build -- --bundles nsis 2>&1 | Tee-Object -FilePath tauri-build.log
+      if ($LASTEXITCODE -ne 0) {
+        throw "Tauri build failed with exit code $LASTEXITCODE"
+      }
 
       $installerPath = "src-tauri/target/release/bundle/nsis/$installerName"
       $signaturePath = "$installerPath.sig"
@@ -125,5 +128,6 @@ release:windows:
     expire_in: 7 days
     paths:
       - latest.json
+      - tauri-build.log
       - src-tauri/target/release/bundle/nsis/*.exe
       - src-tauri/target/release/bundle/nsis/*.sig
