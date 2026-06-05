@@ -23,7 +23,7 @@ export const defaultSessionConfig = {
   outputPath: '',
   outputPolicy: 'timestamp' as OutputPolicy,
   targetVersion: '4.3.xx',
-  exportMode: 'perProjectJson' as ExportMode,
+  exportMode: 'globalJson' as ExportMode,
   fallbackMode: 'builtIn' as FallbackMode,
   globalJsonPath: '',
   builtInExport: 'binary+pack',
@@ -77,8 +77,20 @@ export type SessionConfig = typeof defaultSessionConfig;
 /** Flat shape consumed by the workspace UI and the Tauri export request (AppConfig + SessionConfig). */
 export type MergedConfig = AppConfig & SessionConfig;
 
+/** A project groups multiple sessions in the sidebar. */
+export type Project = {
+  id: string;
+  name: string;
+  /** true for the auto-created default project (lets migration keep it un-renamed). */
+  autoNamed: boolean;
+  createdAt: number;
+  updatedAt: number;
+};
+
 export type Session = {
   id: string;
+  /** Every session belongs to exactly one project. */
+  projectId: string;
   name: string;
   /** true until the user renames it — lets a folder pick keep updating the auto name. */
   autoNamed: boolean;
@@ -86,6 +98,9 @@ export type Session = {
   createdAt: number;
   updatedAt: number;
 };
+
+/** Per-session readiness shown as a colored dot in the sidebar. */
+export type SessionStatus = 'green' | 'yellow' | 'red';
 
 /** Ephemeral, never persisted. Reset on app restart. */
 export type SessionRuntime = {
@@ -101,6 +116,71 @@ export function emptyRuntime(): SessionRuntime {
 }
 
 export const targetVersionPresets = ['3.8.99', '4.3.11', 'lateststable'];
+
+/** Starting point for a brand-new global preset in the editor (JSON skeleton + packed atlas). */
+export const defaultExportPreset = {
+  class: 'export-json',
+  extension: '.json',
+  format: 'JSON',
+  prettyPrint: true,
+  nonessential: true,
+  cleanUp: false,
+  packAtlas: {
+    stripWhitespaceX: true,
+    stripWhitespaceY: true,
+    rotation: true,
+    alias: true,
+    ignoreBlankImages: false,
+    alphaThreshold: 3,
+    minWidth: 16,
+    minHeight: 16,
+    maxWidth: 2048,
+    maxHeight: 2048,
+    pot: true,
+    multipleOfFour: false,
+    square: false,
+    outputFormat: 'png',
+    jpegQuality: 0.9,
+    premultiplyAlpha: false,
+    bleed: true,
+    scale: [1],
+    scaleSuffix: [''],
+    scaleResampling: ['bicubic'],
+    paddingX: 2,
+    paddingY: 2,
+    edgePadding: true,
+    duplicatePadding: false,
+    filterMin: 'Linear',
+    filterMag: 'Linear',
+    wrapX: 'ClampToEdge',
+    wrapY: 'ClampToEdge',
+    format: 'RGBA8888',
+    atlasExtension: '.atlas',
+    combineSubdirectories: false,
+    flattenPaths: false,
+    useIndexes: false,
+    debug: false,
+    fast: false,
+    limitMemory: true,
+    currentProject: true,
+    packing: 'polygons',
+    prettyPrint: true,
+    legacyOutput: false,
+    webp: null,
+    bleedIterations: 2,
+    ignore: false,
+    separator: '_',
+    silent: false
+  } as Record<string, unknown> | null,
+  packSource: 'attachments',
+  packTarget: 'perskeleton',
+  warnings: true,
+  version: null,
+  output: '',
+  forceAll: false,
+  input: '',
+  open: false
+};
 
 export const initialUpdateUi: UpdateUiState = {
   status: 'idle',

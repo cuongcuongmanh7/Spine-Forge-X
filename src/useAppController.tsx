@@ -7,25 +7,33 @@ import { relaunch } from '@tauri-apps/plugin-process';
 import { check, type DownloadEvent, type Update } from '@tauri-apps/plugin-updater';
 import {
   defaultAppConfig,
+  defaultExportPreset,
   defaultSessionConfig,
   emptyRuntime,
   initialUpdateUi,
   targetVersionPresets,
   type AppConfig,
   type MergedConfig,
+  type Project,
   type Session,
   type SessionConfig,
-  type SessionRuntime
+  type SessionRuntime,
+  type SessionStatus
 } from './config';
 import { formatMessage, getCopy, type Translations } from './i18n';
 import {
   basename,
   cloneSession,
+  createDefaultProject,
+  createProject,
   createSession,
   loadPersistedState,
   persistActiveId,
+  persistActiveProjectId,
   persistAppConfig,
+  persistCollapsedProjects,
   persistLanguage,
+  persistProjects,
   persistSessions,
   persistTheme
 } from './sessions';
@@ -59,22 +67,41 @@ export function useAppControllerValue() {
   const [language, setLanguage] = useState<Language>(persisted.language);
   const [theme, setTheme] = useState<ThemeMode>(persisted.theme);
   const [appConfig, setAppConfig] = useState<AppConfig>(persisted.appConfig);
+  const [projects, setProjects] = useState<Project[]>(persisted.projects);
   const [sessions, setSessions] = useState<Session[]>(persisted.sessions);
   const [activeSessionId, setActiveSessionId] = useState<string | null>(persisted.activeSessionId);
+  const [activeProjectId, setActiveProjectId] = useState<string | null>(persisted.activeProjectId);
+  const [collapsedProjectIds, setCollapsedProjectIds] = useState<Set<string>>(
+    new Set(persisted.collapsedProjectIds)
+  );
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [projectDialogOpen, setProjectDialogOpen] = useState(false);
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
+  const [renamingProjectId, setRenamingProjectId] = useState<string | null>(null);
+  const [projectMenuOpenId, setProjectMenuOpenId] = useState<string | null>(null);
+  const [sessionStatuses, setSessionStatuses] = useState<Record<string, SessionStatus>>({});
 
   const [targetVersions, setTargetVersions] = useState<string[]>(targetVersionPresets);
 
   // Active-session runtime (ephemeral). Other sessions' runtime lives in runtimeByIdRef.
   const activeSession = sessions.find((s) => s.id === activeSessionId) ?? null;
+  const activeProject = projects.find((p) => p.id === activeProjectId) ?? null;
   const [files, setFiles] = useState<string[]>(activeSession?.config.inputFiles ?? []);
   const [skippedFiles, setSkippedFiles] = useState<string[]>([]);
   const [logs, setLogs] = useState<string[]>([]);
   const [lastOutputFolders, setLastOutputFolders] = useState<string[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [runningSessionId, setRunningSessionId] = useState<string | null>(null);
+  // Live progress for the blocking run overlay — updated for whichever session is running,
+  // independent of which session is currently active.
+  const [liveProgress, setLiveProgress] = useState<{ current: number; total: number; file: string }>({
+    current: 0,
+    total: 0,
+    file: ''
+  });
+  // Set during "Export all" so the overlay can show "session X / Y".
+  const [batchProgress, setBatchProgress] = useState<{ index: number; count: number } | null>(null);
 
   const [isScanning, setIsScanning] = useState(false);
   const [isChoosingInputFolder, setIsChoosingInputFolder] = useState(false);
@@ -91,6 +118,9 @@ export function useAppControllerValue() {
   const [presetPreview, setPresetPreview] = useState('');
   const [isPresetBusy, setIsPresetBusy] = useState(false);
   const [presetImportedTick, setPresetImportedTick] = useState(false);
+  const [presetEditorOpen, setPresetEditorOpen] = useState(false);
+  // The preset currently open in the editor. builtIn → must be saved under a new name.
+  const [editingPreset, setEditingPreset] = useState<{ name: string; content: string; builtIn: boolean } | null>(null);
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [validation, setValidation] = useState<ValidateResult>({ ok: false, warnings: [], errors: [] });
   const [updateUi, setUpdateUi] = useState<UpdateUiState>(initialUpdateUi);
@@ -124,9 +154,11 @@ export function useAppControllerValue() {
   const progress = files.length === 0 ? 0 : Math.round((currentIndex / files.length) * 100);
   const currentFile = files[Math.max(0, currentIndex - 1)] ?? '';
   const canStart = useMemo(
-    () => validation.ok && files.length > 0 && !anyRunning && activeSessionId !== null,
-    [validation.ok, files.length, anyRunning, activeSessionId]
+    () => validation.ok && files.length > 0 && merged.globalJsonPath.trim() !== '' && !anyRunning && activeSessionId !== null,
+    [validation.ok, files.length, merged.globalJsonPath, anyRunning, activeSessionId]
   );
+  // Status for the main-panel pill — same logic as the sidebar dots (input-aware), so they always agree.
+  const activeStatus: SessionStatus = activeSession ? statusFromValidation(activeSession, validation) : 'red';
   const outputRootMissingForSourceFolder = merged.outputPolicy === 'sourceFolderName' && !merged.outputPath.trim();
   const maxMemoryValid = /^\d+[kKmMgG]?$/.test(merged.maxMemory.trim());
   const outputHelper =
@@ -162,8 +194,20 @@ export function useAppControllerValue() {
   }, [sessions]);
 
   useEffect(() => {
+    persistProjects(projects);
+  }, [projects]);
+
+  useEffect(() => {
     persistActiveId(activeSessionId);
   }, [activeSessionId]);
+
+  useEffect(() => {
+    persistActiveProjectId(activeProjectId);
+  }, [activeProjectId]);
+
+  useEffect(() => {
+    persistCollapsedProjects([...collapsedProjectIds]);
+  }, [collapsedProjectIds]);
 
   function stamp(text: string) {
     return `${new Date().toLocaleTimeString()} - ${text}`;
@@ -215,6 +259,7 @@ export function useAppControllerValue() {
         listen<string>('spine-error', (event) => recordRunLog(stamp(`[ERROR] ${event.payload}`))),
         listen<{ current: number; total: number; file: string }>('spine-progress', (event) => {
           recordRunProgress(event.payload.current);
+          setLiveProgress({ current: event.payload.current, total: event.payload.total, file: event.payload.file });
           recordRunLog(stamp(`[PROGRESS] ${event.payload.current}/${event.payload.total} ${event.payload.file}`));
         })
       ]);
@@ -230,6 +275,12 @@ export function useAppControllerValue() {
     void validateSettings();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [appConfig.spinePath, sessionConfig.outputPath, sessionConfig.outputPolicy, sessionConfig.exportMode, sessionConfig.globalJsonPath, activeSessionId]);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => void refreshSessionStatuses(), 300);
+    return () => window.clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sessions, appConfig.spinePath]);
 
   useEffect(() => {
     void autoDetectSpine(true);
@@ -410,11 +461,24 @@ export function useAppControllerValue() {
     setCurrentIndex(rt.currentIndex);
   }
 
+  /** Resolve which project a new session should land in, creating a default one if needed. */
+  function resolveTargetProject(): Project {
+    const fromActive = projects.find((p) => p.id === activeProjectId);
+    if (fromActive) return fromActive;
+    const fromSession = activeSession ? projects.find((p) => p.id === activeSession.projectId) : undefined;
+    if (fromSession) return fromSession;
+    if (projects[0]) return projects[0];
+    const project = createDefaultProject(language);
+    setProjects((list) => [project, ...list]);
+    return project;
+  }
+
   function selectSession(id: string) {
     if (id === activeSessionId) return;
     captureActiveRuntime();
     const next = sessions.find((s) => s.id === id) ?? null;
     setActiveSessionId(id);
+    if (next) setActiveProjectId(next.projectId);
     loadRuntime(next);
     setMenuOpenId(null);
     setRenamingId(null);
@@ -422,8 +486,10 @@ export function useAppControllerValue() {
 
   function newSession() {
     captureActiveRuntime();
-    const session = createSession(t, sessions);
+    const project = resolveTargetProject();
+    const session = createSession(t, sessions, project.id);
     setSessions((list) => [session, ...list]);
+    setActiveProjectId(project.id);
     setActiveSessionId(session.id);
     loadRuntime(session);
     setMenuOpenId(null);
@@ -431,11 +497,13 @@ export function useAppControllerValue() {
     return session.id;
   }
 
-  /** Returns a session id to operate on, creating one if the workspace is empty. */
+  /** Returns a session id to operate on, creating one (and a project if needed) if the workspace is empty. */
   function ensureActiveSession(): string {
-    if (activeSessionId) return activeSessionId;
-    const session = createSession(t, sessions);
+    if (activeSessionId && sessions.some((s) => s.id === activeSessionId)) return activeSessionId;
+    const project = resolveTargetProject();
+    const session = createSession(t, sessions, project.id);
     setSessions((list) => [session, ...list]);
+    setActiveProjectId(project.id);
     setActiveSessionId(session.id);
     return session.id;
   }
@@ -465,9 +533,11 @@ export function useAppControllerValue() {
     setMenuOpenId(null);
 
     if (activeSessionId === id) {
-      const index = sessions.findIndex((s) => s.id === id);
-      const fallback = remaining[index] ?? remaining[index - 1] ?? remaining[0] ?? null;
+      // Prefer another session in the same project, then any session, then none.
+      const sameProject = remaining.filter((s) => s.projectId === target.projectId);
+      const fallback = sameProject[0] ?? remaining[0] ?? null;
       setActiveSessionId(fallback ? fallback.id : null);
+      if (fallback) setActiveProjectId(fallback.projectId);
       loadRuntime(fallback);
     }
   }
@@ -491,9 +561,108 @@ export function useAppControllerValue() {
       next.splice(index + 1, 0, copy);
       return next;
     });
+    setActiveProjectId(copy.projectId);
     setActiveSessionId(copy.id);
     loadRuntime(copy);
     setMenuOpenId(null);
+  }
+
+  // ----- Project lifecycle -----
+
+  function newProject(name?: string) {
+    captureActiveRuntime();
+    const base = createProject(t, projects);
+    const trimmed = (name ?? '').trim();
+    const project = trimmed ? { ...base, name: trimmed, autoNamed: false } : base;
+    const session = createSession(t, sessions, project.id);
+    setProjects((list) => [project, ...list]);
+    setSessions((list) => [session, ...list]);
+    setActiveProjectId(project.id);
+    setActiveSessionId(session.id);
+    loadRuntime(session);
+    setProjectMenuOpenId(null);
+    setProjectDialogOpen(false);
+    setSettingsOpen(false);
+    return project.id;
+  }
+
+  function renameProject(id: string, name: string) {
+    const trimmed = name.trim();
+    setProjects((list) =>
+      list.map((p) => (p.id === id ? { ...p, name: trimmed || p.name || t.untitledProject, autoNamed: false, updatedAt: Date.now() } : p))
+    );
+    setRenamingProjectId(null);
+  }
+
+  function addSessionToProject(projectId: string) {
+    captureActiveRuntime();
+    const session = createSession(t, sessions, projectId);
+    setSessions((list) => [session, ...list]);
+    setActiveProjectId(projectId);
+    setActiveSessionId(session.id);
+    loadRuntime(session);
+    setProjectMenuOpenId(null);
+    setCollapsedProjectIds((set) => {
+      if (!set.has(projectId)) return set;
+      const next = new Set(set);
+      next.delete(projectId);
+      return next;
+    });
+    return session.id;
+  }
+
+  function toggleProjectCollapsed(id: string) {
+    setCollapsedProjectIds((set) => {
+      const next = new Set(set);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  async function deleteProject(id: string) {
+    const target = projects.find((p) => p.id === id);
+    if (!target) return;
+    const childIds = sessions.filter((s) => s.projectId === id).map((s) => s.id);
+    const ok = await confirm(
+      t.deleteProjectConfirm.replace('{name}', target.name || t.untitledProject).replace('{count}', String(childIds.length)),
+      { title: t.deleteProject, kind: 'warning' }
+    );
+    if (!ok) return;
+
+    if (runningSessionId && childIds.includes(runningSessionId)) {
+      try {
+        await invoke('stop_batch_export');
+      } catch (error) {
+        appendLog(`${t.stopFailed}: ${String(error)}`);
+      }
+      runningIdRef.current = null;
+      setRunningSessionId(null);
+    }
+
+    for (const childId of childIds) delete runtimeByIdRef.current[childId];
+
+    const remainingProjects = projects.filter((p) => p.id !== id);
+    const remainingSessions = sessions.filter((s) => s.projectId !== id);
+    setProjects(remainingProjects);
+    setSessions(remainingSessions);
+    setProjectMenuOpenId(null);
+    setCollapsedProjectIds((set) => {
+      if (!set.has(id)) return set;
+      const next = new Set(set);
+      next.delete(id);
+      return next;
+    });
+
+    if (activeProjectId === id || (activeSessionId && childIds.includes(activeSessionId))) {
+      const fallbackProject = remainingProjects[0] ?? null;
+      const fallbackSession = fallbackProject
+        ? remainingSessions.find((s) => s.projectId === fallbackProject.id) ?? null
+        : null;
+      setActiveProjectId(fallbackProject ? fallbackProject.id : null);
+      setActiveSessionId(fallbackSession ? fallbackSession.id : null);
+      loadRuntime(fallbackSession);
+    }
   }
 
   // ----- Presets -----
@@ -597,32 +766,94 @@ export function useAppControllerValue() {
     }
   }
 
-  async function resetDefaultConfig() {
-    const ok = await confirm(t.resetDefaultsConfirm, { title: t.resetDefaults });
-    if (!ok) return;
+  // ----- Preset editor -----
 
-    setLanguage('en');
-    setTheme('dark');
-    setAppConfig({ ...defaultAppConfig, spinePath: appConfig.spinePath });
-    if (activeSessionId) {
-      patchSession(activeSessionId, {
-        ...defaultSessionConfig,
-        inputPath: '',
-        inputFiles: [],
-        outputPath: 'C:\\Users\\Admin\\Desktop\\export',
-        outputPolicy: 'sourceFolderName',
-        targetVersion: '3.8.99',
-        exportMode: 'globalJson',
-        globalJsonPath: ''
-      });
+  function presetDisplayName(fileName: string): string {
+    return fileName.replace(/\.export\.json$/i, '');
+  }
+
+  function uniquePresetFileName(base: string): string {
+    const used = new Set(exportPresets.map((p) => p.name.toLowerCase()));
+    let candidate = `${base}.export.json`;
+    let index = 2;
+    while (used.has(candidate.toLowerCase())) {
+      candidate = `${base}-${index}.export.json`;
+      index += 1;
     }
-    setFiles([]);
-    setSkippedFiles([]);
-    setCurrentIndex(0);
-    setLastOutputFolders([]);
-    setPresetPreview('');
-    appendLog(t.resetDefaultsDone);
-    pushToast(t.resetDefaultsDone, 'success');
+    return candidate;
+  }
+
+  async function openPresetEditor(preset?: ExportPreset) {
+    try {
+      let content: string;
+      let name: string;
+      let builtIn = false;
+      if (preset) {
+        content = await invoke<string>('read_export_preset', { path: preset.path });
+        name = presetDisplayName(preset.name);
+        builtIn = preset.builtIn;
+      } else {
+        content = JSON.stringify(defaultExportPreset, null, 2);
+        name = '';
+      }
+      setEditingPreset({ name, content, builtIn });
+      setPresetEditorOpen(true);
+    } catch (error) {
+      appendLog(`${t.presetLoadFailed}: ${String(error)}`);
+      pushToast(t.presetLoadFailed, 'error');
+    }
+  }
+
+  function closePresetEditor() {
+    setPresetEditorOpen(false);
+    setEditingPreset(null);
+  }
+
+  /** Save edited content as a user preset file (name without extension), then select it. */
+  async function saveUserPreset(name: string, content: string) {
+    const trimmed = name.trim();
+    if (!trimmed) return;
+    try {
+      const preset = await invoke<ExportPreset>('save_user_export_preset', {
+        name: `${trimmed}.export.json`,
+        content
+      });
+      await loadExportPresets();
+      updateSessionConfig('globalJsonPath', preset.path);
+      await loadUserPresetContent(preset.name);
+      closePresetEditor();
+      appendLog(`${t.presetSaved}: ${preset.name}`);
+      pushToast(`${t.presetSaved}: ${presetDisplayName(preset.name)}`, 'success');
+    } catch (error) {
+      appendLog(`${t.presetSaveFailed}: ${String(error)}`);
+      pushToast(t.presetSaveFailed, 'error');
+    }
+  }
+
+  /** New blank preset from the default template. */
+  function newPreset() {
+    void openPresetEditor();
+  }
+
+  /** Duplicate the selected preset (built-in or user) into a new user copy. */
+  async function duplicateSelectedPreset() {
+    if (isPresetBusy || !selectedExportPreset) return;
+    setIsPresetBusy(true);
+    try {
+      const content = await invoke<string>('read_export_preset', { path: selectedExportPreset.path });
+      const base = `${presetDisplayName(selectedExportPreset.name)}-${t.presetCopySuffix}`;
+      const fileName = uniquePresetFileName(base);
+      const preset = await invoke<ExportPreset>('save_user_export_preset', { name: fileName, content });
+      await loadExportPresets();
+      updateSessionConfig('globalJsonPath', preset.path);
+      appendLog(`${t.presetSaved}: ${preset.name}`);
+      pushToast(`${t.presetSaved}: ${presetDisplayName(preset.name)}`, 'success');
+    } catch (error) {
+      appendLog(`${t.presetSaveFailed}: ${String(error)}`);
+      pushToast(t.presetSaveFailed, 'error');
+    } finally {
+      setIsPresetBusy(false);
+    }
   }
 
   // ----- Spine detection -----
@@ -797,67 +1028,103 @@ export function useAppControllerValue() {
     }
   }
 
-  function buildExportRequest() {
+  function statusFromValidation(session: Session, result: ValidateResult): SessionStatus {
+    const cfg = session.config;
+    const inputConfigured = cfg.inputPath.trim() !== '' || cfg.inputFiles.length > 0;
+    // A global preset is now mandatory (the only export flow).
+    const presetConfigured = cfg.globalJsonPath.trim() !== '';
+    if (!result.ok || !inputConfigured || !presetConfigured) return 'red';
+    if (result.warnings.length > 0) return 'yellow';
+    return 'green';
+  }
+
+  // Per-session readiness dot. Based on config only (not ephemeral runtime files) so it is reload-stable.
+  async function refreshSessionStatuses() {
+    const entries = await Promise.all(
+      sessions.map(async (s): Promise<[string, SessionStatus]> => {
+        const cfg: MergedConfig = { ...appConfig, ...s.config };
+        try {
+          const result = await invoke<ValidateResult>('validate_settings', {
+            spinePath: cfg.spinePath,
+            outputPath: cfg.outputPath,
+            outputPolicy: cfg.outputPolicy,
+            exportMode: cfg.exportMode,
+            globalJsonPath: cfg.globalJsonPath
+          });
+          return [s.id, statusFromValidation(s, result)];
+        } catch {
+          return [s.id, 'red'];
+        }
+      })
+    );
+    setSessionStatuses(Object.fromEntries(entries));
+  }
+
+  function buildExportRequestFrom(cfg: MergedConfig, sessionFiles: string[]) {
     return {
-      spinePath: merged.spinePath,
-      inputRoot: merged.inputPath,
-      files,
-      outputPath: merged.outputPath,
-      outputPolicy: merged.outputPolicy,
-      targetVersion: merged.targetVersion,
-      exportMode: merged.exportMode,
-      fallbackMode: merged.fallbackMode,
-      globalJsonPath: merged.globalJsonPath || null,
-      builtInExport: merged.builtInExport,
-      generatedFormat: merged.generatedFormat,
-      generatedSkeletonExtension: merged.generatedSkeletonExtension,
-      generatedPackAtlas: merged.generatedPackAtlas,
-      generatedMaxWidth: merged.generatedMaxWidth,
-      generatedMaxHeight: merged.generatedMaxHeight,
-      generatedPremultiplyAlpha: merged.generatedPremultiplyAlpha,
-      generatedPot: merged.generatedPot,
-      generatedPaddingX: merged.generatedPaddingX,
-      generatedPaddingY: merged.generatedPaddingY,
-      generatedPrettyPrint: merged.generatedPrettyPrint,
-      generatedNonessential: merged.generatedNonessential,
-      generatedStripWhitespaceX: merged.generatedStripWhitespaceX,
-      generatedStripWhitespaceY: merged.generatedStripWhitespaceY,
-      generatedRotation: merged.generatedRotation,
-      generatedAlias: merged.generatedAlias,
-      generatedIgnoreBlankImages: merged.generatedIgnoreBlankImages,
-      generatedAlphaThreshold: merged.generatedAlphaThreshold,
-      generatedMinWidth: merged.generatedMinWidth,
-      generatedMinHeight: merged.generatedMinHeight,
-      generatedMultipleOfFour: merged.generatedMultipleOfFour,
-      generatedSquare: merged.generatedSquare,
-      generatedOutputFormat: merged.generatedOutputFormat,
-      generatedJpegQuality: merged.generatedJpegQuality,
-      generatedBleed: merged.generatedBleed,
-      generatedBleedIterations: merged.generatedBleedIterations,
-      generatedEdgePadding: merged.generatedEdgePadding,
-      generatedDuplicatePadding: merged.generatedDuplicatePadding,
-      generatedFilterMin: merged.generatedFilterMin,
-      generatedFilterMag: merged.generatedFilterMag,
-      generatedWrapX: merged.generatedWrapX,
-      generatedWrapY: merged.generatedWrapY,
-      generatedTextureFormat: merged.generatedTextureFormat,
-      generatedAtlasExtension: merged.generatedAtlasExtension,
-      generatedCombineSubdirectories: merged.generatedCombineSubdirectories,
-      generatedFlattenPaths: merged.generatedFlattenPaths,
-      generatedUseIndexes: merged.generatedUseIndexes,
-      generatedFast: merged.generatedFast,
-      generatedLimitMemory: merged.generatedLimitMemory,
-      generatedPacking: merged.generatedPacking,
-      generatedPackSource: merged.generatedPackSource,
-      generatedPackTarget: merged.generatedPackTarget,
-      generatedWarnings: merged.generatedWarnings,
-      generatedForceAll: merged.generatedForceAll,
-      clean: merged.clean,
-      parallelJobs: merged.parallelJobs,
-      maxMemory: merged.maxMemory,
-      timeoutSeconds: merged.timeoutSeconds,
-      preserveRelativePaths: merged.preserveRelativePaths
+      spinePath: cfg.spinePath,
+      inputRoot: cfg.inputPath,
+      files: sessionFiles,
+      outputPath: cfg.outputPath,
+      outputPolicy: cfg.outputPolicy,
+      targetVersion: cfg.targetVersion,
+      exportMode: cfg.exportMode,
+      fallbackMode: cfg.fallbackMode,
+      globalJsonPath: cfg.globalJsonPath || null,
+      builtInExport: cfg.builtInExport,
+      generatedFormat: cfg.generatedFormat,
+      generatedSkeletonExtension: cfg.generatedSkeletonExtension,
+      generatedPackAtlas: cfg.generatedPackAtlas,
+      generatedMaxWidth: cfg.generatedMaxWidth,
+      generatedMaxHeight: cfg.generatedMaxHeight,
+      generatedPremultiplyAlpha: cfg.generatedPremultiplyAlpha,
+      generatedPot: cfg.generatedPot,
+      generatedPaddingX: cfg.generatedPaddingX,
+      generatedPaddingY: cfg.generatedPaddingY,
+      generatedPrettyPrint: cfg.generatedPrettyPrint,
+      generatedNonessential: cfg.generatedNonessential,
+      generatedStripWhitespaceX: cfg.generatedStripWhitespaceX,
+      generatedStripWhitespaceY: cfg.generatedStripWhitespaceY,
+      generatedRotation: cfg.generatedRotation,
+      generatedAlias: cfg.generatedAlias,
+      generatedIgnoreBlankImages: cfg.generatedIgnoreBlankImages,
+      generatedAlphaThreshold: cfg.generatedAlphaThreshold,
+      generatedMinWidth: cfg.generatedMinWidth,
+      generatedMinHeight: cfg.generatedMinHeight,
+      generatedMultipleOfFour: cfg.generatedMultipleOfFour,
+      generatedSquare: cfg.generatedSquare,
+      generatedOutputFormat: cfg.generatedOutputFormat,
+      generatedJpegQuality: cfg.generatedJpegQuality,
+      generatedBleed: cfg.generatedBleed,
+      generatedBleedIterations: cfg.generatedBleedIterations,
+      generatedEdgePadding: cfg.generatedEdgePadding,
+      generatedDuplicatePadding: cfg.generatedDuplicatePadding,
+      generatedFilterMin: cfg.generatedFilterMin,
+      generatedFilterMag: cfg.generatedFilterMag,
+      generatedWrapX: cfg.generatedWrapX,
+      generatedWrapY: cfg.generatedWrapY,
+      generatedTextureFormat: cfg.generatedTextureFormat,
+      generatedAtlasExtension: cfg.generatedAtlasExtension,
+      generatedCombineSubdirectories: cfg.generatedCombineSubdirectories,
+      generatedFlattenPaths: cfg.generatedFlattenPaths,
+      generatedUseIndexes: cfg.generatedUseIndexes,
+      generatedFast: cfg.generatedFast,
+      generatedLimitMemory: cfg.generatedLimitMemory,
+      generatedPacking: cfg.generatedPacking,
+      generatedPackSource: cfg.generatedPackSource,
+      generatedPackTarget: cfg.generatedPackTarget,
+      generatedWarnings: cfg.generatedWarnings,
+      generatedForceAll: cfg.generatedForceAll,
+      clean: cfg.clean,
+      parallelJobs: cfg.parallelJobs,
+      maxMemory: cfg.maxMemory,
+      timeoutSeconds: cfg.timeoutSeconds,
+      preserveRelativePaths: cfg.preserveRelativePaths
     };
+  }
+
+  function buildExportRequest() {
+    return buildExportRequestFrom(merged, files);
   }
 
   async function startExport() {
@@ -865,9 +1132,25 @@ export function useAppControllerValue() {
     const sid = activeSessionId;
     if (!sid) return;
 
+    // Warn before overwriting output folders that already exist.
+    try {
+      const existing = await invoke<string[]>('check_output_collisions', { request: buildExportRequest() });
+      if (existing.length > 0) {
+        const ok = await confirm(t.overwriteConfirmBody.replace('{count}', String(existing.length)), {
+          title: t.overwriteConfirmTitle,
+          kind: 'warning'
+        });
+        if (!ok) return;
+      }
+    } catch {
+      // If the check fails, fall through and let the export proceed.
+    }
+
     runningIdRef.current = sid;
     setRunningSessionId(sid);
     setCurrentIndex(0);
+    setBatchProgress(null);
+    setLiveProgress({ current: 0, total: files.length, file: '' });
     recordRunLog(stamp(`${t.starting}: ${files.length} files.`));
 
     try {
@@ -903,6 +1186,132 @@ export function useAppControllerValue() {
     } finally {
       setIsStopping(false);
     }
+  }
+
+  /** Export every ready session in a project, sequentially. Skips sessions that aren't ready. */
+  async function exportProjectSessions(projectId: string) {
+    if (anyRunning) return;
+    const targets = sessions.filter((s) => s.projectId === projectId);
+    setProjectMenuOpenId(null);
+    if (targets.length === 0) {
+      pushToast(t.exportAllNothing, 'warning');
+      return;
+    }
+    captureActiveRuntime();
+
+    // ----- Pre-flight: classify each session and resolve its files (no UI run yet) -----
+    const plan: { session: Session; files: string[] }[] = [];
+    let warned = 0;
+    let skipped = 0;
+    for (const s of targets) {
+      const cfg: MergedConfig = { ...appConfig, ...s.config };
+      let result: ValidateResult = { ok: false, warnings: [], errors: [] };
+      try {
+        result = await invoke<ValidateResult>('validate_settings', {
+          spinePath: cfg.spinePath,
+          outputPath: cfg.outputPath,
+          outputPolicy: cfg.outputPolicy,
+          exportMode: cfg.exportMode,
+          globalJsonPath: cfg.globalJsonPath
+        });
+      } catch {
+        result = { ok: false, warnings: [], errors: [] };
+      }
+      const inputConfigured = s.config.inputPath.trim() !== '' || s.config.inputFiles.length > 0;
+      if (!result.ok || !inputConfigured) {
+        skipped += 1;
+        continue;
+      }
+
+      // Resolve files: in-memory runtime → saved inputFiles → scan the input folder.
+      let sessionFiles = runtimeByIdRef.current[s.id]?.files ?? [];
+      if (sessionFiles.length === 0 && s.config.inputFiles.length > 0) sessionFiles = s.config.inputFiles;
+      if (sessionFiles.length === 0 && s.config.inputPath.trim()) {
+        try {
+          const scan = await invoke<ScanResult>('scan_spine_files', { inputPath: s.config.inputPath });
+          sessionFiles = scan.files;
+        } catch (error) {
+          appendLog(`${t.scanFailed}: ${String(error)}`);
+        }
+      }
+      if (sessionFiles.length === 0) {
+        skipped += 1;
+        continue;
+      }
+
+      if (result.warnings.length > 0) warned += 1;
+      plan.push({ session: s, files: sessionFiles });
+    }
+
+    if (plan.length === 0) {
+      pushToast(t.exportAllNothing, 'warning');
+      return;
+    }
+
+    // Collision check across all sessions that will run.
+    const existing = new Set<string>();
+    for (const item of plan) {
+      try {
+        const cols = await invoke<string[]>('check_output_collisions', {
+          request: buildExportRequestFrom({ ...appConfig, ...item.session.config }, item.files)
+        });
+        cols.forEach((dir) => existing.add(dir));
+      } catch {
+        // ignore; treat as no collision
+      }
+    }
+
+    // Single combined confirm: summary + overwrite warning.
+    let body = t.exportAllConfirmBody
+      .replace('{total}', String(plan.length))
+      .replace('{warn}', String(warned))
+      .replace('{skip}', String(skipped));
+    if (existing.size > 0) {
+      body += `\n\n${t.overwriteConfirmBody.replace('{count}', String(existing.size))}`;
+    }
+    const proceed = await confirm(body, { title: t.exportAllConfirmTitle, kind: 'warning' });
+    if (!proceed) return;
+
+    // ----- Run phase -----
+    setBatchProgress({ index: 0, count: plan.length });
+    setLiveProgress({ current: 0, total: 0, file: '' });
+
+    let exported = 0;
+    for (let i = 0; i < plan.length; i += 1) {
+      const { session: s, files: sessionFiles } = plan[i];
+      setBatchProgress({ index: i + 1, count: plan.length });
+
+      runningIdRef.current = s.id;
+      setRunningSessionId(s.id);
+      recordRunProgress(0);
+      setLiveProgress({ current: 0, total: sessionFiles.length, file: '' });
+      recordRunLog(stamp(`${t.starting}: ${sessionFiles.length} files. (${s.name || t.untitledSession})`));
+
+      let stopped = false;
+      try {
+        const result = await invoke<BatchExportResult>('start_batch_export', {
+          request: buildExportRequestFrom({ ...appConfig, ...s.config }, sessionFiles)
+        });
+        recordRunOutput(result.outputFolders);
+        recordRunLog(
+          stamp(result.stopped ? formatMessage(t.exportStoppedBody, result.completed, result.total) : t.finished)
+        );
+        exported += 1;
+        stopped = result.stopped;
+      } catch (error) {
+        recordRunLog(stamp(`${t.batchFailed}: ${String(error)}`));
+      } finally {
+        runningIdRef.current = null;
+        setRunningSessionId(null);
+      }
+      if (stopped) break;
+    }
+
+    setBatchProgress(null);
+    pushToast(
+      t.exportAllDone.replace('{exported}', String(exported)).replace('{skipped}', String(targets.length - exported)),
+      'success'
+    );
   }
 
   function removeFile(path: string) {
@@ -973,6 +1382,24 @@ export function useAppControllerValue() {
     addTargetVersion,
     targetVersions,
 
+    projects,
+    activeProject,
+    activeProjectId,
+    newProject,
+    renameProject,
+    deleteProject,
+    addSessionToProject,
+    renamingProjectId,
+    setRenamingProjectId,
+    projectMenuOpenId,
+    setProjectMenuOpenId,
+    collapsedProjectIds,
+    toggleProjectCollapsed,
+    exportProjectSessions,
+    sessionStatuses,
+    projectDialogOpen,
+    setProjectDialogOpen,
+
     sessions,
     activeSession,
     activeSessionId,
@@ -1000,7 +1427,10 @@ export function useAppControllerValue() {
     isRunning,
     anyRunning,
     runningSessionId,
+    liveProgress,
+    batchProgress,
     canStart,
+    activeStatus,
 
     isScanning,
     isChoosingInputFolder,
@@ -1018,6 +1448,13 @@ export function useAppControllerValue() {
     presetPreview,
     isPresetBusy,
     presetImportedTick,
+    presetEditorOpen,
+    editingPreset,
+    openPresetEditor,
+    closePresetEditor,
+    saveUserPreset,
+    newPreset,
+    duplicateSelectedPreset,
 
     validation,
     updateUi,
@@ -1045,7 +1482,6 @@ export function useAppControllerValue() {
     openOutputFolder,
     saveLogToFile,
     resolveOpenOutputTarget,
-    resetDefaultConfig,
     toasts,
     pushToast,
     dismissToast

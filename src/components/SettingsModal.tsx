@@ -16,7 +16,6 @@ export function SettingsModal() {
     maxMemoryValid,
     isAutoDetecting,
     autoDetectSpine,
-    resetDefaultConfig,
     setSettingsOpen
   } = useApp();
 
@@ -54,10 +53,6 @@ export function SettingsModal() {
                   <button className={theme === 'dark' ? 'active' : ''} onClick={() => setTheme('dark')}>{t.dark}</button>
                 </span>
               </label>
-              <button className="secondary-button" onClick={resetDefaultConfig}>
-                <RotateCw size={16} />
-                {t.resetDefaults}
-              </button>
             </div>
           </Section>
 

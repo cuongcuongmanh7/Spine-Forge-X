@@ -345,6 +345,40 @@ textarea {
   color: var(--primary);
 }
 
+.session-status-dot {
+  flex: 0 0 auto;
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--text-muted);
+}
+
+.session-status-dot.status-green {
+  background: #22c55e;
+}
+
+.session-status-dot.status-yellow {
+  background: #eab308;
+}
+
+.session-status-dot.status-red {
+  background: #ef4444;
+}
+
+.session-time {
+  flex: 0 0 auto;
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--text-muted);
+  transition: opacity 0.12s var(--ease);
+}
+
+.session-row:hover .session-time,
+.session-row.active .session-time,
+.session-row.menu-open .session-time {
+  opacity: 0;
+}
+
 .session-text {
   display: flex;
   flex-direction: column;
@@ -466,6 +500,110 @@ textarea {
   background: color-mix(in srgb, #d92d37, transparent 88%);
 }
 
+/* ----- Project groups ----- */
+
+.project-group {
+  margin-bottom: 2px;
+}
+
+.project-header {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 34px;
+  padding: 0 6px 0 8px;
+  border-radius: 8px;
+  color: var(--text-strong);
+  cursor: pointer;
+  transition: background 0.15s var(--ease);
+}
+
+.project-header:hover {
+  background: var(--sidebar-hover);
+}
+
+.project-chevron {
+  flex: 0 0 auto;
+  color: var(--text-muted);
+}
+
+.project-icon {
+  flex: 0 0 auto;
+  color: var(--text-muted);
+}
+
+.project-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+}
+
+.project-rename-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 26px;
+  padding: 0 8px;
+  border: 1px solid var(--primary);
+  border-radius: 7px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.project-add,
+.project-menu-trigger {
+  flex: 0 0 auto;
+  display: inline-grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.12s var(--ease), background 0.15s var(--ease), color 0.15s var(--ease);
+}
+
+.project-header:hover .project-add,
+.project-header:hover .project-menu-trigger,
+.project-group.menu-open .project-menu-trigger {
+  opacity: 1;
+}
+
+.project-add:hover,
+.project-menu-trigger:hover {
+  background: color-mix(in srgb, var(--text), transparent 88%);
+  color: var(--text-strong);
+}
+
+.project-menu {
+  top: 32px;
+}
+
+.project-menu button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.project-sessions {
+  padding-left: 10px;
+}
+
+.project-empty {
+  margin: 4px 10px 8px;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
 .sidebar-footer {
   flex: 0 0 auto;
   padding: 8px;
@@ -518,6 +656,20 @@ textarea {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  cursor: text;
+}
+
+.session-title-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  margin: 0;
+  padding: 2px 8px;
+  border: 1px solid var(--primary);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text-strong);
+  font-size: 19px;
+  font-weight: 700;
 }
 
 /* ----- Empty state ----- */
@@ -626,6 +778,110 @@ textarea {
   padding: 18px;
 }
 
+/* Compact name-input dialog (e.g. "Name project"). */
+.name-dialog {
+  width: min(420px, 94vw);
+}
+
+/* Preset editor modal — wider, with tabs + section titles, scrollable body, pinned footer. */
+.preset-editor {
+  width: min(720px, 96vw);
+  display: flex;
+  flex-direction: column;
+  max-height: 86vh;
+  overflow: hidden;
+}
+
+.preset-editor .modal-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.preset-editor .modal-footer {
+  flex: 0 0 auto;
+  margin-top: 0;
+  padding: 14px 18px;
+  border-top: 1px solid var(--border);
+  background: color-mix(in srgb, var(--surface), var(--bg) 20%);
+}
+
+.preset-tabs {
+  display: inline-flex;
+  gap: 2px;
+  padding: 3px;
+  border: 1px solid var(--border-strong);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--surface-soft), var(--surface) 50%);
+  align-self: flex-start;
+}
+
+.preset-tabs button {
+  min-width: 80px;
+  height: 28px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.preset-tabs button.active {
+  background: var(--primary);
+  color: var(--primary-text);
+}
+
+.preset-section-title {
+  margin: 6px 0 0;
+  color: var(--text-strong);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.preset-json-edit {
+  display: grid;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.preset-json-edit textarea {
+  width: 100%;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+}
+
+.name-dialog-hint {
+  margin: -4px 0 0;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+.name-dialog-input {
+  width: 100%;
+  height: 38px;
+  padding: 0 12px;
+  border: 1px solid var(--border-strong);
+  border-radius: 9px;
+  background: var(--surface);
+  color: var(--text-strong);
+  font-size: 14px;
+}
+
+.name-dialog-input:focus {
+  outline: none;
+  border-color: var(--primary);
+}
+
+.modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 4px;
+}
+
 .segmented-label {
   display: grid;
   gap: 4px;
@@ -687,10 +943,16 @@ textarea {
   color: #052e16 !important;
 }
 
-.status-pill.needs-setup {
-  border-color: #f59e0b !important;
-  background: #f59e0b !important;
-  color: #451a03 !important;
+.status-pill.warning {
+  border-color: #eab308 !important;
+  background: #eab308 !important;
+  color: #422006 !important;
+}
+
+.status-pill.blocked {
+  border-color: #ef4444 !important;
+  background: #ef4444 !important;
+  color: #450a0a !important;
 }
 
 .status-pill svg {
@@ -1021,12 +1283,128 @@ input.field-invalid:focus {
   display: grid;
   gap: 12px;
   margin-top: 12px;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface-soft);
+}
+
+.preset-manager label {
+  display: grid;
+  gap: 5px;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 650;
+}
+
+/* Inside the card the helper text aligns with everything else (no left indent). */
+.preset-manager .helper-text {
+  margin: 0;
+}
+
+/* Full path of the currently selected global .export.json. */
+.preset-path {
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-muted);
+  font-size: 12px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
 }
 
 .preset-toolbar {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
+}
+
+/* Blocking overlay shown while an export is running (Run or Export all). */
+.run-overlay {
+  position: fixed;
+  left: 0;
+  right: 0;
+  top: 42px; /* keep the custom titlebar (window controls) reachable */
+  bottom: 0;
+  z-index: 700;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: color-mix(in srgb, var(--bg), transparent 25%);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+  animation: fade-in 0.16s var(--ease);
+}
+
+.run-overlay-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  width: min(440px, 92vw);
+  padding: 26px 28px;
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  background: var(--surface);
+  box-shadow: 0 28px 80px rgba(0, 0, 0, 0.4);
+  text-align: center;
+}
+
+.run-overlay-spinner {
+  color: var(--primary);
+}
+
+.run-overlay-title {
+  margin: 0;
+  font-size: 18px;
+}
+
+.run-overlay-session {
+  margin: 0;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-strong);
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.run-overlay-batch {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.run-overlay-progress {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  margin-top: 4px;
+}
+
+.run-overlay-progress span {
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.run-overlay-file {
+  margin: 0;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.run-overlay-hint {
+  margin: 2px 0 8px;
+  color: var(--text-muted);
+  font-size: 12px;
 }
 
 .run-dock {

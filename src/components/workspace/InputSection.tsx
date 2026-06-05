@@ -27,9 +27,6 @@ export function InputSection() {
           onChange={(event) => updateInputPath(event.target.value)}
           placeholder="D:\Project\SpineAssets"
         />
-        <button className="icon-button" title={t.browseFolder} disabled={isChoosingInputFolder || isScanning} onClick={chooseInputFolder}>
-          {isChoosingInputFolder ? <RotateCw className="spin" size={18} /> : <FolderOpen size={18} />}
-        </button>
         <button className="icon-button" title={t.scan} disabled={isScanning || !merged.inputPath.trim()} onClick={scanInput}>
           <RotateCw className={isScanning ? 'spin' : undefined} size={18} />
         </button>

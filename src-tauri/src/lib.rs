@@ -183,13 +183,10 @@ async fn detect_spine_version(spine_path: String) -> Result<String, String> {
         return Err("Spine executable không tồn tại.".to_string());
     }
 
-    let output = Command::new(path)
-        .arg("--version")
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .output()
-        .await
-        .map_err(|e| e.to_string())?;
+    let mut cmd = Command::new(path);
+    cmd.arg("--version").stdout(Stdio::piped()).stderr(Stdio::piped());
+    apply_no_window(&mut cmd);
+    let output = cmd.output().await.map_err(|e| e.to_string())?;
 
     let mut text = String::new();
     text.push_str(&String::from_utf8_lossy(&output.stdout));
@@ -421,6 +418,37 @@ fn read_user_export_preset(app: AppHandle, name: String) -> Result<String, Strin
     fs::read_to_string(path).map_err(|e| e.to_string())
 }
 
+/// Read any .export.json preset by absolute path (built-in resource or user), for the editor.
+#[tauri::command]
+fn read_export_preset(path: String) -> Result<String, String> {
+    let target = PathBuf::from(path.trim_matches('"'));
+    if !target
+        .file_name()
+        .and_then(|name| name.to_str())
+        .map(|name| name.ends_with(".export.json"))
+        .unwrap_or(false)
+    {
+        return Err("Chỉ đọc được file .export.json.".to_string());
+    }
+    fs::read_to_string(&target).map_err(|e| e.to_string())
+}
+
+/// Save (create or overwrite) a user preset from edited content, into the user preset dir.
+#[tauri::command]
+fn save_user_export_preset(app: AppHandle, name: String, content: String) -> Result<ExportPreset, String> {
+    let safe_name = validate_preset_file_name(&name)?;
+    validate_export_json_content(&content)?;
+    let user_dir = user_preset_dir(&app)?;
+    fs::create_dir_all(&user_dir).map_err(|e| e.to_string())?;
+    let target = user_dir.join(&safe_name);
+    fs::write(&target, content).map_err(|e| e.to_string())?;
+    Ok(ExportPreset {
+        name: safe_name,
+        path: path_to_string(&target),
+        built_in: false,
+    })
+}
+
 #[tauri::command]
 fn write_text_file(path: String, content: String) -> Result<(), String> {
     let target = PathBuf::from(path.trim_matches('"'));
@@ -598,6 +626,7 @@ async fn export_one_file(
     }
 
     cmd.stdout(Stdio::piped()).stderr(Stdio::piped());
+    apply_no_window(&mut cmd);
 
     let command_line = format!("{cmd:?}");
     let _ = window.emit("spine-log", format!("Running: {command_line}"));
@@ -715,6 +744,32 @@ fn resolve_output_dir(
             Ok(path_to_string(&output_dir))
         }
     }
+}
+
+/// Returns the resolved output directories that already exist and contain files,
+/// so the UI can warn before overwriting them. Mainly relevant for the source-folder
+/// policy (timestamp folders are unique per run and won't pre-exist).
+#[tauri::command]
+fn check_output_collisions(request: BatchExportRequest) -> Result<Vec<String>, String> {
+    let run_folder_name = make_export_folder_name(&request.target_version);
+    let mut dirs = std::collections::BTreeSet::new();
+    for file in &request.files {
+        let input_file = PathBuf::from(file);
+        if let Ok(dir) = resolve_output_dir(&request, &input_file, &run_folder_name) {
+            dirs.insert(dir);
+        }
+    }
+    let existing = dirs
+        .into_iter()
+        .filter(|dir| {
+            let path = Path::new(dir);
+            path.is_dir()
+                && fs::read_dir(path)
+                    .map(|mut entries| entries.next().is_some())
+                    .unwrap_or(false)
+        })
+        .collect();
+    Ok(existing)
 }
 
 fn resolve_export_plan(
@@ -1064,16 +1119,30 @@ fn parse_spine_version(output: &str) -> Option<String> {
     None
 }
 
+/// Windows flag that prevents a spawned console process from opening a console window.
+#[cfg(windows)]
+const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+
+/// Suppress the console window that Windows pops up when spawning console executables
+/// (e.g. Spine.com). No-op on other platforms.
+fn apply_no_window(cmd: &mut Command) {
+    #[cfg(windows)]
+    {
+        cmd.creation_flags(CREATE_NO_WINDOW);
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = cmd;
+    }
+}
+
 async fn kill_process(pid: u32) {
     #[cfg(windows)]
     {
-        let _ = Command::new("taskkill")
-            .arg("/PID")
-            .arg(pid.to_string())
-            .arg("/T")
-            .arg("/F")
-            .output()
-            .await;
+        let mut cmd = Command::new("taskkill");
+        cmd.arg("/PID").arg(pid.to_string()).arg("/T").arg("/F");
+        apply_no_window(&mut cmd);
+        let _ = cmd.output().await;
     }
 
     #[cfg(not(windows))]
@@ -1105,9 +1174,12 @@ pub fn run() {
             detect_spine_version,
             scan_spine_files,
             validate_settings,
+            check_output_collisions,
             list_export_presets,
             import_user_export_preset,
             read_user_export_preset,
+            read_export_preset,
+            save_user_export_preset,
             delete_user_export_preset,
             write_text_file,
             clean_timestamp_exports,

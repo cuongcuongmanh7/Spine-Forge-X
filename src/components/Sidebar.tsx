@@ -1,7 +1,18 @@
 import { useEffect, useRef, useState } from 'react';
-import { Copy, FileText, MoreHorizontal, Pencil, Plus, Settings, Trash2 } from 'lucide-react';
+import {
+  ChevronDown,
+  ChevronRight,
+  Copy,
+  Folder,
+  MoreHorizontal,
+  Pencil,
+  Play,
+  Plus,
+  Settings,
+  Trash2
+} from 'lucide-react';
 import { basename } from '../sessions';
-import type { Session } from '../config';
+import type { Project, Session } from '../config';
 import { useApp } from '../useAppController';
 
 function sessionSubtitle(session: Session): string {
@@ -9,6 +20,22 @@ function sessionSubtitle(session: Session): string {
   if (path) return path;
   if (session.config.inputFiles.length) return `${session.config.inputFiles.length} files`;
   return '';
+}
+
+/** Compact "23h", "1d", "3w" label from a timestamp. Language-neutral suffixes. */
+function relativeTime(ts: number): string {
+  const diff = Math.max(0, Date.now() - ts);
+  const minute = 60_000;
+  const hour = 60 * minute;
+  const day = 24 * hour;
+  const week = 7 * day;
+  const year = 365 * day;
+  if (diff < minute) return 'now';
+  if (diff < hour) return `${Math.floor(diff / minute)}m`;
+  if (diff < day) return `${Math.floor(diff / hour)}h`;
+  if (diff < week) return `${Math.floor(diff / day)}d`;
+  if (diff < year) return `${Math.floor(diff / week)}w`;
+  return `${Math.floor(diff / year)}y`;
 }
 
 function SessionRow({ session }: { session: Session }) {
@@ -23,7 +50,8 @@ function SessionRow({ session }: { session: Session }) {
     setRenamingId,
     menuOpenId,
     setMenuOpenId,
-    runningSessionId
+    runningSessionId,
+    sessionStatuses
   } = useApp();
 
   const isActive = session.id === activeSessionId;
@@ -41,6 +69,8 @@ function SessionRow({ session }: { session: Session }) {
 
   const label = session.name || basename(session.config.inputPath) || t.untitledSession;
   const subtitle = sessionSubtitle(session);
+  const status = sessionStatuses[session.id] ?? 'red';
+  const statusTitle = status === 'green' ? t.statusReady : status === 'yellow' ? t.statusWarning : t.statusBlocked;
 
   return (
     <div
@@ -49,7 +79,7 @@ function SessionRow({ session }: { session: Session }) {
       role="button"
       tabIndex={0}
     >
-      <FileText className="session-icon" size={15} />
+      <span className={`session-status-dot status-${status}`} title={statusTitle} />
       {isRenaming ? (
         <input
           ref={inputRef}
@@ -71,6 +101,8 @@ function SessionRow({ session }: { session: Session }) {
           {subtitle && <span className="session-subtitle" title={subtitle}>{subtitle}</span>}
         </span>
       )}
+
+      {!isRenaming && <span className="session-time">{relativeTime(session.updatedAt)}</span>}
 
       {runningSessionId === session.id && <span className="session-running-dot" title={t.running} />}
 
@@ -115,22 +147,159 @@ function SessionRow({ session }: { session: Session }) {
   );
 }
 
+function ProjectGroup({ project }: { project: Project }) {
+  const {
+    t,
+    sessions,
+    addSessionToProject,
+    renameProject,
+    deleteProject,
+    exportProjectSessions,
+    collapsedProjectIds,
+    toggleProjectCollapsed,
+    renamingProjectId,
+    setRenamingProjectId,
+    projectMenuOpenId,
+    setProjectMenuOpenId,
+    anyRunning
+  } = useApp();
+
+  const projectSessions = sessions.filter((s) => s.projectId === project.id);
+  const isCollapsed = collapsedProjectIds.has(project.id);
+  const isRenaming = renamingProjectId === project.id;
+  const isMenuOpen = projectMenuOpenId === project.id;
+  const [draft, setDraft] = useState(project.name);
+  const inputRef = useRef<HTMLInputElement | null>(null);
+
+  useEffect(() => {
+    if (isRenaming) {
+      setDraft(project.name);
+      requestAnimationFrame(() => inputRef.current?.select());
+    }
+  }, [isRenaming, project.name]);
+
+  return (
+    <div className={`project-group${isMenuOpen ? ' menu-open' : ''}`}>
+      <div
+        className="project-header"
+        onClick={() => !isRenaming && toggleProjectCollapsed(project.id)}
+        role="button"
+        tabIndex={0}
+      >
+        {isCollapsed ? <ChevronRight className="project-chevron" size={14} /> : <ChevronDown className="project-chevron" size={14} />}
+        <Folder className="project-icon" size={15} />
+        {isRenaming ? (
+          <input
+            ref={inputRef}
+            className="project-rename-input"
+            value={draft}
+            onClick={(event) => event.stopPropagation()}
+            onChange={(event) => setDraft(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter') renameProject(project.id, draft);
+              if (event.key === 'Escape') setRenamingProjectId(null);
+            }}
+            onBlur={() => renameProject(project.id, draft)}
+          />
+        ) : (
+          <span className="project-name" title={project.name || t.untitledProject}>
+            {project.name || t.untitledProject}
+          </span>
+        )}
+
+        {!isRenaming && (
+          <button
+            className="project-add"
+            title={t.addSession}
+            onClick={(event) => {
+              event.stopPropagation();
+              addSessionToProject(project.id);
+            }}
+          >
+            <Plus size={15} />
+          </button>
+        )}
+
+        {!isRenaming && (
+          <button
+            className="project-menu-trigger"
+            title="..."
+            onClick={(event) => {
+              event.stopPropagation();
+              setProjectMenuOpenId(isMenuOpen ? null : project.id);
+            }}
+          >
+            <MoreHorizontal size={16} />
+          </button>
+        )}
+
+        {isMenuOpen && (
+          <>
+            <div className="menu-backdrop" onClick={(event) => { event.stopPropagation(); setProjectMenuOpenId(null); }} />
+            <div className="session-menu project-menu" onClick={(event) => event.stopPropagation()}>
+              <button
+                onClick={() => {
+                  setProjectMenuOpenId(null);
+                  addSessionToProject(project.id);
+                }}
+              >
+                <Plus size={14} />
+                {t.addSession}
+              </button>
+              <button
+                disabled={anyRunning}
+                onClick={() => void exportProjectSessions(project.id)}
+              >
+                <Play size={14} />
+                {t.exportAll}
+              </button>
+              <button
+                onClick={() => {
+                  setProjectMenuOpenId(null);
+                  setRenamingProjectId(project.id);
+                }}
+              >
+                <Pencil size={14} />
+                {t.renameProject}
+              </button>
+              <button className="danger" onClick={() => void deleteProject(project.id)}>
+                <Trash2 size={14} />
+                {t.deleteProject}
+              </button>
+            </div>
+          </>
+        )}
+      </div>
+
+      {!isCollapsed && (
+        <div className="project-sessions">
+          {projectSessions.length === 0 ? (
+            <p className="project-empty">{t.projectEmpty}</p>
+          ) : (
+            projectSessions.map((session) => <SessionRow key={session.id} session={session} />)
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function Sidebar() {
-  const { t, sessions, newSession, setSettingsOpen } = useApp();
+  const { t, projects, setProjectDialogOpen, setSettingsOpen } = useApp();
 
   return (
     <aside className="sidebar">
       <div className="sidebar-header">
-        <span className="sidebar-title">{t.recents}</span>
-        <button className="sidebar-new" title={t.newSession} onClick={() => newSession()}>
+        <span className="sidebar-title">{t.projects}</span>
+        <button className="sidebar-new" title={t.newProject} onClick={() => setProjectDialogOpen(true)}>
           <Plus size={16} />
         </button>
       </div>
       <div className="session-list">
-        {sessions.length === 0 ? (
+        {projects.length === 0 ? (
           <p className="session-list-empty">{t.emptyTitle}</p>
         ) : (
-          sessions.map((session) => <SessionRow key={session.id} session={session} />)
+          projects.map((project) => <ProjectGroup key={project.id} project={project} />)
         )}
       </div>
       <div className="sidebar-footer">

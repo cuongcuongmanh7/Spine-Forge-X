@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState } from 'react';
 import { AlertTriangle, CheckCircle2, FolderOpen, Plus } from 'lucide-react';
 import { basename } from '../sessions';
 import { useApp } from '../useAppController';
@@ -30,7 +31,19 @@ function EmptyState() {
 }
 
 export function SessionMain() {
-  const { t, activeSession, validation } = useApp();
+  const { t, activeSession, activeStatus, renameSession } = useApp();
+  const [editingTitle, setEditingTitle] = useState(false);
+  const [draft, setDraft] = useState('');
+  const inputRef = useRef<HTMLInputElement | null>(null);
+
+  useEffect(() => {
+    if (editingTitle) requestAnimationFrame(() => inputRef.current?.select());
+  }, [editingTitle]);
+
+  // Drop edit mode when switching sessions.
+  useEffect(() => {
+    setEditingTitle(false);
+  }, [activeSession?.id]);
 
   if (!activeSession) {
     return (
@@ -42,13 +55,43 @@ export function SessionMain() {
 
   const title = activeSession.name || basename(activeSession.config.inputPath) || t.untitledSession;
 
+  function commitTitle() {
+    if (activeSession) renameSession(activeSession.id, draft);
+    setEditingTitle(false);
+  }
+
   return (
     <div className="session-main">
       <div className="session-toolbar">
-        <h1 className="session-title" title={title}>{title}</h1>
-        <div className={`status-pill ${validation.ok ? 'ready' : 'needs-setup'}`}>
-          {validation.ok ? <CheckCircle2 size={16} /> : <AlertTriangle size={16} />}
-          {validation.ok ? t.ready : t.needsSetup}
+        {editingTitle ? (
+          <input
+            ref={inputRef}
+            className="session-title-input"
+            value={draft}
+            onChange={(event) => setDraft(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter') commitTitle();
+              if (event.key === 'Escape') setEditingTitle(false);
+            }}
+            onBlur={commitTitle}
+          />
+        ) : (
+          <h1
+            className="session-title"
+            title={title}
+            onDoubleClick={() => {
+              setDraft(activeSession.name || title);
+              setEditingTitle(true);
+            }}
+          >
+            {title}
+          </h1>
+        )}
+        <div
+          className={`status-pill ${activeStatus === 'green' ? 'ready' : activeStatus === 'yellow' ? 'warning' : 'blocked'}`}
+        >
+          {activeStatus === 'green' ? <CheckCircle2 size={16} /> : <AlertTriangle size={16} />}
+          {activeStatus === 'green' ? t.ready : activeStatus === 'yellow' ? t.statusWarning : t.statusBlocked}
         </div>
       </div>
       <main className="app-shell">
