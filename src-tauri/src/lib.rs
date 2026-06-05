@@ -793,6 +793,17 @@ fn resolve_export_plan(
     }
 
     let arg = resolve_export_arg(request, input_file)?;
+
+    // Preset files (globalJson / per-project / built-in path) are passed straight to Spine.
+    // Older presets may carry the invalid packSource value "folder", which Spine silently
+    // ignores (falling back to attachments). Rewrite such files to a normalized temp copy so
+    // the user's intent is honored without having to re-save the preset.
+    if let Some(arg_value) = &arg {
+        if let Some(plan) = normalize_preset_file(arg_value)? {
+            return Ok(plan);
+        }
+    }
+
     Ok(ExportPlan {
         arg,
         temp_file: None,
@@ -997,6 +1008,52 @@ fn normalize_pack_source(value: &str) -> &str {
         "folder" => "imagefolders",
         other => other,
     }
+}
+
+/// If `arg` points to an `.export.json` file whose `packSource` is the legacy/invalid value
+/// "folder", write a corrected copy ("imagefolders") to a temp file and return a plan pointing
+/// at it. Returns `Ok(None)` when the file needs no rewrite (or isn't a readable JSON preset),
+/// so the caller falls back to using the original path unchanged.
+fn normalize_preset_file(arg: &str) -> Result<Option<ExportPlan>, String> {
+    let path = Path::new(arg);
+    let is_export_json = path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .map(|name| name.ends_with(".export.json"))
+        .unwrap_or(false);
+    if !is_export_json || !path.is_file() {
+        return Ok(None);
+    }
+
+    let Ok(content) = fs::read_to_string(path) else {
+        return Ok(None);
+    };
+    let Ok(mut value) = serde_json::from_str::<serde_json::Value>(&content) else {
+        return Ok(None);
+    };
+
+    let needs_fix = value
+        .get("packSource")
+        .and_then(|source| source.as_str())
+        .map(|source| source.trim() == "folder")
+        .unwrap_or(false);
+    if !needs_fix {
+        return Ok(None);
+    }
+
+    value["packSource"] = serde_json::Value::String("imagefolders".to_string());
+    let temp_file = std::env::temp_dir().join(format!(
+        "spineforge-x-{}-{}.export.json",
+        chrono::Local::now().format("%Y%m%d%H%M%S%3f"),
+        std::process::id()
+    ));
+    let json = serde_json::to_string_pretty(&value).map_err(|e| e.to_string())?;
+    fs::write(&temp_file, json).map_err(|e| e.to_string())?;
+
+    Ok(Some(ExportPlan {
+        arg: Some(path_to_string(&temp_file)),
+        temp_file: Some(temp_file),
+    }))
 }
 
 fn normalize_skeleton_extension(value: &str, format: &str) -> String {
