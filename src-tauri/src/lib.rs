@@ -112,6 +112,7 @@ struct BatchExportRequest {
     max_memory: String,
     timeout_seconds: u64,
     preserve_relative_paths: bool,
+    clean_folder_name: bool,
 }
 
 #[derive(Debug, Serialize)]
@@ -738,9 +739,15 @@ fn resolve_output_dir(
 
             let source_folder_name = parent
                 .file_name()
+                .and_then(|name| name.to_str())
                 .ok_or_else(|| "Không xác định được tên folder chứa file .spine.".to_string())?;
+            let folder_name = if request.clean_folder_name {
+                clean_source_folder_name(source_folder_name)
+            } else {
+                source_folder_name
+            };
             let mut output_dir = PathBuf::from(output_root.trim_matches('"'));
-            output_dir.push(source_folder_name);
+            output_dir.push(folder_name);
             Ok(path_to_string(&output_dir))
         }
     }
@@ -869,7 +876,7 @@ fn create_generated_export_settings(
         "nonessential": request.generated_nonessential,
         "cleanUp": request.clean,
         "packAtlas": pack_atlas,
-        "packSource": request.generated_pack_source,
+        "packSource": normalize_pack_source(&request.generated_pack_source),
         "packTarget": request.generated_pack_target,
         "warnings": request.generated_warnings,
         "version": null,
@@ -951,6 +958,16 @@ fn make_export_folder_name(target_version: &str) -> String {
     format!("export_{}_{}", version, now.format("%d%m%Y_%H%M%S"))
 }
 
+/// Shorten a source folder name to the token before the first underscore,
+/// e.g. "3001_Lucius" -> "3001". Falls back to the full name when there is no
+/// underscore or the leading token would be empty.
+fn clean_source_folder_name(name: &str) -> &str {
+    match name.split_once('_') {
+        Some((head, _)) if !head.is_empty() => head,
+        _ => name,
+    }
+}
+
 fn sanitize_folder_part(value: &str) -> String {
     let sanitized = value
         .trim()
@@ -968,6 +985,17 @@ fn sanitize_folder_part(value: &str) -> String {
         "unknown".to_string()
     } else {
         sanitized
+    }
+}
+
+/// Map our UI pack-source value to the string Spine actually recognises in
+/// `.export.json`. Spine expects `attachments` or `imagefolders`; the legacy
+/// value `folder` is silently ignored by Spine (it falls back to attachments),
+/// so translate it to the correct enum.
+fn normalize_pack_source(value: &str) -> &str {
+    match value.trim() {
+        "folder" => "imagefolders",
+        other => other,
     }
 }
 

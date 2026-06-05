@@ -293,9 +293,12 @@ export function PresetEditorModal() {
               <div className="form-grid">
                 <label>
                   {t.generatedPackSource}
-                  <select value={str(obj.packSource)} onChange={(e) => setTop('packSource', e.target.value)}>
+                  <select
+                    value={str(obj.packSource) === 'folder' ? 'imagefolders' : str(obj.packSource)}
+                    onChange={(e) => setTop('packSource', e.target.value)}
+                  >
                     <option value="attachments">attachments</option>
-                    <option value="folder">folder</option>
+                    <option value="imagefolders">folder</option>
                   </select>
                 </label>
                 <label>

@@ -1240,7 +1240,8 @@ export function useAppControllerValue() {
       parallelJobs: cfg.parallelJobs,
       maxMemory: cfg.maxMemory,
       timeoutSeconds: cfg.timeoutSeconds,
-      preserveRelativePaths: cfg.preserveRelativePaths
+      preserveRelativePaths: cfg.preserveRelativePaths,
+      cleanFolderName: cfg.cleanFolderName
     };
   }
 

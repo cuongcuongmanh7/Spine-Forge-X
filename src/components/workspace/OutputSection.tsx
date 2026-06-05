@@ -54,6 +54,41 @@ export function OutputSection() {
           ))}
         </div>
       </div>
+      <div className="output-options">
+        <div className="output-option">
+          <label className="checkbox-line">
+            <input type="checkbox" checked={merged.clean} onChange={(event) => updateSetting('clean', event.target.checked)} />
+            {t.cleanAnimation}
+          </label>
+          <small>{t.cleanAnimationHelp}</small>
+        </div>
+        {merged.outputPolicy === 'timestamp' && (
+          <div className="output-option">
+            <label className="checkbox-line">
+              <input
+                type="checkbox"
+                checked={merged.preserveRelativePaths}
+                onChange={(event) => updateSetting('preserveRelativePaths', event.target.checked)}
+              />
+              {t.mirrorRelativePaths}
+            </label>
+            <small>{t.mirrorRelativePathsHelp}</small>
+          </div>
+        )}
+        {merged.outputPolicy === 'sourceFolderName' && (
+          <div className="output-option">
+            <label className="checkbox-line">
+              <input
+                type="checkbox"
+                checked={merged.cleanFolderName}
+                onChange={(event) => updateSetting('cleanFolderName', event.target.checked)}
+              />
+              {t.cleanFolderName}
+            </label>
+            <small>{t.cleanFolderNameHelp}</small>
+          </div>
+        )}
+      </div>
       <p className="helper-text">{outputHelper}</p>
     </Section>
   );

@@ -127,6 +127,42 @@ function readAppConfig(): AppConfig {
   }
 }
 
+/**
+ * `clean` and `preserveRelativePaths` used to be global (app-level) settings; they are now
+ * per-session. Read any explicit values left in the stored global config so we can seed
+ * existing sessions with them — otherwise a user who toggled them globally would silently
+ * lose that choice. Returns {} once the global config has been rewritten without these keys.
+ */
+function readLegacyGlobalSessionDefaults(): Partial<SessionConfig> {
+  const stored = localStorage.getItem(KEYS.appConfig);
+  if (!stored) return {};
+  try {
+    const parsed = JSON.parse(stored) as Record<string, unknown>;
+    const out: Partial<SessionConfig> = {};
+    if (typeof parsed.clean === 'boolean') out.clean = parsed.clean;
+    if (typeof parsed.preserveRelativePaths === 'boolean') {
+      out.preserveRelativePaths = parsed.preserveRelativePaths;
+    }
+    return out;
+  } catch {
+    return {};
+  }
+}
+
+/**
+ * Apply the legacy global defaults to every already-stored session (all of which predate the
+ * per-session migration), then persist so the values stick. No-op once the global config no
+ * longer carries the keys.
+ */
+function migrateGlobalSessionDefaults(sessions: Session[]): void {
+  const legacy = readLegacyGlobalSessionDefaults();
+  if (Object.keys(legacy).length === 0 || sessions.length === 0) return;
+  for (const s of sessions) {
+    s.config = { ...s.config, ...legacy };
+  }
+  persistSessions(sessions);
+}
+
 function migrateLegacy(): { appConfig: AppConfig; session: Omit<Session, 'projectId'> } | null {
   const stored = localStorage.getItem(KEYS.legacySettings);
   if (!stored) return null;
@@ -226,6 +262,7 @@ export function loadPersistedState(): PersistedState {
     }
 
     const collapsedProjectIds = readCollapsedProjectIds().filter((id) => validIds.has(id));
+    migrateGlobalSessionDefaults(sessions);
     return { appConfig, language, theme, projects, sessions, activeSessionId, activeProjectId, collapsedProjectIds };
   }
 
@@ -235,6 +272,7 @@ export function loadPersistedState(): PersistedState {
     const sessions = readSessions();
     const project = createDefaultProject(language);
     for (const s of sessions) s.projectId = project.id;
+    migrateGlobalSessionDefaults(sessions);
     let activeSessionId = localStorage.getItem(KEYS.activeId);
     if (!activeSessionId || !sessions.some((s) => s.id === activeSessionId)) {
       activeSessionId = sessions[0]?.id ?? null;

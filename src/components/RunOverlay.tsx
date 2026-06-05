@@ -1,6 +1,12 @@
 import { CircleStop, RotateCw } from 'lucide-react';
 import { useApp } from '../useAppController';
 
+/** Reduce a full path to its last two segments, e.g. "3001_Lucius/hero.spine". */
+function shortenPath(path: string): string {
+  const segments = path.split(/[\\/]+/).filter(Boolean);
+  return segments.slice(-2).join('/');
+}
+
 export function RunOverlay() {
   const { t, sessions, runningSessionId, liveProgress, batchProgress, isStopping, stopExport } = useApp();
 
@@ -8,6 +14,8 @@ export function RunOverlay() {
   const { current, total, file } = liveProgress;
   const percent = total > 0 ? Math.min(100, Math.round((current / total) * 100)) : 0;
   const sessionLabel = runningSession?.name || t.untitledSession;
+  // Show a compact <folder>/<file> path instead of the full absolute path.
+  const shortFile = shortenPath(file);
 
   return (
     <div className="run-overlay" role="alertdialog" aria-modal="true" aria-busy="true">
@@ -26,7 +34,7 @@ export function RunOverlay() {
           <progress value={percent} max={100} />
           <span>{current} / {total}</span>
         </div>
-        {file && <p className="run-overlay-file" title={file}>{file}</p>}
+        {file && <p className="run-overlay-file" title={file}>{shortFile}</p>}
         <p className="run-overlay-hint">{t.processingHint}</p>
         <button className="secondary-button" disabled={isStopping} onClick={stopExport}>
           {isStopping ? <RotateCw className="spin" size={16} /> : <CircleStop size={16} />}

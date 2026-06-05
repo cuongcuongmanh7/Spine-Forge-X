@@ -118,19 +118,6 @@ export function SettingsModal() {
                   onChange={(event) => updateAppConfig('timeoutSeconds', Number(event.target.value))}
                 />
               </label>
-              <label className="checkbox-line">
-                <input type="checkbox" checked={merged.clean} onChange={(event) => updateAppConfig('clean', event.target.checked)} />
-                {t.cleanAnimation}
-              </label>
-              <label className="checkbox-line">
-                <input
-                  type="checkbox"
-                  checked={merged.preserveRelativePaths}
-                  disabled={merged.outputPolicy !== 'timestamp'}
-                  onChange={(event) => updateAppConfig('preserveRelativePaths', event.target.checked)}
-                />
-                {t.preserveRelativePaths}
-              </label>
             </div>
           </Section>
         </div>

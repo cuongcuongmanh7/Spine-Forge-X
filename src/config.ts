@@ -5,11 +5,9 @@ import type { ExportMode, FallbackMode, OutputPolicy, UpdateUiState } from './ty
  */
 export const defaultAppConfig = {
   spinePath: '',
-  clean: false,
   parallelJobs: 1,
   maxMemory: '512m',
-  timeoutSeconds: 300,
-  preserveRelativePaths: true
+  timeoutSeconds: 300
 };
 
 export type AppConfig = typeof defaultAppConfig;
@@ -24,6 +22,13 @@ export const defaultSessionConfig = {
   excludedFiles: [] as string[],
   outputPath: '',
   outputPolicy: 'timestamp' as OutputPolicy,
+  // Pass --clean to Spine: wipe each output folder before exporting.
+  clean: false,
+  // Timestamp policy only: mirror the input path's relative folder structure into the output root.
+  preserveRelativePaths: true,
+  // For the source-folder policy: shorten the folder name to the token before the
+  // first underscore, e.g. "3001_Lucius" -> "3001".
+  cleanFolderName: false,
   targetVersion: '4.3.xx',
   exportMode: 'globalJson' as ExportMode,
   fallbackMode: 'builtIn' as FallbackMode,

@@ -1322,6 +1322,32 @@ input.field-invalid:focus {
   margin-bottom: 0;
 }
 
+.output-options {
+  display: grid;
+  gap: 10px;
+  margin: 12px 0;
+}
+
+.output-option {
+  display: grid;
+  gap: 2px;
+}
+
+.output-option .checkbox-line {
+  font-size: 13px;
+  font-weight: 650;
+  color: var(--text);
+  gap: 8px;
+}
+
+.output-option small {
+  padding-left: 24px;
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.4;
+}
+
 .mode-option input {
   width: auto;
   min-height: auto;
