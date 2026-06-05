@@ -1,4 +1,4 @@
-import { AlertTriangle, CircleStop, FolderOpen, Play, RotateCw, Trash2, XCircle } from 'lucide-react';
+import { AlertTriangle, FolderOpen, Play, RotateCw, Trash2, XCircle } from 'lucide-react';
 import { useApp } from '../../useAppController';
 
 export function RunDock() {
@@ -8,15 +8,9 @@ export function RunDock() {
     validation,
     canStart,
     isRunning,
-    isStopping,
     isOpeningOutput,
     isCleaningTimestamp,
-    progress,
-    currentIndex,
-    currentFile,
-    files,
     startExport,
-    stopExport,
     openOutputFolder,
     cleanTimestampExports,
     resolveOpenOutputTarget
@@ -42,10 +36,6 @@ export function RunDock() {
             {isRunning ? <RotateCw className="spin" size={18} /> : <Play size={18} />}
             {isRunning ? t.running : t.start}
           </button>
-          <button className="secondary-button" disabled={!isRunning || isStopping} onClick={stopExport}>
-            {isStopping ? <RotateCw className="spin" size={18} /> : <CircleStop size={18} />}
-            {t.stop}
-          </button>
           <button className="secondary-button" disabled={!resolveOpenOutputTarget() || isOpeningOutput} onClick={openOutputFolder}>
             {isOpeningOutput ? <RotateCw className="spin" size={18} /> : <FolderOpen size={18} />}
             {t.openOutput}
@@ -55,11 +45,6 @@ export function RunDock() {
             {t.cleanTimestamp}
           </button>
         </div>
-        <div className="progress-row">
-          <progress value={progress} max={100} />
-          <span>{currentIndex} / {files.length}</span>
-        </div>
-        {currentFile && <div className="current-file">{currentFile}</div>}
       </div>
     </div>
   );

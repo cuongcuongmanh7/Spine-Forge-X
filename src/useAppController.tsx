@@ -76,6 +76,9 @@ export function useAppControllerValue() {
   );
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [projectDialogOpen, setProjectDialogOpen] = useState(false);
+  const [sessionDialogOpen, setSessionDialogOpen] = useState(false);
+  // Project that a popup-created session should land in (resolved when the dialog opens).
+  const [pendingSessionProjectId, setPendingSessionProjectId] = useState<string | null>(null);
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
   const [renamingProjectId, setRenamingProjectId] = useState<string | null>(null);
@@ -132,6 +135,8 @@ export function useAppControllerValue() {
   const runtimeByIdRef = useRef<Record<string, SessionRuntime>>({});
   const activeIdRef = useRef<string | null>(activeSessionId);
   const runningIdRef = useRef<string | null>(null);
+  // Session ids already auto-scanned this app run, so we scan a folder session at most once automatically.
+  const autoScannedRef = useRef<Set<string>>(new Set());
 
   const t = getCopy(language);
   const appWindowRef = useRef<ReturnType<typeof getCurrentWindow> | null>(null);
@@ -158,7 +163,7 @@ export function useAppControllerValue() {
     [validation.ok, files.length, merged.globalJsonPath, anyRunning, activeSessionId]
   );
   // Status for the main-panel pill — same logic as the sidebar dots (input-aware), so they always agree.
-  const activeStatus: SessionStatus = activeSession ? statusFromValidation(activeSession, validation) : 'red';
+  const activeStatus: SessionStatus = activeSession ? statusFromValidation(activeSession, validation, files.length) : 'red';
   const outputRootMissingForSourceFolder = merged.outputPolicy === 'sourceFolderName' && !merged.outputPath.trim();
   const maxMemoryValid = /^\d+[kKmMgG]?$/.test(merged.maxMemory.trim());
   const outputHelper =
@@ -288,6 +293,32 @@ export function useAppControllerValue() {
     void loadExportPresets();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Auto-scan the active folder session once (e.g. on open / first switch) so its file list shows
+  // without a manual Scan. Only the active session is scanned; exclusions are respected.
+  useEffect(() => {
+    const session = activeSession;
+    if (!session || isScanning) return;
+    const id = session.id;
+    if (autoScannedRef.current.has(id)) return;
+    if (!session.config.inputPath.trim()) return;
+    // Already have files (scanned earlier this run, or an explicit file list) → nothing to do.
+    const rt = runtimeByIdRef.current[id];
+    if ((rt && rt.files.length > 0) || session.config.inputFiles.length > 0 || files.length > 0) return;
+    autoScannedRef.current.add(id);
+    void (async () => {
+      setIsScanning(true);
+      appendLog(`${t.scanning}: ${session.config.inputPath}`);
+      try {
+        await scanPath(session.config.inputPath, session.config.excludedFiles ?? []);
+      } catch (error) {
+        appendLog(`${t.scanFailed}: ${String(error)}`);
+      } finally {
+        setIsScanning(false);
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeSessionId]);
 
   useEffect(() => {
     if (!selectedExportPreset || selectedExportPreset.builtIn) {
@@ -497,6 +528,38 @@ export function useAppControllerValue() {
     return session.id;
   }
 
+  /** Open the "name session" popup, targeting an explicit project (or the resolved default). */
+  function openNewSessionDialog(projectId?: string) {
+    const targetId = projectId ?? resolveTargetProject().id;
+    setPendingSessionProjectId(targetId);
+    setSessionDialogOpen(true);
+    setProjectMenuOpenId(null);
+    setMenuOpenId(null);
+  }
+
+  /** Create a session with the name from the popup, in the pending target project. */
+  function confirmNewSession(name: string) {
+    captureActiveRuntime();
+    const projectId = pendingSessionProjectId ?? resolveTargetProject().id;
+    const base = createSession(t, sessions, projectId);
+    const trimmed = name.trim();
+    const session = trimmed ? { ...base, name: trimmed, autoNamed: false } : base;
+    setSessions((list) => [session, ...list]);
+    setActiveProjectId(projectId);
+    setActiveSessionId(session.id);
+    loadRuntime(session);
+    setCollapsedProjectIds((set) => {
+      if (!set.has(projectId)) return set;
+      const next = new Set(set);
+      next.delete(projectId);
+      return next;
+    });
+    setSettingsOpen(false);
+    setSessionDialogOpen(false);
+    setPendingSessionProjectId(null);
+    return session.id;
+  }
+
   /** Returns a session id to operate on, creating one (and a project if needed) if the workspace is empty. */
   function ensureActiveSession(): string {
     if (activeSessionId && sessions.some((s) => s.id === activeSessionId)) return activeSessionId;
@@ -554,7 +617,20 @@ export function useAppControllerValue() {
     const source = sessions.find((s) => s.id === id);
     if (!source) return;
     captureActiveRuntime();
-    const copy = cloneSession(source, t);
+    const copy = cloneSession(source, t, sessions);
+    // Scanned files live in the ephemeral runtime, not in config — carry them over so the
+    // duplicate shows the same files without needing a re-scan. (captureActiveRuntime above
+    // ensures the source's runtime is up to date if it was the active session.)
+    const sourceRuntime = runtimeByIdRef.current[source.id];
+    if (sourceRuntime) {
+      runtimeByIdRef.current[copy.id] = {
+        files: [...sourceRuntime.files],
+        skippedFiles: [...sourceRuntime.skippedFiles],
+        logs: [],
+        lastOutputFolders: [],
+        currentIndex: 0
+      };
+    }
     setSessions((list) => {
       const index = list.findIndex((s) => s.id === id);
       const next = [...list];
@@ -899,12 +975,14 @@ export function useAppControllerValue() {
 
   // ----- Input scanning -----
 
-  async function scanPath(inputPath: string) {
+  async function scanPath(inputPath: string, excluded: string[] = []) {
     const result = await invoke<ScanResult>('scan_spine_files', { inputPath });
-    setFiles(result.files);
+    const excludedSet = new Set(excluded);
+    const kept = excludedSet.size ? result.files.filter((f) => !excludedSet.has(f)) : result.files;
+    setFiles(kept);
     setSkippedFiles(result.skipped);
     setCurrentIndex(0);
-    appendLog(`${t.scanned} ${result.files.length} Spine files. ${t.skipped}: ${result.skipped.length}.`);
+    appendLog(`${t.scanned} ${kept.length} Spine files. ${t.skipped}: ${result.skipped.length}.`);
   }
 
   async function scanInput() {
@@ -916,7 +994,7 @@ export function useAppControllerValue() {
     setIsScanning(true);
     appendLog(`${t.scanning}: ${merged.inputPath}`);
     try {
-      await scanPath(merged.inputPath);
+      await scanPath(merged.inputPath, sessionConfig.excludedFiles ?? []);
     } catch (error) {
       appendLog(`${t.scanFailed}: ${String(error)}`);
     } finally {
@@ -928,7 +1006,12 @@ export function useAppControllerValue() {
     if (isChoosingInputFolder || isScanning) return;
     setIsChoosingInputFolder(true);
     try {
-      const selected = await open({ directory: true, multiple: false, title: t.browseFolder });
+      const selected = await open({
+        directory: true,
+        multiple: false,
+        title: t.browseFolder,
+        defaultPath: merged.inputPath.trim() || undefined
+      });
       if (typeof selected !== 'string') return;
 
       const id = ensureActiveSession();
@@ -936,13 +1019,14 @@ export function useAppControllerValue() {
         list.map((s) => {
           if (s.id !== id) return s;
           const name = s.autoNamed ? basename(selected) || s.name : s.name;
-          return { ...s, name, config: { ...s.config, inputPath: selected, inputFiles: [] }, updatedAt: Date.now() };
+          // New folder → reset any exclusions from the previous folder.
+          return { ...s, name, config: { ...s.config, inputPath: selected, inputFiles: [], excludedFiles: [] }, updatedAt: Date.now() };
         })
       );
 
       setIsScanning(true);
       appendLog(`${t.scanning}: ${selected}`);
-      await scanPath(selected);
+      await scanPath(selected, []);
     } catch (error) {
       appendLog(`${t.scanFailed}: ${String(error)}`);
     } finally {
@@ -959,6 +1043,7 @@ export function useAppControllerValue() {
         directory: false,
         multiple: true,
         title: t.browseFiles,
+        defaultPath: merged.inputPath.trim() || undefined,
         filters: [{ name: 'Spine Project', extensions: ['spine'] }]
       });
       if (!Array.isArray(selected)) return;
@@ -968,7 +1053,23 @@ export function useAppControllerValue() {
       setFiles(combined);
       setSkippedFiles([]);
       setCurrentIndex(0);
-      patchSession(id, { inputFiles: combined });
+      // Explicitly browsing a file wins over a prior exclusion — un-exclude anything just added.
+      const added = new Set(spineFiles);
+      setSessions((list) =>
+        list.map((s) =>
+          s.id === id
+            ? {
+                ...s,
+                config: {
+                  ...s.config,
+                  inputFiles: combined,
+                  excludedFiles: (s.config.excludedFiles ?? []).filter((p) => !added.has(p))
+                },
+                updatedAt: Date.now()
+              }
+            : s
+        )
+      );
       appendLog(`${t.scanned} ${spineFiles.length} Spine files.`);
     } finally {
       setIsChoosingInputFiles(false);
@@ -979,7 +1080,12 @@ export function useAppControllerValue() {
     if (isChoosingOutputFolder) return;
     setIsChoosingOutputFolder(true);
     try {
-      const selected = await open({ directory: true, multiple: false, title: t.browseOutput });
+      const selected = await open({
+        directory: true,
+        multiple: false,
+        title: t.browseOutput,
+        defaultPath: merged.outputPath.trim() || undefined
+      });
       if (typeof selected !== 'string') return;
       updateOutputPath(selected);
     } finally {
@@ -1028,12 +1134,14 @@ export function useAppControllerValue() {
     }
   }
 
-  function statusFromValidation(session: Session, result: ValidateResult): SessionStatus {
+  function statusFromValidation(session: Session, result: ValidateResult, fileCount: number): SessionStatus {
     const cfg = session.config;
     const inputConfigured = cfg.inputPath.trim() !== '' || cfg.inputFiles.length > 0;
     // A global preset is now mandatory (the only export flow).
     const presetConfigured = cfg.globalJsonPath.trim() !== '';
     if (!result.ok || !inputConfigured || !presetConfigured) return 'red';
+    // Input is set but the scan found no .spine files — nothing to export.
+    if (fileCount === 0) return 'red';
     if (result.warnings.length > 0) return 'yellow';
     return 'green';
   }
@@ -1051,7 +1159,20 @@ export function useAppControllerValue() {
             exportMode: cfg.exportMode,
             globalJsonPath: cfg.globalJsonPath
           });
-          return [s.id, statusFromValidation(s, result)];
+          // Resolve how many .spine files this session would export: in-memory runtime →
+          // saved inputFiles → scan the input folder. Mirrors the Export-all preflight.
+          let fileCount = runtimeByIdRef.current[s.id]?.files.length ?? 0;
+          if (fileCount === 0 && s.config.inputFiles.length > 0) fileCount = s.config.inputFiles.length;
+          if (fileCount === 0 && s.config.inputPath.trim()) {
+            try {
+              const scan = await invoke<ScanResult>('scan_spine_files', { inputPath: s.config.inputPath });
+              const excluded = new Set(s.config.excludedFiles ?? []);
+              fileCount = scan.files.filter((f) => !excluded.has(f)).length;
+            } catch {
+              fileCount = 0;
+            }
+          }
+          return [s.id, statusFromValidation(s, result, fileCount)];
         } catch {
           return [s.id, 'red'];
         }
@@ -1229,7 +1350,8 @@ export function useAppControllerValue() {
       if (sessionFiles.length === 0 && s.config.inputPath.trim()) {
         try {
           const scan = await invoke<ScanResult>('scan_spine_files', { inputPath: s.config.inputPath });
-          sessionFiles = scan.files;
+          const excluded = new Set(s.config.excludedFiles ?? []);
+          sessionFiles = scan.files.filter((f) => !excluded.has(f));
         } catch (error) {
           appendLog(`${t.scanFailed}: ${String(error)}`);
         }
@@ -1316,8 +1438,43 @@ export function useAppControllerValue() {
 
   function removeFile(path: string) {
     setFiles((items) => items.filter((item) => item !== path));
-    if (activeSessionId && sessionConfig.inputFiles.includes(path)) {
+    if (!activeSessionId) return;
+    if (sessionConfig.inputFiles.includes(path)) {
+      // Browse-files item: drop it from the explicit list.
       patchSession(activeSessionId, { inputFiles: sessionConfig.inputFiles.filter((item) => item !== path) });
+    } else {
+      // Folder-scan result: remember the exclusion so a re-scan keeps it removed (survives restart).
+      const excluded = sessionConfig.excludedFiles ?? [];
+      if (!excluded.includes(path)) {
+        patchSession(activeSessionId, { excludedFiles: [...excluded, path] });
+      }
+    }
+  }
+
+  /** Un-exclude a single file: drop it from excludedFiles and add it back to the visible list. */
+  function restoreExcludedFile(path: string) {
+    if (!activeSessionId) return;
+    const excluded = sessionConfig.excludedFiles ?? [];
+    if (!excluded.includes(path)) return;
+    patchSession(activeSessionId, { excludedFiles: excluded.filter((p) => p !== path) });
+    setFiles((items) => (items.includes(path) ? items : [...items, path].sort()));
+  }
+
+  /** Clear all exclusions and re-scan the folder so every file comes back. */
+  async function restoreAllExcluded() {
+    if (!activeSessionId) return;
+    if ((sessionConfig.excludedFiles ?? []).length === 0) return;
+    patchSession(activeSessionId, { excludedFiles: [] });
+    if (merged.inputPath.trim()) {
+      setIsScanning(true);
+      appendLog(`${t.scanning}: ${merged.inputPath}`);
+      try {
+        await scanPath(merged.inputPath, []);
+      } catch (error) {
+        appendLog(`${t.scanFailed}: ${String(error)}`);
+      } finally {
+        setIsScanning(false);
+      }
     }
   }
 
@@ -1405,6 +1562,10 @@ export function useAppControllerValue() {
     activeSessionId,
     selectSession,
     newSession,
+    sessionDialogOpen,
+    setSessionDialogOpen,
+    openNewSessionDialog,
+    confirmNewSession,
     deleteSession,
     renameSession,
     duplicateSession,
@@ -1479,6 +1640,8 @@ export function useAppControllerValue() {
     startExport,
     stopExport,
     removeFile,
+    restoreExcludedFile,
+    restoreAllExcluded,
     openOutputFolder,
     saveLogToFile,
     resolveOpenOutputTarget,

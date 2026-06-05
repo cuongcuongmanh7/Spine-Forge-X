@@ -20,6 +20,8 @@ export type AppConfig = typeof defaultAppConfig;
 export const defaultSessionConfig = {
   inputPath: '',
   inputFiles: [] as string[],
+  // Full paths removed from a folder-scan result; re-applied on re-scan so deletions survive restart.
+  excludedFiles: [] as string[],
   outputPath: '',
   outputPolicy: 'timestamp' as OutputPolicy,
   targetVersion: '4.3.xx',

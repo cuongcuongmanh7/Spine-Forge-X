@@ -9,14 +9,14 @@ import { LogSection } from './workspace/LogSection';
 import { RunDock } from './workspace/RunDock';
 
 function EmptyState() {
-  const { t, newSession, chooseInputFolder } = useApp();
+  const { t, openNewSessionDialog, chooseInputFolder } = useApp();
   return (
     <div className="empty-state">
       <div className="empty-card">
         <h2>{t.emptyTitle}</h2>
         <p>{t.emptyBody}</p>
         <div className="empty-actions">
-          <button className="primary-button" onClick={() => newSession()}>
+          <button className="primary-button" onClick={() => openNewSessionDialog()}>
             <Plus size={18} />
             {t.newSession}
           </button>

@@ -71,6 +71,20 @@ export function PresetEditorModal() {
     });
   }
 
+  // Spine stores scale as parallel arrays (scale / scaleSuffix / scaleResampling). The form edits a
+  // single scale; the JSON tab remains for multi-resolution setups. Keep all three arrays length-1.
+  function setScale(value: number) {
+    setObj((current) => {
+      const a = (current.packAtlas && typeof current.packAtlas === 'object' ? { ...(current.packAtlas as AnyObj) } : {}) as AnyObj;
+      const suffix = Array.isArray(a.scaleSuffix) ? a.scaleSuffix : [];
+      const resampling = Array.isArray(a.scaleResampling) ? a.scaleResampling : [];
+      a.scale = [value];
+      a.scaleSuffix = [typeof suffix[0] === 'string' ? suffix[0] : ''];
+      a.scaleResampling = [typeof resampling[0] === 'string' ? resampling[0] : 'bicubic'];
+      return { ...current, packAtlas: a };
+    });
+  }
+
   function toggleAtlas(enabled: boolean) {
     setObj((current) => ({
       ...current,
@@ -108,6 +122,10 @@ export function PresetEditorModal() {
   const num = (v: unknown) => (typeof v === 'number' ? v : Number(v) || 0);
   const str = (v: unknown) => (typeof v === 'string' ? v : '');
   const bool = (v: unknown) => Boolean(v);
+  const scaleValue = () => {
+    const s = av('scale');
+    return Array.isArray(s) && s.length ? num(s[0]) : 1;
+  };
 
   return (
     <div className="modal-backdrop" onClick={closePresetEditor}>
@@ -118,7 +136,7 @@ export function PresetEditorModal() {
             <X size={18} />
           </button>
         </div>
-        <div className="modal-body">
+        <div className="preset-toolbar">
           <label>
             {t.presetName}
             <input value={name} onChange={(e) => setName(e.target.value)} placeholder="my-preset" />
@@ -129,7 +147,8 @@ export function PresetEditorModal() {
             <button className={tab === 'form' ? 'active' : ''} onClick={() => switchTab('form')}>{t.tabForm}</button>
             <button className={tab === 'json' ? 'active' : ''} onClick={() => switchTab('json')}>{t.tabJson}</button>
           </div>
-
+        </div>
+        <div className="modal-body">
           {tab === 'form' ? (
             <>
               <h3 className="preset-section-title">{t.presetSkeleton}</h3>
@@ -206,10 +225,12 @@ export function PresetEditorModal() {
                     {t.generatedBleedIterations}
                     <input type="number" min={0} value={num(av('bleedIterations'))} onChange={(e) => setAtlas('bleedIterations', Number(e.target.value))} />
                   </label>
-                  <label>
-                    {t.generatedJpegQuality}
-                    <input type="number" min={0} max={1} step={0.05} value={num(av('jpegQuality'))} onChange={(e) => setAtlas('jpegQuality', Number(e.target.value))} />
-                  </label>
+                  {str(av('outputFormat')) === 'jpg' && (
+                    <label>
+                      {t.generatedJpegQuality}
+                      <input type="number" min={0} max={1} step={0.05} value={num(av('jpegQuality'))} onChange={(e) => setAtlas('jpegQuality', Number(e.target.value))} />
+                    </label>
+                  )}
                   <label>
                     {t.generatedOutputFormat}
                     <select value={str(av('outputFormat'))} onChange={(e) => setAtlas('outputFormat', e.target.value)}>
@@ -247,6 +268,10 @@ export function PresetEditorModal() {
                     <select value={str(av('wrapY'))} onChange={(e) => setAtlas('wrapY', e.target.value)}>
                       {WRAP.map((v) => <option key={v} value={v}>{v}</option>)}
                     </select>
+                  </label>
+                  <label>
+                    {t.generatedScale}
+                    <input type="number" min={0.1} step={0.1} value={scaleValue()} onChange={(e) => setScale(Number(e.target.value))} />
                   </label>
                   <label>
                     {t.generatedPacking}

@@ -151,7 +151,7 @@ function ProjectGroup({ project }: { project: Project }) {
   const {
     t,
     sessions,
-    addSessionToProject,
+    openNewSessionDialog,
     renameProject,
     deleteProject,
     exportProjectSessions,
@@ -213,7 +213,7 @@ function ProjectGroup({ project }: { project: Project }) {
             title={t.addSession}
             onClick={(event) => {
               event.stopPropagation();
-              addSessionToProject(project.id);
+              openNewSessionDialog(project.id);
             }}
           >
             <Plus size={15} />
@@ -239,8 +239,7 @@ function ProjectGroup({ project }: { project: Project }) {
             <div className="session-menu project-menu" onClick={(event) => event.stopPropagation()}>
               <button
                 onClick={() => {
-                  setProjectMenuOpenId(null);
-                  addSessionToProject(project.id);
+                  openNewSessionDialog(project.id);
                 }}
               >
                 <Plus size={14} />

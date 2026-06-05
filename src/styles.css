@@ -798,6 +798,17 @@ textarea {
   overflow-y: auto;
 }
 
+/* Pinned name + tabs above the scrollable preset body. */
+.preset-editor .preset-toolbar {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--border);
+  background: color-mix(in srgb, var(--surface), var(--bg) 20%);
+}
+
 .preset-editor .modal-footer {
   flex: 0 0 auto;
   margin-top: 0;
@@ -1143,40 +1154,124 @@ input.field-invalid:focus {
 }
 
 .file-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
   max-height: 170px;
   overflow: auto;
   margin-left: 138px;
+  padding: 8px;
   border: 1px solid var(--border);
   border-radius: 6px;
   background: var(--surface-soft);
 }
 
-.file-item {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
+.file-pill {
+  display: inline-flex;
   align-items: center;
-  gap: 8px;
-  padding: 7px 8px;
-  border-bottom: 1px solid var(--border);
+  gap: 6px;
+  max-width: 100%;
+  padding: 4px 6px 4px 8px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
   font-size: 12px;
+  line-height: 1;
 }
 
-.file-item:last-child {
-  border-bottom: 0;
+.file-pill > svg {
+  flex: 0 0 auto;
 }
 
-.file-item span {
+.file-pill-name {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.ghost-icon {
-  width: 26px;
-  height: 26px;
+.file-path-note {
+  color: var(--text-muted);
+  font-weight: 400;
+}
+
+/* Remove button stays hidden until the pill is hovered/focused. */
+.file-pill-remove {
+  display: inline-grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  flex: 0 0 auto;
   border: 0;
+  border-radius: 50%;
   background: transparent;
   color: var(--text-muted);
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.12s var(--ease), background 0.12s var(--ease), color 0.12s var(--ease);
+}
+
+.file-pill:hover .file-pill-remove,
+.file-pill:focus-within .file-pill-remove {
+  opacity: 1;
+}
+
+.file-pill-remove:hover {
+  background: var(--sidebar-hover);
+  color: var(--text-strong);
+}
+
+/* Excluded (hidden) files — per-file restore list. */
+.excluded-block {
+  margin-left: 138px;
+  margin-top: 8px;
+}
+
+.excluded-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.excluded-list {
+  display: flex;
+  flex-direction: column;
+  max-height: 140px;
+  overflow: auto;
+  border: 1px dashed var(--border);
+  border-radius: 6px;
+  background: var(--surface-soft);
+}
+
+.excluded-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 5px 8px;
+  border-bottom: 1px solid var(--border);
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.excluded-item:last-child {
+  border-bottom: 0;
+}
+
+.link-button {
+  border: 0;
+  background: transparent;
+  color: var(--primary);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 0;
+}
+
+.link-button:hover {
+  text-decoration: underline;
 }
 
 .mode-grid {
@@ -1540,6 +1635,7 @@ progress {
 
   .file-summary,
   .file-list,
+  .excluded-block,
   .offset-row,
   .helper-text {
     margin-left: 0;

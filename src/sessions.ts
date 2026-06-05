@@ -347,14 +347,36 @@ export function createProject(t: Translations, existing: Project[]): Project {
   return { id: makeId(), name, autoNamed: true, createdAt: now(), updatedAt: now() };
 }
 
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/**
+ * Numbered duplicate name, e.g. "Enemy" → "Enemy (copy) (1)", then "(2)", ... Strips any existing
+ * " (copy)" / " (copy) (N)" tail first so repeated duplicates don't nest ("(copy) (copy)").
+ */
+function uniqueDuplicateName(sourceName: string, suffix: string, existing: Session[]): string {
+  const suf = escapeRegExp(suffix);
+  const root = sourceName.replace(new RegExp(`\\s*\\(${suf}\\)(\\s*\\(\\d+\\))?\\s*$`), '').trim() || sourceName.trim();
+  const base = `${root} (${suffix})`;
+  const used = new Set(existing.map((s) => s.name));
+  let n = 1;
+  while (used.has(`${base} (${n})`)) n += 1;
+  return `${base} (${n})`;
+}
+
 /** Deep-clone a session's config into a new session in the same project (runtime is not copied). */
-export function cloneSession(source: Session, t: Translations): Session {
+export function cloneSession(source: Session, t: Translations, existing: Session[] = []): Session {
   return {
     id: makeId(),
     projectId: source.projectId,
-    name: `${source.name} (${t.duplicateSuffix})`,
+    name: uniqueDuplicateName(source.name, t.duplicateSuffix, existing),
     autoNamed: false,
-    config: { ...source.config, inputFiles: [...source.config.inputFiles] },
+    config: {
+      ...source.config,
+      inputFiles: [...source.config.inputFiles],
+      excludedFiles: [...(source.config.excludedFiles ?? [])]
+    },
     createdAt: now(),
     updatedAt: now()
   };
