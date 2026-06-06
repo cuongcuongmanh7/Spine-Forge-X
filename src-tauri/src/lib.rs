@@ -6,7 +6,7 @@ use std::{
     path::{Path, PathBuf},
     process::Stdio,
     sync::{
-        atomic::{AtomicBool, Ordering},
+        atomic::{AtomicBool, AtomicUsize, Ordering},
         Arc,
     },
     time::Duration,
@@ -15,7 +15,8 @@ use tauri::{AppHandle, Emitter, Manager, State, Window};
 use tokio::{
     io::{AsyncBufReadExt, BufReader},
     process::Command,
-    sync::Mutex,
+    sync::{Mutex, Semaphore},
+    task::JoinSet,
     time,
 };
 use walkdir::WalkDir;
@@ -113,6 +114,8 @@ struct BatchExportRequest {
     timeout_seconds: u64,
     preserve_relative_paths: bool,
     clean_folder_name: bool,
+    #[serde(default)]
+    unicode_workaround: bool,
 }
 
 #[derive(Debug, Serialize)]
@@ -139,10 +142,23 @@ struct CleanResult {
     failed: Vec<String>,
 }
 
+/// Outcome of processing a single .spine file in a batch export.
+#[derive(Debug)]
+enum FileOutcome {
+    /// CLI exited 0 and at least one output file was found.
+    Completed,
+    /// CLI failed (non-zero exit, timeout) or exited 0 but produced no output.
+    Failed(String),
+    /// File was skipped because FallbackMode::Skip was active and no .export.json was found.
+    Skipped,
+}
+
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct BatchExportResult {
     completed: usize,
+    failed: usize,
+    skipped: usize,
     total: usize,
     output_folders: Vec<String>,
     stopped: bool,
@@ -482,19 +498,9 @@ async fn start_batch_export(
     }
 
     let parallel_jobs = request.parallel_jobs.clamp(1, 8);
-    if parallel_jobs > 1 {
-        let _ = window.emit(
-            "spine-log",
-            format!(
-                "Parallel jobs hiện đang chạy tuần tự ở skeleton đầu tiên. Requested: {parallel_jobs}."
-            ),
-        );
-    }
+    let _ = window.emit("spine-log", format!("Running {parallel_jobs} parallel jobs"));
 
     let total = request.files.len();
-    let mut completed = 0;
-    let mut output_folders = Vec::new();
-    let mut stopped = false;
     let run_folder_name = make_export_folder_name(&request.target_version);
     match request.output_policy {
         OutputPolicy::Timestamp => {
@@ -504,25 +510,104 @@ async fn start_batch_export(
             let _ = window.emit("spine-log", "Output policy: source folder name");
         }
     }
+
     let shared_request = Arc::new(request);
+    let semaphore = Arc::new(Semaphore::new(parallel_jobs));
+    let state_arc: Arc<AppState> = Arc::clone(&state);
+    // Shared counter tracking how many files have been fully processed (any outcome).
+    // Each task atomically increments this after export_one_file returns, so progress
+    // events always arrive in completion order (1, 2, 3, …) rather than spawn order.
+    let completed_count = Arc::new(AtomicUsize::new(0));
+
+    // Spawn one task per file; each task acquires a semaphore permit before calling
+    // export_one_file, so at most `parallel_jobs` exports run concurrently.
+    let mut join_set: JoinSet<(usize, FileOutcome, Option<String>)> = JoinSet::new();
 
     for (index, file) in shared_request.files.iter().enumerate() {
-        if state.stop_requested.load(Ordering::SeqCst) {
+        // Check stop flag BEFORE queuing so a Stop request drains the queue immediately.
+        if state_arc.stop_requested.load(Ordering::SeqCst) {
             let _ = window.emit("spine-log", "Batch stopped by user.");
-            stopped = true;
             break;
         }
 
-        let payload = ProgressPayload {
-            current: index + 1,
-            total,
-            file: file.clone(),
-        };
-        let _ = window.emit("spine-progress", payload);
+        let file = file.clone();
+        let run_folder = run_folder_name.clone();
+        let req = Arc::clone(&shared_request);
+        let sem = Arc::clone(&semaphore);
+        let app_state = Arc::clone(&state_arc);
+        let win = window.clone();
+        let counter = Arc::clone(&completed_count);
 
-        let output_dir = export_one_file(&window, &state, shared_request.as_ref(), file, &run_folder_name).await?;
-        completed += 1;
-        output_folders.push(output_dir);
+        join_set.spawn(async move {
+            // Check stop flag once before blocking on the semaphore.
+            if app_state.stop_requested.load(Ordering::SeqCst) {
+                return (index, FileOutcome::Skipped, None);
+            }
+
+            // Acquire permit — blocks if `parallel_jobs` tasks are already running.
+            // The permit is held for the lifetime of the export call and released on drop.
+            let _permit = sem.acquire().await;
+
+            // Re-check stop flag after acquiring the permit (could have been set while waiting).
+            if app_state.stop_requested.load(Ordering::SeqCst) {
+                return (index, FileOutcome::Skipped, None);
+            }
+
+            let output_dir_hint = {
+                let input_path = std::path::PathBuf::from(file.as_str());
+                resolve_output_dir(&req, &input_path, &run_folder).ok()
+            };
+
+            let outcome = export_one_file(win.clone(), app_state, req, &file, &run_folder).await;
+
+            // Emit progress AFTER processing completes — ensures current reflects actual
+            // completion order across parallel tasks, not spawn order.
+            let current = counter.fetch_add(1, Ordering::SeqCst) + 1;
+            let payload = ProgressPayload {
+                current,
+                total,
+                file: file.clone(),
+            };
+            let _ = win.emit("spine-progress", payload);
+
+            (index, outcome, output_dir_hint)
+        });
+    }
+
+    let mut completed = 0usize;
+    let mut failed = 0usize;
+    let mut skipped = 0usize;
+    let mut output_folders = Vec::new();
+    let mut stopped = false;
+
+    while let Some(result) = join_set.join_next().await {
+        match result {
+            Ok((_index, outcome, output_dir_hint)) => match outcome {
+                FileOutcome::Completed => {
+                    completed += 1;
+                    if let Some(dir) = output_dir_hint {
+                        output_folders.push(dir);
+                    }
+                }
+                FileOutcome::Failed(reason) => {
+                    failed += 1;
+                    let _ = window.emit("spine-error", format!("Failed: {reason}"));
+                }
+                FileOutcome::Skipped => {
+                    skipped += 1;
+                }
+            },
+            Err(join_err) => {
+                // Task panicked — treat as a failed file.
+                failed += 1;
+                let _ = window.emit("spine-error", format!("Task error: {join_err}"));
+            }
+        }
+    }
+
+    // If the stop flag was set, reflect that in the result.
+    if state_arc.stop_requested.load(Ordering::SeqCst) {
+        stopped = true;
     }
 
     output_folders.sort();
@@ -530,6 +615,8 @@ async fn start_batch_export(
 
     Ok(BatchExportResult {
         completed,
+        failed,
+        skipped,
         total,
         output_folders,
         stopped,
@@ -586,19 +673,60 @@ async fn open_path(path: String) -> Result<(), String> {
     Ok(())
 }
 
+/// Scan `output_dir` for at least one file with a recognised Spine output
+/// extension (`.skel`, `.json`, `.atlas`). Returns `true` when at least one
+/// such file is found, `false` otherwise.
+fn has_output_files(output_dir: &str) -> bool {
+    let path = Path::new(output_dir);
+    if !path.is_dir() {
+        return false;
+    }
+    WalkDir::new(path)
+        .into_iter()
+        .filter_map(Result::ok)
+        .any(|entry| {
+            let p = entry.path();
+            if !p.is_file() {
+                return false;
+            }
+            p.extension()
+                .and_then(|ext| ext.to_str())
+                .map(|ext| {
+                    let lower = ext.to_ascii_lowercase();
+                    lower == "skel" || lower == "json" || lower == "atlas"
+                })
+                .unwrap_or(false)
+        })
+}
+
 async fn export_one_file(
-    window: &Window,
-    state: &State<'_, Arc<AppState>>,
-    request: &BatchExportRequest,
+    window: Window,
+    state: Arc<AppState>,
+    request: Arc<BatchExportRequest>,
     file: &str,
     run_folder_name: &str,
-) -> Result<String, String> {
+) -> FileOutcome {
     let input_file = PathBuf::from(file);
-    let output_dir = resolve_output_dir(request, &input_file, run_folder_name)?;
-    let export_plan = resolve_export_plan(request, &input_file, &output_dir)?;
+    let output_dir = match resolve_output_dir(&request, &input_file, run_folder_name) {
+        Ok(dir) => dir,
+        Err(e) => return FileOutcome::Failed(e),
+    };
+    let export_plan = match resolve_export_plan(&request, &input_file, &output_dir) {
+        Ok(plan) => plan,
+        Err(e) => {
+            // FallbackMode::Skip produces an Err — treat it as Skipped, not Failed.
+            if e.starts_with("Không tìm thấy .export.json cạnh") {
+                let _ = window.emit("spine-log", format!("Skipped (no export.json): {file}"));
+                return FileOutcome::Skipped;
+            }
+            return FileOutcome::Failed(e);
+        }
+    };
 
     if !output_dir.trim().is_empty() {
-        fs::create_dir_all(&output_dir).map_err(|e| e.to_string())?;
+        if let Err(e) = fs::create_dir_all(&output_dir) {
+            return FileOutcome::Failed(e.to_string());
+        }
     }
     let _ = window.emit("spine-log", format!("Output: {output_dir}"));
     let _ = window.emit(
@@ -632,7 +760,10 @@ async fn export_one_file(
     let command_line = format!("{cmd:?}");
     let _ = window.emit("spine-log", format!("Running: {command_line}"));
 
-    let mut child = cmd.spawn().map_err(|e| e.to_string())?;
+    let mut child = match cmd.spawn() {
+        Ok(c) => c,
+        Err(e) => return FileOutcome::Failed(e.to_string()),
+    };
     if let Some(pid) = child.id() {
         state.running_children.lock().await.push(pid);
     }
@@ -659,10 +790,21 @@ async fn export_one_file(
 
     let timeout = Duration::from_secs(request.timeout_seconds.max(30));
     let status = match time::timeout(timeout, child.wait()).await {
-        Ok(result) => result.map_err(|e| e.to_string())?,
+        Ok(result) => match result {
+            Ok(s) => s,
+            Err(e) => {
+                if let Some(temp_file) = export_plan.temp_file {
+                    let _ = fs::remove_file(temp_file);
+                }
+                return FileOutcome::Failed(e.to_string());
+            }
+        },
         Err(_) => {
             let _ = child.kill().await;
-            return Err(format!("Timeout khi export: {file}"));
+            if let Some(temp_file) = export_plan.temp_file {
+                let _ = fs::remove_file(temp_file);
+            }
+            return FileOutcome::Failed(format!("Timeout khi export: {file}"));
         }
     };
 
@@ -681,16 +823,23 @@ async fn export_one_file(
         if let Some(temp_file) = export_plan.temp_file {
             let _ = fs::remove_file(temp_file);
         }
-        return Err(format!("Spine CLI failed for {file} with status {status}."));
+        return FileOutcome::Failed(format!("Spine CLI failed for {file} with status {status}."));
     }
 
     if let Some(temp_file) = export_plan.temp_file {
         let _ = fs::remove_file(temp_file);
     }
 
+    // Requirement 8.1 / 8.2: CLI exited 0 — verify that at least one output file exists.
+    if !has_output_files(&output_dir) {
+        let warn = format!("CLI exit 0 nhưng không tìm thấy file output: {file}");
+        let _ = window.emit("spine-log", format!("[WARNING] {warn}"));
+        return FileOutcome::Failed(warn);
+    }
+
     let _ = window.emit("spine-log", format!("Completed: {file}"));
 
-    Ok(output_dir)
+    FileOutcome::Completed
 }
 
 fn resolve_output_dir(
@@ -1193,15 +1342,24 @@ fn validate_export_json_content(content: &str) -> Result<(), String> {
     Ok(())
 }
 
+/// Parse the first semver-like version string (`\d+\.\d+\.\d+`) from Spine CLI output.
+/// Works across multi-line output — scans every whitespace/punctuation-delimited token
+/// and returns the first token that matches the pattern, regardless of the exact version.
 fn parse_spine_version(output: &str) -> Option<String> {
-    for token in output.split(|ch: char| !(ch.is_ascii_alphanumeric() || ch == '.')) {
-        let cleaned = token.trim_matches('.');
-        if matches!(cleaned, "3.8.99" | "4.3.11") {
-            return Some(cleaned.to_string());
+    for token in output.split(|ch: char| ch.is_whitespace() || ch == ',' || ch == ';') {
+        let trimmed = token.trim_matches(|ch: char| !ch.is_ascii_alphanumeric());
+        if is_semver_token(trimmed) {
+            return Some(trimmed.to_string());
         }
     }
-
     None
+}
+
+/// Returns `true` when `s` matches the pattern `\d+\.\d+\.\d+` exactly —
+/// one or more digit groups separated by exactly two dots, nothing else.
+fn is_semver_token(s: &str) -> bool {
+    let parts: Vec<&str> = s.split('.').collect();
+    parts.len() == 3 && parts.iter().all(|part| !part.is_empty() && part.chars().all(|ch| ch.is_ascii_digit()))
 }
 
 /// Windows flag that prevents a spawned console process from opening a console window.

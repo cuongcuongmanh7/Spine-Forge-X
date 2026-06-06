@@ -172,9 +172,11 @@ export const copy = {
     dark: 'Dark',
     exportSuccessTitle: 'Export thành công',
     exportSuccessBody: 'Đã export {completed}/{total} file.',
+    exportSummary: '{completed} thành công, {failed} lỗi, {skipped} bỏ qua.',
     exportFailedTitle: 'Export thất bại',
     exportStoppedTitle: 'Export đã dừng',
     exportStoppedBody: 'Đã dừng sau khi export {completed}/{total} file.',
+    exportStoppedSummary: 'Đã dừng — {completed} thành công, {failed} lỗi, {skipped} bỏ qua.',
     settings: 'Cài đặt',
     recents: 'Phiên gần đây',
     newSession: 'Phiên mới',
@@ -400,9 +402,11 @@ export const copy = {
     dark: 'Dark',
     exportSuccessTitle: 'Export completed',
     exportSuccessBody: 'Exported {completed}/{total} files.',
+    exportSummary: '{completed} completed, {failed} failed, {skipped} skipped.',
     exportFailedTitle: 'Export failed',
     exportStoppedTitle: 'Export stopped',
     exportStoppedBody: 'Stopped after exporting {completed}/{total} files.',
+    exportStoppedSummary: 'Stopped — {completed} completed, {failed} failed, {skipped} skipped.',
     settings: 'Settings',
     recents: 'Recents',
     newSession: 'New session',
@@ -467,4 +471,11 @@ export function getCopy(language: Language): Translations {
 
 export function formatMessage(template: string, completed: number, total: number) {
   return template.replace('{completed}', String(completed)).replace('{total}', String(total));
+}
+
+export function formatSummary(template: string, completed: number, failed: number, skipped: number) {
+  return template
+    .replace('{completed}', String(completed))
+    .replace('{failed}', String(failed))
+    .replace('{skipped}', String(skipped));
 }
