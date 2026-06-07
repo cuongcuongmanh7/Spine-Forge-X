@@ -36,6 +36,11 @@ Shipped ở commit `c133cac`.
 - [x] Session mới đi wizard tuần tự (Spine?→Input→Export→Output); duplicate đã xong thì bỏ qua (`wizardCompleted`)
 - [x] Bước Output: Auto-detect Type theo path input (1 Type/session + cảnh báo khi nhiều loại)
 
+### Accessibility & UX polish (theo docs/ui-design-rules.md mục 7)
+- [x] `prefers-reduced-motion` toàn cục; focus ring `:focus-visible`; keyboard activation cho session/project row
+- [x] `aria-label` cho nút icon-only; `FieldStatus`/status dot có `role`+`aria-label`; notice dùng `role=alert`/`aria-live`
+- [x] base `line-height` 1.5; đếm file format locale; contrast đo ≥ 4.5:1
+
 ### Unicode path workaround
 - [x] B1 — Nối `unicodeWorkaround` vào request payload (đã bị rớt)
 - [x] B2 — Backend: `has_non_ascii`, copy-to-temp-ASCII trong `export_one_file`, `TempDirGuard` cleanup

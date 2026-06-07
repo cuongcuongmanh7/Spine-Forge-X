@@ -32,7 +32,7 @@ export function SettingsModal() {
       <div className="modal" role="dialog" aria-modal="true" onClick={(event) => event.stopPropagation()}>
         <div className="modal-header">
           <h2>{t.settings}</h2>
-          <button className="modal-close" title={t.closeSettings} onClick={() => setSettingsOpen(false)}>
+          <button className="modal-close" title={t.closeSettings} aria-label={t.closeSettings} onClick={() => setSettingsOpen(false)}>
             <X size={18} />
           </button>
         </div>
@@ -81,7 +81,7 @@ export function SettingsModal() {
                         : t.executableMissing
                 }
               />
-              <button className="icon-button" title={t.autoDetect} disabled={isAutoDetecting} onClick={() => autoDetectSpine(false)}>
+              <button className="icon-button" title={t.autoDetect} aria-label={t.autoDetect} disabled={isAutoDetecting} onClick={() => autoDetectSpine(false)}>
                 {isAutoDetecting ? <RotateCw className="spin" size={18} /> : <Search size={18} />}
               </button>
             </div>

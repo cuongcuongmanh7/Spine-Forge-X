@@ -76,10 +76,18 @@ function SessionRow({ session }: { session: Session }) {
     <div
       className={`session-row${isActive ? ' active' : ''}${isMenuOpen ? ' menu-open' : ''}`}
       onClick={() => !isRenaming && selectSession(session.id)}
+      onKeyDown={(event) => {
+        // Only when the row itself is focused (not a child input), so keyboard users can activate it.
+        if (isRenaming || event.target !== event.currentTarget) return;
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault();
+          selectSession(session.id);
+        }
+      }}
       role="button"
       tabIndex={0}
     >
-      <span className={`session-status-dot status-${status}`} title={statusTitle} />
+      <span className={`session-status-dot status-${status}`} title={statusTitle} role="img" aria-label={statusTitle} />
       {isRenaming ? (
         <input
           ref={inputRef}
@@ -109,7 +117,8 @@ function SessionRow({ session }: { session: Session }) {
       {!isRenaming && (
         <button
           className="session-menu-trigger"
-          title="..."
+          title={t.options}
+          aria-label={t.options}
           onClick={(event) => {
             event.stopPropagation();
             setMenuOpenId(isMenuOpen ? null : session.id);
@@ -183,6 +192,13 @@ function ProjectGroup({ project }: { project: Project }) {
       <div
         className="project-header"
         onClick={() => !isRenaming && toggleProjectCollapsed(project.id)}
+        onKeyDown={(event) => {
+          if (isRenaming || event.target !== event.currentTarget) return;
+          if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            toggleProjectCollapsed(project.id);
+          }
+        }}
         role="button"
         tabIndex={0}
       >
@@ -211,6 +227,7 @@ function ProjectGroup({ project }: { project: Project }) {
           <button
             className="project-add"
             title={t.addSession}
+            aria-label={t.addSession}
             onClick={(event) => {
               event.stopPropagation();
               openNewSessionDialog(project.id);
@@ -223,7 +240,8 @@ function ProjectGroup({ project }: { project: Project }) {
         {!isRenaming && (
           <button
             className="project-menu-trigger"
-            title="..."
+            title={t.options}
+            aria-label={t.options}
             onClick={(event) => {
               event.stopPropagation();
               setProjectMenuOpenId(isMenuOpen ? null : project.id);
@@ -290,7 +308,7 @@ export function Sidebar() {
     <aside className="sidebar">
       <div className="sidebar-header">
         <span className="sidebar-title">{t.projects}</span>
-        <button className="sidebar-new" title={t.newProject} onClick={() => setProjectDialogOpen(true)}>
+        <button className="sidebar-new" title={t.newProject} aria-label={t.newProject} onClick={() => setProjectDialogOpen(true)}>
           <Plus size={16} />
         </button>
       </div>

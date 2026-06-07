@@ -63,6 +63,8 @@ body {
   margin: 0;
   min-width: 360px;
   background: var(--bg);
+  /* Comfortable default for any text that doesn't set its own line-height. */
+  line-height: 1.5;
 }
 
 .window-frame {
@@ -1066,6 +1068,17 @@ select:focus,
 textarea:focus {
   outline: 2px solid #7aa7ff;
   outline-offset: 1px;
+}
+
+/* Visible keyboard-focus ring for all interactive controls (mouse clicks don't trigger
+   :focus-visible, so this only shows for keyboard nav). */
+button:focus-visible,
+[role='button']:focus-visible,
+.session-row:focus-visible,
+.project-header:focus-visible {
+  outline: 2px solid #7aa7ff;
+  outline-offset: 2px;
+  border-radius: 8px;
 }
 
 textarea {
@@ -2141,11 +2154,18 @@ progress {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .toast,
-  .modal-backdrop,
-  .modal,
-  .session-menu,
-  .session-running-dot {
-    animation: none;
+  /* Honor the OS "reduce motion" setting: near-instant transitions, no looping/decorative
+     animation (incl. the .spin loaders), no smooth scroll. */
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  .spin {
+    animation: none !important;
   }
 }

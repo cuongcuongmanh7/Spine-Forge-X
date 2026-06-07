@@ -90,3 +90,39 @@ Mọi chuỗi hiển thị thêm vào **cả `vi` và `en`** trong [i18n.ts](../
 
 - App.tsx mỏng; logic ở `useAppController`; UI ở `components/**`.
 - Icon dùng `lucide-react`. Browse thư mục/file dùng `open()` của `@tauri-apps/plugin-dialog`.
+
+---
+
+## 7. UX checklist (desktop)
+
+Chắt lọc các guideline framework-agnostic phù hợp app desktop (Tauri + React + CSS), bỏ phần mobile/marketing. Nguồn tham khảo: bộ rule "UI UX Pro Max". `✓` = đã làm trong app; `☐` = còn cần rà thủ công.
+
+**Accessibility**
+- ✓ Không dùng emoji làm icon — dùng SVG (`lucide-react`).
+- ✓ Không truyền thông tin **chỉ bằng màu** — status dot có `title` + `aria-label`; `FieldStatus` có icon + `role="img"` + `aria-label`.
+- ✓ Nút chỉ-icon có **`aria-label`** (workspace, modals, sidebar, titlebar, wizard).
+- ✓ **Keyboard nav** + **focus ring**: `:focus-visible` cho button/`[role=button]`; hàng `session-row`/`project-header` kích hoạt bằng Enter/Space.
+- ✓ Lỗi announce bằng `role="alert"`; cảnh báo/info dùng `role="status"` + `aria-live="polite"` (RunDock, OutputSection, InputSection).
+- ✓ Tương phản chữ ≥ **4.5:1** (đã đo): `--text` ~10–16:1; `--text-muted` ~4.8:1 (light) / ~6–7.5:1 (dark) trên `--bg`/`--surface`.
+
+**Trạng thái tương tác**
+- ✓ Disabled: giảm opacity + đổi cursor.
+- ✓ Nút async: disable + spinner (Start/Browse/Detect/Scan…); thao tác > 300ms đều có spinner/overlay.
+- ✓ Confirm trước hành động phá hủy / không hoàn tác (`confirm()` khi xóa, ghi đè).
+- ✓ Hover/active transition **120–150ms** (`var(--ease)`), trong ngưỡng micro-interaction.
+
+**Feedback**
+- ✓ Empty state có hướng dẫn + hành động (`EmptyState`).
+- ✓ Progress nhiều bước (wizard stepper, progress bar khi export).
+- ✓ Toast cho kết quả ngắn; lỗi hiện gần chỗ phát sinh (`FieldStatus` cạnh input).
+
+**Motion**
+- ✓ Tôn trọng `prefers-reduced-motion`: rule toàn cục gần như tắt animation/transition + dừng `.spin` + tắt smooth-scroll.
+- ✓ Animation có ý nghĩa (spinner = đang chạy, stepper = tiến trình), không trang trí thuần.
+
+**Typography & nội dung**
+- ✓ Cắt chuỗi dài bằng ellipsis + tooltip full (`file-pill`, `linked-card-title`).
+- ✓ `line-height` base body = 1.5.
+- ✓ Số đếm file format theo locale (`toLocaleString`); ngày giờ log dùng `toLocaleTimeString`.
+
+> Toàn bộ checklist đã đạt. Khi đổi palette/đổi theme sau này, đo lại contrast (≥ 4.5:1 cho text thường).

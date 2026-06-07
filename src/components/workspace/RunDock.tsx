@@ -31,19 +31,19 @@ export function RunDock() {
     <div className="run-dock">
       <div className="run-dock-inner">
         {showUnicodeWarning && (
-          <div className="notice info">
+          <div className="notice info" role="status" aria-live="polite">
             <Info size={18} />
             <span>{t.unicodeWarning}</span>
           </div>
         )}
         {validation.errors.length > 0 && (
-          <div className="notice danger">
+          <div className="notice danger" role="alert">
             <XCircle size={18} />
             <span>{validation.errors.join(' ')}</span>
           </div>
         )}
         {validation.warnings.length > 0 && (
-          <div className="notice warning">
+          <div className="notice warning" role="status" aria-live="polite">
             <AlertTriangle size={18} />
             <span>{validation.warnings.join(' ')}</span>
           </div>

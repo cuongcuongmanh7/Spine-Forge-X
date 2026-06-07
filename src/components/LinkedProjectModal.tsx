@@ -66,7 +66,7 @@ export function LinkedProjectModal() {
       <div className="modal linked-modal" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
           <h2>{t.linkedModalTitle}</h2>
-          <button className="modal-close" title={t.cancel} onClick={close}>
+          <button className="modal-close" title={t.cancel} aria-label={t.cancel} onClick={close}>
             <X size={18} />
           </button>
         </div>
@@ -86,7 +86,9 @@ export function LinkedProjectModal() {
                   <span className="linked-list-meta">{p.types.length}</span>
                   <span
                     className="linked-list-del"
+                    role="button"
                     title={t.linkedDeleteProject}
+                    aria-label={t.linkedDeleteProject}
                     onClick={(e) => {
                       e.stopPropagation();
                       removeProject(p.id);
@@ -111,14 +113,14 @@ export function LinkedProjectModal() {
                 <div className="form-row">
                   <label>{t.unityRoot}</label>
                   <input value={selected.unityRoot} onChange={(e) => updateLinkedProject(selected.id, { unityRoot: e.target.value })} placeholder="…/Animations/Spine" />
-                  <button className="icon-button" title={t.unityRoot} onClick={() => browse(selected.id, 'unityRoot', selected.unityRoot)}>
+                  <button className="icon-button" title={t.unityRoot} aria-label={t.unityRoot} onClick={() => browse(selected.id, 'unityRoot', selected.unityRoot)}>
                     <FolderOpen size={18} />
                   </button>
                 </div>
                 <div className="form-row">
                   <label>{t.sourceRoot}</label>
                   <input value={selected.sourceRoot} onChange={(e) => updateLinkedProject(selected.id, { sourceRoot: e.target.value })} placeholder="[FD] Animation" />
-                  <button className="icon-button" title={t.sourceRoot} onClick={() => browse(selected.id, 'sourceRoot', selected.sourceRoot)}>
+                  <button className="icon-button" title={t.sourceRoot} aria-label={t.sourceRoot} onClick={() => browse(selected.id, 'sourceRoot', selected.sourceRoot)}>
                     <FolderOpen size={18} />
                   </button>
                 </div>
@@ -144,7 +146,7 @@ export function LinkedProjectModal() {
                           placeholder={t.linkedDestName}
                           onChange={(e) => setType(selected.id, selected.types, i, { destName: e.target.value })}
                         />
-                        <button className="icon-button danger" title={t.remove} onClick={() => removeType(selected.id, selected.types, i)}>
+                        <button className="icon-button danger" title={t.remove} aria-label={t.remove} onClick={() => removeType(selected.id, selected.types, i)}>
                           <Trash2 size={16} />
                         </button>
                       </div>

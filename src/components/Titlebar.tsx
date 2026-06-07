@@ -20,6 +20,7 @@ export function Titlebar() {
           <button
             className="titlebar-update-check"
             title="Check for update"
+            aria-label="Check for update"
             disabled={updateUi.status === 'checking' || updateUi.status === 'downloading' || updateUi.status === 'ready'}
             onMouseDown={(event) => event.stopPropagation()}
             onClick={() => void checkForAppUpdate(true)}
@@ -52,13 +53,13 @@ export function Titlebar() {
         </div>
       </div>
       <div className="titlebar-controls">
-        <button title="Minimize" onClick={() => void getAppWindow()?.minimize()}>
+        <button title="Minimize" aria-label="Minimize" onClick={() => void getAppWindow()?.minimize()}>
           <Minus size={15} />
         </button>
-        <button title="Maximize" onClick={() => void getAppWindow()?.toggleMaximize()}>
+        <button title="Maximize" aria-label="Maximize" onClick={() => void getAppWindow()?.toggleMaximize()}>
           <Square size={13} />
         </button>
-        <button className="close" title="Close" onClick={() => void getAppWindow()?.close()}>
+        <button className="close" title="Close" aria-label="Close" onClick={() => void getAppWindow()?.close()}>
           <X size={16} />
         </button>
       </div>

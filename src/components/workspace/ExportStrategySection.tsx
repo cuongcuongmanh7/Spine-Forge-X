@@ -40,7 +40,7 @@ export function ExportStrategySection() {
                   <option key={version} value={version}>{version}</option>
                 ))}
             </select>
-            <button className="icon-button" title={t.detectVersion} disabled={isDetectingVersion} onClick={() => detectVersion()}>
+            <button className="icon-button" title={t.detectVersion} aria-label={t.detectVersion} disabled={isDetectingVersion} onClick={() => detectVersion()}>
               {isDetectingVersion ? <RotateCw className="spin" size={18} /> : <Search size={18} />}
             </button>
           </div>

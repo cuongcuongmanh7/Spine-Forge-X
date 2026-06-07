@@ -91,7 +91,7 @@ export function OutputSection() {
             warning={Boolean(validation.outputWarning)}
             message={merged.outputPath.trim() ? (validation.outputOk ? t.outputExists : t.outputMissing) : outputHelper}
           />
-          <button className="icon-button" title={t.browseOutput} disabled={isChoosingOutputFolder} onClick={chooseOutputFolder}>
+          <button className="icon-button" title={t.browseOutput} aria-label={t.browseOutput} disabled={isChoosingOutputFolder} onClick={chooseOutputFolder}>
             {isChoosingOutputFolder ? <RotateCw className="spin" size={18} /> : <FolderOpen size={18} />}
           </button>
         </div>
@@ -133,7 +133,7 @@ export function OutputSection() {
                 </option>
               ))}
             </select>
-            <button className="icon-button" title={t.manageLinkedProjects} onClick={() => setLinkedModalOpen(true)}>
+            <button className="icon-button" title={t.manageLinkedProjects} aria-label={t.manageLinkedProjects} onClick={() => setLinkedModalOpen(true)}>
               <Link2 size={18} />
             </button>
           </div>
@@ -154,6 +154,7 @@ export function OutputSection() {
             <button
               className="icon-button"
               title={t.autoDetectType}
+              aria-label={t.autoDetectType}
               disabled={!selectedLinked || files.length === 0}
               onClick={() => autoDetectLinkedType()}
             >
@@ -161,7 +162,7 @@ export function OutputSection() {
             </button>
           </div>
           {linkedTypeWarning && (
-            <div className="notice warning">
+            <div className="notice warning" role="status" aria-live="polite">
               <AlertTriangle size={18} />
               <span>{linkedTypeWarning}</span>
             </div>

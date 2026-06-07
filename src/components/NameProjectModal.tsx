@@ -24,7 +24,7 @@ export function NameProjectModal() {
       <div className="modal name-dialog" role="dialog" aria-modal="true" onClick={(event) => event.stopPropagation()}>
         <div className="modal-header">
           <h2>{t.nameProjectTitle}</h2>
-          <button className="modal-close" title={t.cancel} onClick={close}>
+          <button className="modal-close" title={t.cancel} aria-label={t.cancel} onClick={close}>
             <X size={18} />
           </button>
         </div>

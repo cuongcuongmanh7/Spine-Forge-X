@@ -132,7 +132,7 @@ export function PresetEditorModal() {
       <div className="modal preset-editor" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
           <h2>{initial.builtIn || initial.name === '' ? t.presetEditorNew : t.presetEditorTitle}</h2>
-          <button className="modal-close" title={t.cancel} onClick={closePresetEditor}>
+          <button className="modal-close" title={t.cancel} aria-label={t.cancel} onClick={closePresetEditor}>
             <X size={18} />
           </button>
         </div>

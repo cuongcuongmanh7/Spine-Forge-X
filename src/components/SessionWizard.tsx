@@ -90,6 +90,8 @@ export function SessionWizard() {
                 disabled={!reachable && !active}
                 onClick={() => reachable && setStep(i)}
                 title={titles[key]}
+                aria-label={`${t.wizardStep} ${i + 1}: ${titles[key]}`}
+                aria-current={active ? 'step' : undefined}
               >
                 <span className="wizard-step-num">{done && !active ? <Check size={14} /> : i + 1}</span>
                 <span className="wizard-step-name">{titles[key]}</span>
