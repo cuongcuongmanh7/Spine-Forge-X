@@ -41,6 +41,8 @@ export type ExportPreset = {
 
 export type BatchExportResult = {
   completed: number;
+  failed: number;
+  skipped: number;
   total: number;
   outputFolders: string[];
   stopped: boolean;

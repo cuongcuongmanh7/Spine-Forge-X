@@ -20,7 +20,7 @@ import {
   type SessionRuntime,
   type SessionStatus
 } from './config';
-import { formatMessage, getCopy, type Translations } from './i18n';
+import { formatMessage, formatSummary, getCopy, type Translations } from './i18n';
 import {
   basename,
   cloneSession,
@@ -1279,11 +1279,11 @@ export function useAppControllerValue() {
       const result = await invoke<BatchExportResult>('start_batch_export', { request: buildExportRequest() });
       recordRunOutput(result.outputFolders);
       if (result.stopped) {
-        const body = formatMessage(t.exportStoppedBody, result.completed, result.total);
+        const body = formatSummary(t.exportStoppedSummary, result.completed, result.failed, result.skipped);
         recordRunLog(stamp(body));
         await message(body, { title: t.exportStoppedTitle, kind: 'warning' });
       } else {
-        const body = formatMessage(t.exportSuccessBody, result.completed, result.total);
+        const body = formatSummary(t.exportSummary, result.completed, result.failed, result.skipped);
         recordRunLog(stamp(t.finished));
         await message(body, { title: t.exportSuccessTitle, kind: 'info' });
       }
@@ -1417,7 +1417,11 @@ export function useAppControllerValue() {
         });
         recordRunOutput(result.outputFolders);
         recordRunLog(
-          stamp(result.stopped ? formatMessage(t.exportStoppedBody, result.completed, result.total) : t.finished)
+          stamp(
+            result.stopped
+              ? formatSummary(t.exportStoppedSummary, result.completed, result.failed, result.skipped)
+              : formatSummary(t.exportSummary, result.completed, result.failed, result.skipped)
+          )
         );
         exported += 1;
         stopped = result.stopped;

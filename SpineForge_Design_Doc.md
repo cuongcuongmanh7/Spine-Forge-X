@@ -62,6 +62,7 @@ Quy tắc UI chính:
 * **Input Directory / File Selection:** Chọn thư mục gốc hoặc chọn nhiều file `.spine`; hỗ trợ kéo thả folder/file.
 * **Selected Files Preview:** Khi có nhiều file, hiển thị danh sách compact có icon file, path ellipsis, tooltip full path và nút remove từng file.
 * **Output Directory:** Chọn thư mục output. Nếu để trống, app có thể dùng output cạnh file gốc hoặc theo setting trong `.export.json` tùy mode. Có tùy chọn giữ cấu trúc thư mục tương đối từ input.
+* **Linked Project (liên kết Unity):** Thay vì gõ path output thủ công, chọn một **Linked Project** đã cấu hình (Unity root + danh sách type) và một **Type**; app tự định tuyến output vào `unityRoot/<DestType>/<IdFolder>`, khớp id từ tên thư mục nguồn. Xem mục V.3 và roadmap cuối tài liệu.
 
 ### 2. Export Settings
 
@@ -109,6 +110,7 @@ Quy tắc UI chính:
    * Fallback policy khi thiếu `.export.json`.
    * Global `.export.json` picker.
    * Built-in export format picker.
+   * Output policy: `Timestamp` / `SourceFolderName` / **`Linked Project`** (chọn Project + Type, nút "Manage…" mở modal cấu hình, có dòng preview thư mục đích real-time).
 4. **Advanced Runtime**
    * Target version.
    * Parallel jobs.
@@ -204,6 +206,18 @@ Spine.com -Xmx512m --update 4.3.xx --input "D:\Project\char.spine" --output "D:\
 ```
 
 Mode D chỉ được xem là hợp lệ nếu test thực tế sinh đủ `.skel`/`.json`, `.atlas`, `.png` và giữ đúng atlas max size từng file.
+
+**Định tuyến output — Linked Project**
+
+Độc lập với export mode ở trên, khi output policy là `Linked Project`, `--output` được resolve về `unityRoot/<DestType>/<IdFolder>`:
+
+* `DestType` = `destName` của Type được chọn trong Linked Project.
+* `IdFolder` = tách id token từ tên thư mục nguồn (phần trước `_` đầu tiên, ví dụ `3001_Lucius` → `3001`), rồi tìm thư mục đích đã tồn tại theo thứ tự: khớp tên đúng → khớp tiền tố `<id>_` → tạo mới theo tên thư mục nguồn nếu không có.
+* Không tạo thư mục trùng cạnh thư mục id đã tồn tại (ví dụ id `0001` tái dùng `Heroes/0001_Fighter` thay vì tạo `Heroes/0001`).
+
+```bash
+Spine.com -Xmx512m --update 4.3.xx --input "...\[FD] Animation\Enemy\4001\char.spine" --output "D:\Projects\FD\Assets\_Assets\Animations\Spine\Enemy\4001" --export binary+pack
+```
 
 ### 4. Chạy process và stream log
 
@@ -378,3 +392,15 @@ Không nên copy nguyên:
 * Ép toàn bộ file qua một default/global export JSON nếu mục tiêu là giữ Max Size riêng từng project.
 * Hậu xử lý JSON bằng regex. Nếu cần sửa JSON export, dùng JSON parser.
 * Fallback command không giống sample hãng nếu chưa test bằng Spine CLI thật.
+
+---
+
+## IX. TÍCH HỢP UNITY — LINKED PROJECT
+
+**Pha 1 (trong phạm vi):** Tính năng **Linked Project** cho phép export đi thẳng vào cây asset Unity, loại bỏ thao tác copy thủ công.
+
+* **Linked Project** lưu `name`, `unityRoot` (vd `.../Animations/Spine`), `sourceRoot` (cây art chứa `.spine`) và danh sách **type** ánh xạ `sourceName → destName` (tên nguồn số ít → tên đích số nhiều, ví dụ `Hero → Heroes`). Lưu trong AppConfig, dùng lại cho mọi session.
+* Mỗi session chọn 1 Linked Project + 1 type; output = `unityRoot/<destName>/<IdFolder>`, id tự khớp từ tên thư mục nguồn (xem mục V.3).
+* UI: radio output policy `Linked Project`, select Project/Type, nút "Manage…" mở modal CRUD (Browse `unityRoot`/`sourceRoot`, bảng type + "Auto-fill từ Unity root"), và dòng preview thư mục đích trước khi Run.
+
+**Pha 2 (roadmap tương lai — ngoài phạm vi):** Kích hoạt pipeline export trực tiếp từ Unity Editor qua chế độ headless CLI của SpineForge X (Unity Headless Trigger) — yêu cầu tách core export khỏi GUI, parse CLI args, job file và trả log về Unity console. Sẽ lên plan riêng sau khi Pha 1 được verify.

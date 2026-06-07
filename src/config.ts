@@ -76,7 +76,10 @@ export const defaultSessionConfig = {
   generatedPackSource: 'attachments',
   generatedPackTarget: 'perskeleton',
   generatedWarnings: true,
-  generatedForceAll: false
+  generatedForceAll: false,
+  // When enabled, the backend copies .spine files to an ASCII temp path before calling
+  // SpineCLI, to work around SpineCLI failures with non-ASCII (Unicode) paths.
+  unicodeWorkaround: false
 };
 
 export type SessionConfig = typeof defaultSessionConfig;
