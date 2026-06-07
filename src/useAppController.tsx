@@ -23,6 +23,7 @@ import {
   type SessionStatus
 } from './config';
 import { formatMessage, formatSummary, getCopy, type Translations } from './i18n';
+import { computeCanStart, statusFromValidation } from './validation';
 import {
   basename,
   cloneSession,
@@ -206,7 +207,14 @@ export function useAppControllerValue() {
   const progress = files.length === 0 ? 0 : Math.round((currentIndex / files.length) * 100);
   const currentFile = files[Math.max(0, currentIndex - 1)] ?? '';
   const canStart = useMemo(
-    () => validation.ok && files.length > 0 && merged.globalJsonPath.trim() !== '' && !anyRunning && activeSessionId !== null,
+    () =>
+      computeCanStart({
+        validationOk: validation.ok,
+        fileCount: files.length,
+        globalJsonPath: merged.globalJsonPath,
+        anyRunning,
+        activeSessionId
+      }),
     [validation.ok, files.length, merged.globalJsonPath, anyRunning, activeSessionId]
   );
   // Status for the main-panel pill — same logic as the sidebar dots (input-aware), so they always agree.
@@ -1245,17 +1253,7 @@ export function useAppControllerValue() {
     }
   }
 
-  function statusFromValidation(session: Session, result: ValidateResult, fileCount: number): SessionStatus {
-    const cfg = session.config;
-    const inputConfigured = cfg.inputPath.trim() !== '' || cfg.inputFiles.length > 0;
-    // A global preset is now mandatory (the only export flow).
-    const presetConfigured = cfg.globalJsonPath.trim() !== '';
-    if (!result.ok || !inputConfigured || !presetConfigured) return 'red';
-    // Input is set but the scan found no .spine files — nothing to export.
-    if (fileCount === 0) return 'red';
-    if (result.warnings.length > 0) return 'yellow';
-    return 'green';
-  }
+  // `statusFromValidation` is imported from ./validation (pure, unit-tested).
 
   // Per-session readiness dot. Based on config only (not ephemeral runtime files) so it is reload-stable.
   async function refreshSessionStatuses() {

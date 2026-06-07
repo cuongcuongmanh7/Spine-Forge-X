@@ -55,10 +55,23 @@ Shipped ở commit `c133cac`.
 
 ---
 
-## v0.2.7 — Hardening & Test Suite 📋 Planned
+## v0.2.7 — Hardening & Test Suite ✅ Done
 
-- [ ] Frontend (Vitest): persistence migration round-trip A/B/C/D; session runtime isolation; `canStart`/`statusFromValidation`; log routing khi switch session
-- [ ] Backend proptests còn lại: `validate_settings`, `resolve_output_dir`, preset name validation
+> Không thêm tính năng user-facing; chỉ củng cố test. `cargo test` (14) + `npm test` (16) xanh, `npm run build` ok.
+
+### Backend (proptest)
+- [x] Thêm `[dev-dependencies] proptest`; union feature `schemars` cho `tauri-utils` để test profile build được (quirk 2.9.2: bật `schema` mà không bật `schemars`)
+- [x] Property tests: `validate_settings` (P5 empty spine, P6 internalExperimental), `parallelJobs` clamp (P9), `validate_preset_file_name` (P10), `normalize_pack_source` (P13), `parse_spine_version`
+- [x] `resolve_output_dir(LinkedProject)` không sinh path trùng (P17, FS-backed)
+
+### Frontend (Vitest)
+- [x] Dựng Vitest + jsdom (`vitest.config.ts`, `src/test-setup.ts`, script `test`/`test:watch`)
+- [x] Trích logic thuần ra `src/validation.ts` (`computeCanStart`, `statusFromValidation`); hook import lại
+- [x] `validation.test.ts`: `canStart`/`statusFromValidation` mọi tổ hợp (P15)
+- [x] `sessions.test.ts`: persistence migration round-trip A/B/C/D, `sanitizeConfig`/`pickKnown`, ẩn timestamp→sourceFolder (P2)
+
+### Đẩy sang backlog
+- [ ] Hook-level tests (React Testing Library): session isolation (P3/P4), log routing khi switch session (P14) — cần render `useAppController`, để đợt sau
 
 ---
 

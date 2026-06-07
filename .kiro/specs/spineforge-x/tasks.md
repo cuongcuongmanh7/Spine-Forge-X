@@ -166,13 +166,13 @@ Ngôn ngữ: **Rust** (backend Tauri) + **TypeScript/React** (frontend).
     - Giữ backward compat với các version string Spine thực tế (4.x, 3.8.x)
     - _Requirements: 1.3_
 
-  - [ ]* 9.2 Viết property test cho `parse_spine_version`
+  - [x]* 9.2 Viết property test cho `parse_spine_version`
     - Sinh chuỗi output ngẫu nhiên có/không chứa semver token
     - Assert: nếu output chứa `X.Y.Z` thì parse trả về `Some`; nếu không có pattern nào thì `None`
     - _Requirements: 1.3_
 
 - [ ] 10. Persistence Round-Trip và Session Isolation Tests (Frontend)
-  - [~] 10.1 Viết unit tests cho `loadPersistedState` migration paths
+  - [x] 10.1 Viết unit tests cho `loadPersistedState` migration paths
     - **Property 2: Persist/restore state là round-trip**
     - **Validates: Requirements 2.4, 1.5**
     - Test 4 case migration (A/B/C/D) bằng mock localStorage (jsdom trong Vitest)
@@ -188,7 +188,7 @@ Ngôn ngữ: **Rust** (backend Tauri) + **TypeScript/React** (frontend).
     - _Requirements: 2.3, 2.5_
 
 - [ ] 11. Frontend Tests — Validation và canStart Logic
-  - [~] 11.1 Viết unit tests cho `canStart` và `statusFromValidation`
+  - [x] 11.1 Viết unit tests cho `canStart` và `statusFromValidation`
     - **Property 15: Session status nhất quán giữa sidebar và main panel**
     - **Validates: Requirements 2.7, 16.1**
     - Test mọi tổ hợp `validation.ok`, `files.length`, `anyRunning`

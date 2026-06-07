@@ -1,6 +1,6 @@
 [package]
 name = "spineforge-x"
-version = "0.2.6"
+version = "0.2.7"
 description = "Batch export and version upgrade workflow for Spine projects."
 authors = ["SpineForge X"]
 edition = "2021"
@@ -22,3 +22,10 @@ tokio = { version = "1.43.0", features = ["process", "io-util", "time", "macros"
 walkdir = "2.5.0"
 tauri-plugin-updater = "2.10.1"
 tauri-plugin-process = "2.3.1"
+
+[dev-dependencies]
+proptest = "1"
+# The test profile unifies features such that tauri-utils' `schema` feature gets
+# enabled without its companion `schemars` feature (an upstream 2.9.2 quirk),
+# which fails to compile. Union the `schemars` feature in to keep tests building.
+tauri-utils = { version = "2.9.2", features = ["schemars"] }

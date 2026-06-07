@@ -83,7 +83,13 @@ export function LinkedProjectModal() {
                   onClick={() => setSelectedId(p.id)}
                 >
                   <span className="linked-list-name">{label}</span>
-                  <span className="linked-list-meta">{p.types.length}</span>
+                  <span
+                    className="linked-list-meta"
+                    title={`${p.types.length} ${t.linkedTypeCountWord}`}
+                    aria-label={`${p.types.length} ${t.linkedTypeCountWord}`}
+                  >
+                    {p.types.length}
+                  </span>
                   <span
                     className="linked-list-del"
                     role="button"
@@ -112,14 +118,14 @@ export function LinkedProjectModal() {
                 </div>
                 <div className="form-row">
                   <label>{t.unityRoot}</label>
-                  <input value={selected.unityRoot} onChange={(e) => updateLinkedProject(selected.id, { unityRoot: e.target.value })} placeholder="…/Animations/Spine" />
+                  <input value={selected.unityRoot} title={selected.unityRoot} onChange={(e) => updateLinkedProject(selected.id, { unityRoot: e.target.value })} placeholder="…/Animations/Spine" />
                   <button className="icon-button" title={t.unityRoot} aria-label={t.unityRoot} onClick={() => browse(selected.id, 'unityRoot', selected.unityRoot)}>
                     <FolderOpen size={18} />
                   </button>
                 </div>
                 <div className="form-row">
                   <label>{t.sourceRoot}</label>
-                  <input value={selected.sourceRoot} onChange={(e) => updateLinkedProject(selected.id, { sourceRoot: e.target.value })} placeholder="[FD] Animation" />
+                  <input value={selected.sourceRoot} title={selected.sourceRoot} onChange={(e) => updateLinkedProject(selected.id, { sourceRoot: e.target.value })} placeholder="[FD] Animation" />
                   <button className="icon-button" title={t.sourceRoot} aria-label={t.sourceRoot} onClick={() => browse(selected.id, 'sourceRoot', selected.sourceRoot)}>
                     <FolderOpen size={18} />
                   </button>
@@ -152,7 +158,14 @@ export function LinkedProjectModal() {
                       </div>
                     ))}
                   </div>
-                  <button className="secondary-button small" onClick={() => addType(selected.id, selected.types)}>
+                  <button
+                    className="secondary-button small"
+                    disabled={(() => {
+                      const last = selected.types[selected.types.length - 1];
+                      return !!last && !last.sourceName.trim() && !last.destName.trim();
+                    })()}
+                    onClick={() => addType(selected.id, selected.types)}
+                  >
                     <Plus size={14} /> {t.linkedAddType}
                   </button>
                 </div>

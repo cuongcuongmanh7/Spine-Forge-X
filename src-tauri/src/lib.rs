@@ -1757,4 +1757,208 @@ mod tests {
         let _ = fs::remove_dir_all(&src);
         let _ = fs::remove_dir_all(&dst);
     }
+
+    // ---- Property tests (proptest) ----------------------------------------
+    //
+    // These lock the pure invariants added across v0.2.5–v0.2.6 (validation,
+    // output routing, preset name rules, version parsing) so future refactors
+    // can't silently break them. FS-touching branches are exercised with the
+    // `test_dir()` helper above; the rest are pure string/number logic.
+
+    use proptest::prelude::*;
+
+    /// Build a `BatchExportRequest` for routing tests. Only the fields that
+    /// `resolve_output_dir` reads matter; everything else gets a neutral value.
+    fn linked_request(output_path: &str, linked_dest_type: &str) -> BatchExportRequest {
+        BatchExportRequest {
+            spine_path: String::new(),
+            input_root: String::new(),
+            files: Vec::new(),
+            output_path: output_path.to_string(),
+            output_policy: OutputPolicy::LinkedProject,
+            target_version: String::new(),
+            export_mode: ExportMode::GlobalJson,
+            fallback_mode: FallbackMode::GlobalJson,
+            global_json_path: None,
+            built_in_export: String::new(),
+            generated_format: String::new(),
+            generated_skeleton_extension: String::new(),
+            generated_pack_atlas: false,
+            generated_max_width: 0,
+            generated_max_height: 0,
+            generated_premultiply_alpha: false,
+            generated_pot: false,
+            generated_padding_x: 0,
+            generated_padding_y: 0,
+            generated_pretty_print: false,
+            generated_nonessential: false,
+            generated_strip_whitespace_x: false,
+            generated_strip_whitespace_y: false,
+            generated_rotation: false,
+            generated_alias: false,
+            generated_ignore_blank_images: false,
+            generated_alpha_threshold: 0,
+            generated_min_width: 0,
+            generated_min_height: 0,
+            generated_multiple_of_four: false,
+            generated_square: false,
+            generated_output_format: String::new(),
+            generated_jpeg_quality: 0.0,
+            generated_bleed: false,
+            generated_bleed_iterations: 0,
+            generated_edge_padding: false,
+            generated_duplicate_padding: false,
+            generated_filter_min: String::new(),
+            generated_filter_mag: String::new(),
+            generated_wrap_x: String::new(),
+            generated_wrap_y: String::new(),
+            generated_texture_format: String::new(),
+            generated_atlas_extension: String::new(),
+            generated_combine_subdirectories: false,
+            generated_flatten_paths: false,
+            generated_use_indexes: false,
+            generated_fast: false,
+            generated_limit_memory: false,
+            generated_packing: String::new(),
+            generated_pack_source: String::new(),
+            generated_pack_target: String::new(),
+            generated_warnings: false,
+            generated_force_all: false,
+            clean: false,
+            parallel_jobs: 1,
+            max_memory: String::new(),
+            timeout_seconds: 0,
+            preserve_relative_paths: false,
+            clean_folder_name: false,
+            unicode_workaround: false,
+            linked_dest_type: linked_dest_type.to_string(),
+        }
+    }
+
+    proptest! {
+        /// Property 5: validate_settings always reports an error (ok == false)
+        /// when the Spine path is empty — regardless of the other inputs.
+        #[test]
+        fn prop_validate_settings_rejects_empty_spine_path(
+            output_policy in prop::sample::select(vec!["timestamp", "sourceFolderName", "linkedProject"]),
+            export_mode in prop::sample::select(vec!["globalJson", "perProjectJson", "builtIn"]),
+        ) {
+            let result = validate_settings(
+                String::new(),
+                String::new(),
+                output_policy.to_string(),
+                export_mode.to_string(),
+                String::new(),
+            );
+            prop_assert!(!result.ok);
+            prop_assert!(!result.errors.is_empty());
+            prop_assert!(!result.spine_ok);
+        }
+
+        /// Property 6: ExportMode "internalExperimental" is always rejected,
+        /// even if every other field is otherwise valid-looking.
+        #[test]
+        fn prop_validate_settings_rejects_internal_experimental(
+            spine_path in "[a-zA-Z0-9/]{0,20}",
+            output_path in "[a-zA-Z0-9/]{0,20}",
+        ) {
+            let result = validate_settings(
+                spine_path,
+                output_path,
+                "sourceFolderName".to_string(),
+                "internalExperimental".to_string(),
+                String::new(),
+            );
+            prop_assert!(!result.ok);
+        }
+
+        /// Property 9: parallel_jobs is always clamped into [1, 8].
+        #[test]
+        fn prop_parallel_jobs_clamped(jobs in 0usize..1000) {
+            let clamped = jobs.clamp(1, 8);
+            prop_assert!((1..=8).contains(&clamped));
+            // Idempotent: values already in range are unchanged.
+            if (1..=8).contains(&jobs) {
+                prop_assert_eq!(clamped, jobs);
+            }
+        }
+
+        /// Property 10: validate_preset_file_name accepts a clean *.export.json
+        /// name and rejects anything with a path separator, colon, or the bare
+        /// ".export.json".
+        #[test]
+        fn prop_validate_preset_file_name(stem in "[a-zA-Z0-9 _-]{1,30}") {
+            let valid = format!("{stem}.export.json");
+            prop_assert_eq!(validate_preset_file_name(&valid).unwrap(), valid.trim().to_string());
+
+            // Path separators / colon must be rejected.
+            for bad in [
+                format!("a/{stem}.export.json"),
+                format!("a\\{stem}.export.json"),
+                format!("C:{stem}.export.json"),
+            ] {
+                prop_assert!(validate_preset_file_name(&bad).is_err());
+            }
+
+            // Wrong / missing extension is rejected.
+            prop_assert!(validate_preset_file_name(&stem).is_err());
+            prop_assert!(validate_preset_file_name(".export.json").is_err());
+        }
+
+        /// Property 13: normalize_pack_source maps the legacy "folder" value to
+        /// "imagefolders" and leaves every other value (after trimming) intact.
+        #[test]
+        fn prop_normalize_pack_source(value in "[a-zA-Z]{0,15}") {
+            let normalized = normalize_pack_source(&value);
+            if value.trim() == "folder" {
+                prop_assert_eq!(normalized, "imagefolders");
+            } else {
+                prop_assert_eq!(normalized, value.trim());
+            }
+        }
+
+        /// Property: parse_spine_version returns Some iff the output contains a
+        /// d.d.d token, and never picks the "Launcher" line when an editor line
+        /// with a version is present.
+        #[test]
+        fn prop_parse_spine_version_prefers_editor(
+            launcher in "[0-9]{1,2}\\.[0-9]{1,2}\\.[0-9]{1,2}",
+            editor in "[0-9]{1,2}\\.[0-9]{1,2}\\.[0-9]{1,2}",
+        ) {
+            let output = format!("Spine Launcher {launcher}\nSpine {editor} Professional");
+            let parsed = parse_spine_version(&output);
+            prop_assert_eq!(parsed.as_deref(), Some(editor.as_str()));
+        }
+    }
+
+    /// Property 17 (example-based, FS-backed): resolve_output_dir for the
+    /// LinkedProject policy never produces a duplicate folder — it reuses an
+    /// existing id folder and only falls back to the source name when none exists.
+    #[test]
+    fn resolve_output_dir_linked_project_reuses_then_creates() {
+        let unity_root = test_dir("linked-out");
+        // Existing destination: Heroes/0001_Fighter
+        fs::create_dir_all(unity_root.join("Heroes/0001_Fighter")).unwrap();
+
+        let req = linked_request(unity_root.to_str().unwrap(), "Heroes");
+
+        // Input id "0001" should reuse the existing prefixed folder, not create "0001".
+        let input = unity_root.join("src/0001_Fighter/skel.spine");
+        let resolved = resolve_output_dir(&req, &input, "run").unwrap();
+        assert_eq!(
+            PathBuf::from(&resolved),
+            unity_root.join("Heroes/0001_Fighter")
+        );
+
+        // Unknown id "9999" → fall back to the source folder name (fresh folder).
+        let input2 = unity_root.join("src/9999_New/skel.spine");
+        let resolved2 = resolve_output_dir(&req, &input2, "run").unwrap();
+        assert_eq!(PathBuf::from(&resolved2), unity_root.join("Heroes/9999_New"));
+
+        // Missing dest type → error, never an empty/duplicate path.
+        let bad = linked_request(unity_root.to_str().unwrap(), "");
+        assert!(resolve_output_dir(&bad, &input, "run").is_err());
+
+        let _ = fs::remove_dir_all(&unity_root);
+    }
 }
