@@ -1,6 +1,6 @@
 export type ExportMode = 'perProjectJson' | 'globalJson' | 'builtIn' | 'generatedSettings';
 export type FallbackMode = 'builtIn' | 'globalJson' | 'skip';
-export type OutputPolicy = 'timestamp' | 'sourceFolderName';
+export type OutputPolicy = 'timestamp' | 'sourceFolderName' | 'linkedProject';
 export type Language = 'vi' | 'en';
 export type ThemeMode = 'light' | 'dark';
 export type UpdateStatus = 'idle' | 'checking' | 'downloading' | 'ready' | 'upToDate' | 'error';

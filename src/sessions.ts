@@ -74,6 +74,13 @@ function sanitizeConfig(raw: unknown): SessionConfig {
   const config = pickKnown(defaultSessionConfig, source);
   // The app now only supports the global-preset flow, so every session uses globalJson.
   config.exportMode = 'globalJson';
+  // The 'timestamp' output policy is temporarily hidden; migrate any stored session off it
+  // so it doesn't land on an option the UI no longer shows.
+  if (config.outputPolicy === 'timestamp') config.outputPolicy = 'sourceFolderName';
+  // Normalize legacy lowercase patch-agnostic versions ("4.3.xx" → "4.3.XX") to match presets.
+  if (typeof config.targetVersion === 'string') {
+    config.targetVersion = config.targetVersion.replace(/\.xx$/, '.XX');
+  }
   if (!Array.isArray(config.inputFiles)) {
     config.inputFiles = [];
   }
@@ -90,6 +97,8 @@ function sanitizeSession(raw: unknown): Session | null {
     projectId: typeof source.projectId === 'string' && source.projectId ? source.projectId : '',
     name: typeof source.name === 'string' ? source.name : '',
     autoNamed: source.autoNamed !== false,
+    // Stored sessions are already configured → don't force them through the wizard.
+    wizardCompleted: source.wizardCompleted !== false,
     config,
     createdAt: typeof source.createdAt === 'number' ? source.createdAt : now(),
     updatedAt: typeof source.updatedAt === 'number' ? source.updatedAt : now()
@@ -178,6 +187,7 @@ function migrateLegacy(): { appConfig: AppConfig; session: Omit<Session, 'projec
         id: makeId(),
         name,
         autoNamed: !inputPath,
+        wizardCompleted: true,
         config,
         createdAt: now(),
         updatedAt: now()
@@ -367,6 +377,7 @@ export function createSession(t: Translations, existing: Session[], projectId: s
     projectId,
     name,
     autoNamed: true,
+    wizardCompleted: false,
     config: { ...defaultSessionConfig, inputFiles: [] },
     createdAt: now(),
     updatedAt: now()
@@ -410,6 +421,9 @@ export function cloneSession(source: Session, t: Translations, existing: Session
     projectId: source.projectId,
     name: uniqueDuplicateName(source.name, t.duplicateSuffix, existing),
     autoNamed: false,
+    // Inherit: duplicating an already-set-up session skips the wizard; duplicating an
+    // unfinished one keeps it in the wizard.
+    wizardCompleted: source.wizardCompleted,
     config: {
       ...source.config,
       inputFiles: [...source.config.inputFiles],

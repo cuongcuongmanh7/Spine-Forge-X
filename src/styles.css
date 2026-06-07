@@ -1322,6 +1322,325 @@ input.field-invalid:focus {
   margin-bottom: 0;
 }
 
+/* ----- Setup wizard ----- */
+.wizard {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+/* Top progress bar: numbered steps joined by connector lines; done steps show a check. */
+.wizard-progress {
+  display: flex;
+  align-items: flex-start;
+  gap: 0;
+  margin: 0;
+  padding: 18px 20px;
+  list-style: none;
+  border-bottom: 1px solid var(--border);
+}
+
+.wizard-step {
+  position: relative;
+  flex: 1 1 0;
+  display: flex;
+  justify-content: center;
+}
+
+/* Connector line to the previous step. */
+.wizard-step::before {
+  content: '';
+  position: absolute;
+  top: 13px;
+  right: 50%;
+  width: 100%;
+  height: 2px;
+  background: var(--border);
+}
+
+.wizard-step:first-child::before {
+  display: none;
+}
+
+.wizard-step.done::before,
+.wizard-step.active::before {
+  background: var(--accent, #4a90d9);
+}
+
+.wizard-step-btn {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  border: 0;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 0 6px;
+}
+
+.wizard-step-btn:disabled {
+  cursor: default;
+}
+
+.wizard-step-num {
+  display: inline-grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  border: 2px solid var(--border);
+  background: var(--bg);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.wizard-step.done .wizard-step-num {
+  border-color: var(--accent, #4a90d9);
+  color: var(--accent, #4a90d9);
+}
+
+.wizard-step.active .wizard-step-num {
+  border-color: var(--accent, #4a90d9);
+  background: var(--accent, #4a90d9);
+  color: #fff;
+}
+
+.wizard-step-name {
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.wizard-step.active .wizard-step-name {
+  color: var(--text-strong);
+  font-weight: 650;
+}
+
+.wizard-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 16px 20px;
+}
+
+/* Prominent, always-visible action bar. */
+.wizard-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 20px;
+  border-top: 1px solid var(--border);
+  background: color-mix(in srgb, var(--surface), var(--bg) 20%);
+}
+
+.wizard-step-label {
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.primary-button.lg,
+.secondary-button.lg {
+  min-width: 120px;
+  height: 40px;
+  font-size: 14px;
+  justify-content: center;
+}
+
+.hint {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 6px;
+  color: var(--text-muted);
+  cursor: help;
+  vertical-align: middle;
+}
+
+.hint:hover {
+  color: var(--accent, var(--text));
+}
+
+/* ----- Linked Project ----- */
+.linked-config {
+  display: grid;
+  gap: 10px;
+  margin: 12px 0;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-2, rgba(127, 127, 127, 0.06));
+}
+
+.linked-config select {
+  flex: 1;
+}
+
+/* Fixed-height modal: pinned header/footer, a two-pane (master–detail) body that scrolls
+   internally so the dialog never grows with the number of projects. */
+.linked-modal {
+  width: min(760px, 96vw);
+  display: flex;
+  flex-direction: column;
+  height: 70vh;
+  max-height: 86vh;
+  overflow: hidden;
+}
+
+.linked-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  flex-direction: row !important;
+  gap: 0 !important;
+  padding: 0 !important;
+}
+
+/* Footer sits OUTSIDE the (zero-padding) two-pane body, so — like the preset editor — it must
+   carry its own padding + top border + background instead of relying on modal-body padding. */
+.linked-modal .modal-footer {
+  flex: 0 0 auto;
+  justify-content: space-between;
+  margin-top: 0;
+  padding: 14px 18px;
+  border-top: 1px solid var(--border);
+  background: color-mix(in srgb, var(--surface), var(--bg) 20%);
+}
+
+/* Left: scrollable project list. */
+.linked-list {
+  width: 220px;
+  flex: 0 0 220px;
+  overflow-y: auto;
+  border-right: 1px solid var(--border);
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.linked-list-empty {
+  margin: 8px;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.linked-list-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+}
+
+.linked-list-item:hover {
+  background: var(--sidebar-hover);
+}
+
+.linked-list-item.selected {
+  background: color-mix(in srgb, var(--accent, #4a90d9) 20%, transparent);
+  color: var(--text-strong);
+}
+
+.linked-list-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+}
+
+.linked-list-meta {
+  min-width: 18px;
+  text-align: center;
+  font-size: 11px;
+  color: var(--text-muted);
+  border-radius: 6px;
+  padding: 1px 5px;
+  background: var(--surface-2, rgba(127, 127, 127, 0.12));
+}
+
+.linked-list-del {
+  display: inline-flex;
+  color: var(--text-muted);
+  opacity: 0;
+}
+
+.linked-list-item:hover .linked-list-del,
+.linked-list-item.selected .linked-list-del {
+  opacity: 1;
+}
+
+.linked-list-del:hover {
+  color: var(--danger, #d9534f);
+}
+
+/* Right: editor for the selected project. */
+.linked-detail {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-y: auto;
+  padding: 16px;
+  display: grid;
+  gap: 8px;
+  align-content: start;
+}
+
+.linked-types {
+  display: grid;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.linked-type-list {
+  display: grid;
+  gap: 6px;
+  max-height: 240px;
+  overflow-y: auto;
+}
+
+.linked-types-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.linked-type-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.linked-type-row input {
+  flex: 1;
+  min-width: 0;
+}
+
+.linked-arrow {
+  color: var(--text-muted);
+  font-weight: 700;
+}
+
+.secondary-button.small {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  font-size: 12px;
+}
+
+.icon-button.danger {
+  color: var(--danger, #d9534f);
+}
+
 .output-options {
   display: grid;
   gap: 10px;

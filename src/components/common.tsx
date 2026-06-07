@@ -1,5 +1,14 @@
 import { useState, type ReactNode } from 'react';
-import { AlertTriangle, CheckCircle2, ChevronDown, ChevronRight, XCircle } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, ChevronDown, ChevronRight, HelpCircle, XCircle } from 'lucide-react';
+
+/** Small muted info icon; the tip text shows only on hover (native tooltip). */
+export function Hint({ text }: { text: string }) {
+  return (
+    <span className="hint" title={text} aria-label={text}>
+      <HelpCircle size={14} />
+    </span>
+  );
+}
 
 type SectionProps = {
   title: string;

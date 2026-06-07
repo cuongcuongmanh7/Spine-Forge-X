@@ -7,6 +7,7 @@ import { ExportStrategySection } from './workspace/ExportStrategySection';
 import { OutputSection } from './workspace/OutputSection';
 import { LogSection } from './workspace/LogSection';
 import { RunDock } from './workspace/RunDock';
+import { SessionWizard } from './SessionWizard';
 
 function EmptyState() {
   const { t, openNewSessionDialog, chooseInputFolder } = useApp();
@@ -94,13 +95,19 @@ export function SessionMain() {
           {activeStatus === 'green' ? t.ready : activeStatus === 'yellow' ? t.statusWarning : t.statusBlocked}
         </div>
       </div>
-      <main className="app-shell">
-        <InputSection />
-        <ExportStrategySection />
-        <OutputSection />
-        <LogSection />
-      </main>
-      <RunDock />
+      {activeSession.wizardCompleted ? (
+        <>
+          <main className="app-shell">
+            <InputSection />
+            <ExportStrategySection />
+            <OutputSection />
+            <LogSection />
+          </main>
+          <RunDock />
+        </>
+      ) : (
+        <SessionWizard key={activeSession.id} />
+      )}
     </div>
   );
 }
