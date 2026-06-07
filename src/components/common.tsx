@@ -1,5 +1,14 @@
 import { useState, type ReactNode } from 'react';
-import { AlertTriangle, CheckCircle2, ChevronDown, ChevronRight, XCircle } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, ChevronDown, ChevronRight, HelpCircle, XCircle } from 'lucide-react';
+
+/** Small muted info icon; the tip text shows only on hover (native tooltip). */
+export function Hint({ text }: { text: string }) {
+  return (
+    <span className="hint" title={text} aria-label={text}>
+      <HelpCircle size={14} />
+    </span>
+  );
+}
 
 type SectionProps = {
   title: string;
@@ -29,20 +38,20 @@ type FieldStatusProps = {
 export function FieldStatus({ ok, warning, message }: FieldStatusProps) {
   if (ok) {
     return (
-      <span className="field-status ok" title={message}>
+      <span className="field-status ok" title={message} role="img" aria-label={message}>
         <CheckCircle2 size={18} />
       </span>
     );
   }
   if (warning) {
     return (
-      <span className="field-status warning" title={message}>
+      <span className="field-status warning" title={message} role="img" aria-label={message}>
         <AlertTriangle size={18} />
       </span>
     );
   }
   return (
-    <span className="field-status error" title={message}>
+    <span className="field-status error" title={message} role="img" aria-label={message}>
       <XCircle size={18} />
     </span>
   );

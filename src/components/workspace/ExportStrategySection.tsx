@@ -1,5 +1,5 @@
 import { CheckCircle2, Copy, Pencil, Plus, RotateCw, Search, Trash2, Upload } from 'lucide-react';
-import { Section } from '../common';
+import { Section, Hint } from '../common';
 import { useApp } from '../../useAppController';
 
 export function ExportStrategySection() {
@@ -33,11 +33,14 @@ export function ExportStrategySection() {
           {t.targetVersion}
           <div className="inline-field">
             <select value={merged.targetVersion} onChange={(event) => updateSetting('targetVersion', event.target.value)}>
-              {targetVersions.map((version) => (
-                <option key={version} value={version}>{version}</option>
-              ))}
+              {/* Always include the current value so a session's saved version never renders blank. */}
+              {Array.from(new Set([merged.targetVersion, ...targetVersions]))
+                .filter((version) => version.trim() !== '')
+                .map((version) => (
+                  <option key={version} value={version}>{version}</option>
+                ))}
             </select>
-            <button className="icon-button" title={t.detectVersion} disabled={isDetectingVersion} onClick={() => detectVersion()}>
+            <button className="icon-button" title={t.detectVersion} aria-label={t.detectVersion} disabled={isDetectingVersion} onClick={() => detectVersion()}>
               {isDetectingVersion ? <RotateCw className="spin" size={18} /> : <Search size={18} />}
             </button>
           </div>
@@ -83,8 +86,8 @@ export function ExportStrategySection() {
               {t.presetImported}
             </span>
           )}
+          <Hint text={t.presetImportHelp} />
         </div>
-        <p className="helper-text">{t.presetImportHelp}</p>
         {selectedExportPreset && (
           <p className="preset-path" title={selectedExportPreset.path}>{selectedExportPreset.path}</p>
         )}

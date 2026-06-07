@@ -54,7 +54,7 @@ export function InputSection() {
           onChange={(event) => updateInputPath(event.target.value)}
           placeholder="D:\Project\SpineAssets"
         />
-        <button className="icon-button" title={t.scan} disabled={isScanning || !merged.inputPath.trim()} onClick={scanInput}>
+        <button className="icon-button" title={t.scan} aria-label={t.scan} disabled={isScanning || !merged.inputPath.trim()} onClick={scanInput}>
           <RotateCw className={isScanning ? 'spin' : undefined} size={18} />
         </button>
       </div>
@@ -69,11 +69,11 @@ export function InputSection() {
         </button>
       </div>
       <div className="file-summary">
-        <span>{files.length} {t.spineFiles}</span>
-        <span>{skippedFiles.length} {t.skipped}</span>
+        <span>{files.length.toLocaleString()} {t.spineFiles}</span>
+        <span>{skippedFiles.length.toLocaleString()} {t.skipped}</span>
       </div>
       {merged.inputPath.trim() !== '' && !isScanning && files.length === 0 && (
-        <div className="notice warning">
+        <div className="notice warning" role="status" aria-live="polite">
           <AlertTriangle size={18} />
           <span>{t.noSpineFiles}</span>
         </div>
@@ -91,7 +91,7 @@ export function InputSection() {
                   {name}
                   {duplicated && folder && <span className="file-path-note"> · {folder}</span>}
                 </span>
-                <button className="file-pill-remove" title={t.remove} onClick={() => removeFile(file)}>
+                <button className="file-pill-remove" title={t.remove} aria-label={`${t.remove}: ${name}`} onClick={() => removeFile(file)}>
                   <Trash2 size={13} />
                 </button>
               </div>
@@ -102,7 +102,7 @@ export function InputSection() {
       {(merged.excludedFiles?.length ?? 0) > 0 && (
         <div className="excluded-block">
           <div className="excluded-head">
-            <span>{merged.excludedFiles.length} {t.hiddenFiles}</span>
+            <span>{merged.excludedFiles.length.toLocaleString()} {t.hiddenFiles}</span>
             <button className="link-button" onClick={() => void restoreAllExcluded()}>{t.restoreAll}</button>
           </div>
           <div className="excluded-list">

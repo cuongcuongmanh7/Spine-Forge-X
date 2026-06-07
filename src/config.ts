@@ -1,5 +1,25 @@
 import type { ExportMode, FallbackMode, OutputPolicy, UpdateUiState } from './types';
 
+/** One source→dest folder mapping inside a Linked Project (e.g. `Hero` → `Heroes`). */
+export type LinkedType = {
+  sourceName: string;
+  destName: string;
+};
+
+/**
+ * A saved link between a Spine art tree and a Unity asset tree. Shared across sessions
+ * (lives in AppConfig). Output routes to `unityRoot/<type.destName>/<idFolder>`.
+ */
+export type LinkedProject = {
+  id: string;
+  name: string;
+  /** Unity asset root the export writes into, e.g. `.../Assets/.../Animations/Spine`. */
+  unityRoot: string;
+  /** Art tree containing the `.spine` files (informational; used for Auto-fill convenience). */
+  sourceRoot: string;
+  types: LinkedType[];
+};
+
 /**
  * App-wide configuration — shared across every session. Edited in the Settings popup.
  */
@@ -7,7 +27,9 @@ export const defaultAppConfig = {
   spinePath: '',
   parallelJobs: 1,
   maxMemory: '512m',
-  timeoutSeconds: 300
+  timeoutSeconds: 300,
+  // Saved Unity links, reusable by any session via the `linkedProject` output policy.
+  linkedProjects: [] as LinkedProject[]
 };
 
 export type AppConfig = typeof defaultAppConfig;
@@ -21,7 +43,11 @@ export const defaultSessionConfig = {
   // Full paths removed from a folder-scan result; re-applied on re-scan so deletions survive restart.
   excludedFiles: [] as string[],
   outputPath: '',
-  outputPolicy: 'timestamp' as OutputPolicy,
+  // 'timestamp' is temporarily hidden in the UI; new sessions default to source-folder routing.
+  outputPolicy: 'sourceFolderName' as OutputPolicy,
+  // For the linkedProject policy: which saved LinkedProject + which type (by sourceName) to use.
+  linkedProjectId: '',
+  linkedTypeName: '',
   // Pass --clean to Spine: wipe each output folder before exporting.
   clean: false,
   // Timestamp policy only: mirror the input path's relative folder structure into the output root.
@@ -29,7 +55,7 @@ export const defaultSessionConfig = {
   // For the source-folder policy: shorten the folder name to the token before the
   // first underscore, e.g. "3001_Lucius" -> "3001".
   cleanFolderName: false,
-  targetVersion: '4.3.xx',
+  targetVersion: '4.3.XX',
   exportMode: 'globalJson' as ExportMode,
   fallbackMode: 'builtIn' as FallbackMode,
   globalJsonPath: '',
@@ -104,6 +130,9 @@ export type Session = {
   name: string;
   /** true until the user renames it — lets a folder pick keep updating the auto name. */
   autoNamed: boolean;
+  /** false for a freshly created session → it goes through the setup wizard. Duplicates inherit
+   *  the source's value; sessions loaded from storage default to true (already configured). */
+  wizardCompleted: boolean;
   config: SessionConfig;
   createdAt: number;
   updatedAt: number;
@@ -125,7 +154,11 @@ export function emptyRuntime(): SessionRuntime {
   return { files: [], skippedFiles: [], logs: [], lastOutputFolders: [], currentIndex: 0 };
 }
 
-export const targetVersionPresets = ['3.8.99', '4.3.11', 'lateststable'];
+// Patch-agnostic presets: Spine resolves `MAJOR.MINOR.XX` to the latest installed patch of that
+// minor (e.g. `4.3.XX` → 4.3.17). We can't enumerate installed editor versions via the CLI, so
+// these generic forms are safer than hard-coding specific patches that may not exist on a machine.
+// A concrete version detected from `--version` is added to the dropdown on top of these.
+export const targetVersionPresets = ['4.3.XX', '3.8.XX', 'lateststable'];
 
 /** Starting point for a brand-new global preset in the editor (JSON skeleton + packed atlas). */
 export const defaultExportPreset = {

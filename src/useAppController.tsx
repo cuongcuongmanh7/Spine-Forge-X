@@ -13,6 +13,8 @@ import {
   initialUpdateUi,
   targetVersionPresets,
   type AppConfig,
+  type LinkedProject,
+  type LinkedType,
   type MergedConfig,
   type Project,
   type Session,
@@ -28,6 +30,7 @@ import {
   createProject,
   createSession,
   loadPersistedState,
+  makeId,
   persistActiveId,
   persistActiveProjectId,
   persistAppConfig,
@@ -63,6 +66,47 @@ function snapshotRuntime(
   return { files, skippedFiles, logs, lastOutputFolders, currentIndex };
 }
 
+/**
+ * Resolve the Unity destination for a session using the `linkedProject` output policy:
+ * look up the saved LinkedProject by id, then the chosen type by sourceName. Returns the
+ * unityRoot (becomes the backend `outputPath`) and the destName (becomes `linkedDestType`),
+ * or null when the project/type selection is incomplete.
+ */
+function resolveLinkedTarget(cfg: MergedConfig): { unityRoot: string; destName: string } | null {
+  const project = cfg.linkedProjects.find((p) => p.id === cfg.linkedProjectId);
+  if (!project) return null;
+  const type = project.types.find((t) => t.sourceName === cfg.linkedTypeName);
+  if (!type) return null;
+  return { unityRoot: project.unityRoot, destName: type.destName };
+}
+
+/** Token before the first underscore, e.g. "0001_Fighter" -> "0001". Mirrors backend clean_source_folder_name. */
+function idToken(folderName: string): string {
+  const idx = folderName.indexOf('_');
+  return idx > 0 ? folderName.slice(0, idx) : folderName;
+}
+
+/**
+ * For each input file, find which LinkedProject type its path belongs to: a path segment that
+ * matches a type's `sourceName` (case-insensitive). Returns per-type match counts and how many
+ * files matched no type — used to auto-pick the session's single Type and warn on a mix.
+ */
+function detectTypesFromFiles(
+  files: string[],
+  project: LinkedProject
+): { counts: Map<string, number>; unmatched: number } {
+  const bySource = new Map(project.types.map((t) => [t.sourceName.toLowerCase(), t.sourceName]));
+  const counts = new Map<string, number>();
+  let unmatched = 0;
+  for (const file of files) {
+    const segments = file.split(/[\\/]+/).map((s) => s.toLowerCase());
+    const hit = segments.map((s) => bySource.get(s)).find((name): name is string => Boolean(name));
+    if (hit) counts.set(hit, (counts.get(hit) ?? 0) + 1);
+    else unmatched += 1;
+  }
+  return { counts, unmatched };
+}
+
 export function useAppControllerValue() {
   const [language, setLanguage] = useState<Language>(persisted.language);
   const [theme, setTheme] = useState<ThemeMode>(persisted.theme);
@@ -75,6 +119,9 @@ export function useAppControllerValue() {
     new Set(persisted.collapsedProjectIds)
   );
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [linkedModalOpen, setLinkedModalOpen] = useState(false);
+  // Warning shown at the Output step when input files don't all map to one linked Type.
+  const [linkedTypeWarning, setLinkedTypeWarning] = useState('');
   const [projectDialogOpen, setProjectDialogOpen] = useState(false);
   const [sessionDialogOpen, setSessionDialogOpen] = useState(false);
   // Project that a popup-created session should land in (resolved when the dialog opens).
@@ -279,7 +326,7 @@ export function useAppControllerValue() {
   useEffect(() => {
     void validateSettings();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [appConfig.spinePath, sessionConfig.outputPath, sessionConfig.outputPolicy, sessionConfig.exportMode, sessionConfig.globalJsonPath, activeSessionId]);
+  }, [appConfig.spinePath, appConfig.linkedProjects, sessionConfig.outputPath, sessionConfig.outputPolicy, sessionConfig.exportMode, sessionConfig.globalJsonPath, sessionConfig.linkedProjectId, sessionConfig.linkedTypeName, activeSessionId]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => void refreshSessionStatuses(), 300);
@@ -465,6 +512,69 @@ export function useAppControllerValue() {
   function addTargetVersion(version: string) {
     setTargetVersions((versions) => (versions.includes(version) ? versions : [version, ...versions]));
     updateSessionConfig('targetVersion', version);
+  }
+
+  // ----- Linked Projects (Unity links, shared across sessions via appConfig) -----
+
+  function addLinkedProject(): string {
+    const id = makeId();
+    const project: LinkedProject = { id, name: '', unityRoot: '', sourceRoot: '', types: [] };
+    setAppConfig((current) => ({ ...current, linkedProjects: [...current.linkedProjects, project] }));
+    return id;
+  }
+
+  function updateLinkedProject(id: string, patch: Partial<LinkedProject>) {
+    setAppConfig((current) => ({
+      ...current,
+      linkedProjects: current.linkedProjects.map((p) => (p.id === id ? { ...p, ...patch } : p))
+    }));
+  }
+
+  function deleteLinkedProject(id: string) {
+    setAppConfig((current) => ({ ...current, linkedProjects: current.linkedProjects.filter((p) => p.id !== id) }));
+    // Sessions still pointing at this link fall back to "no selection" (validation flags them).
+  }
+
+  /** Auto-pick the session's linked Type from the input files' paths; warn if files span types. */
+  function autoDetectLinkedType() {
+    if (!activeSessionId) return;
+    const project = appConfig.linkedProjects.find((p) => p.id === sessionConfig.linkedProjectId);
+    if (!project || project.types.length === 0) {
+      setLinkedTypeWarning('');
+      return;
+    }
+    const { counts, unmatched } = detectTypesFromFiles(files, project);
+    if (counts.size === 0) {
+      setLinkedTypeWarning(t.linkedTypeNoMatch);
+      return;
+    }
+    // Pick the most-matched type.
+    const best = [...counts.entries()].sort((a, b) => b[1] - a[1])[0][0];
+    if (sessionConfig.linkedTypeName !== best) updateSessionConfig('linkedTypeName', best);
+    if (counts.size > 1 || unmatched > 0) {
+      const names = [...counts.keys()].join(', ');
+      setLinkedTypeWarning(t.linkedTypeMismatch.replace('{types}', names).replace('{best}', best));
+    } else {
+      setLinkedTypeWarning('');
+    }
+  }
+
+  // ----- Setup wizard -----
+
+  /** Mark a session's setup wizard finished → it switches to the full editing view. */
+  function completeWizard(id: string) {
+    setSessions((list) => list.map((s) => (s.id === id ? { ...s, wizardCompleted: true, updatedAt: Date.now() } : s)));
+  }
+
+  /** List immediate subfolders of a path (for "Auto-fill from Unity root"). Returns [] on error. */
+  async function listSubdirectories(path: string): Promise<string[]> {
+    if (!path.trim()) return [];
+    try {
+      return await invoke<string[]>('list_subdirectories', { path });
+    } catch (error) {
+      appendLog(`${t.linkedAutoFillFailed}: ${String(error)}`);
+      return [];
+    }
   }
 
   // ----- Session lifecycle -----
@@ -1123,7 +1233,8 @@ export function useAppControllerValue() {
     try {
       const result = await invoke<ValidateResult>('validate_settings', {
         spinePath: merged.spinePath,
-        outputPath: merged.outputPath,
+        outputPath:
+          merged.outputPolicy === 'linkedProject' ? resolveLinkedTarget(merged)?.unityRoot ?? '' : merged.outputPath,
         outputPolicy: merged.outputPolicy,
         exportMode: merged.exportMode,
         globalJsonPath: merged.globalJsonPath
@@ -1154,7 +1265,8 @@ export function useAppControllerValue() {
         try {
           const result = await invoke<ValidateResult>('validate_settings', {
             spinePath: cfg.spinePath,
-            outputPath: cfg.outputPath,
+            outputPath:
+              cfg.outputPolicy === 'linkedProject' ? resolveLinkedTarget(cfg)?.unityRoot ?? '' : cfg.outputPath,
             outputPolicy: cfg.outputPolicy,
             exportMode: cfg.exportMode,
             globalJsonPath: cfg.globalJsonPath
@@ -1182,11 +1294,15 @@ export function useAppControllerValue() {
   }
 
   function buildExportRequestFrom(cfg: MergedConfig, sessionFiles: string[]) {
+    // For the linkedProject policy the backend output root is the Unity root, and the
+    // destination type folder is passed separately so resolve_output_dir can route into it.
+    const linked = cfg.outputPolicy === 'linkedProject' ? resolveLinkedTarget(cfg) : null;
     return {
       spinePath: cfg.spinePath,
       inputRoot: cfg.inputPath,
       files: sessionFiles,
-      outputPath: cfg.outputPath,
+      outputPath: linked ? linked.unityRoot : cfg.outputPath,
+      linkedDestType: linked ? linked.destName : '',
       outputPolicy: cfg.outputPolicy,
       targetVersion: cfg.targetVersion,
       exportMode: cfg.exportMode,
@@ -1241,7 +1357,8 @@ export function useAppControllerValue() {
       maxMemory: cfg.maxMemory,
       timeoutSeconds: cfg.timeoutSeconds,
       preserveRelativePaths: cfg.preserveRelativePaths,
-      cleanFolderName: cfg.cleanFolderName
+      cleanFolderName: cfg.cleanFolderName,
+      unicodeWorkaround: cfg.unicodeWorkaround
     };
   }
 
@@ -1331,7 +1448,8 @@ export function useAppControllerValue() {
       try {
         result = await invoke<ValidateResult>('validate_settings', {
           spinePath: cfg.spinePath,
-          outputPath: cfg.outputPath,
+          outputPath:
+            cfg.outputPolicy === 'linkedProject' ? resolveLinkedTarget(cfg)?.unityRoot ?? '' : cfg.outputPath,
           outputPolicy: cfg.outputPolicy,
           exportMode: cfg.exportMode,
           globalJsonPath: cfg.globalJsonPath
@@ -1581,6 +1699,19 @@ export function useAppControllerValue() {
 
     settingsOpen,
     setSettingsOpen,
+
+    // Linked Projects
+    linkedProjects: appConfig.linkedProjects,
+    linkedModalOpen,
+    setLinkedModalOpen,
+    addLinkedProject,
+    updateLinkedProject,
+    deleteLinkedProject,
+    listSubdirectories,
+    idToken,
+    autoDetectLinkedType,
+    linkedTypeWarning,
+    completeWizard,
 
     files,
     skippedFiles,

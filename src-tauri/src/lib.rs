@@ -50,6 +50,7 @@ enum FallbackMode {
 enum OutputPolicy {
     Timestamp,
     SourceFolderName,
+    LinkedProject,
 }
 
 #[derive(Debug, Deserialize)]
@@ -116,6 +117,10 @@ struct BatchExportRequest {
     clean_folder_name: bool,
     #[serde(default)]
     unicode_workaround: bool,
+    /// For the LinkedProject policy: the resolved destination type folder (e.g. "Heroes").
+    /// Output routes to `output_path/<linked_dest_type>/<idFolder>`.
+    #[serde(default)]
+    linked_dest_type: String,
 }
 
 #[derive(Debug, Serialize)]
@@ -194,7 +199,7 @@ fn auto_detect_spine() -> Result<String, String> {
 }
 
 #[tauri::command]
-async fn detect_spine_version(spine_path: String) -> Result<String, String> {
+async fn detect_spine_version(window: Window, spine_path: String) -> Result<String, String> {
     let path = PathBuf::from(spine_path.trim_matches('"'));
     if !path.exists() {
         return Err("Spine executable không tồn tại.".to_string());
@@ -208,6 +213,12 @@ async fn detect_spine_version(spine_path: String) -> Result<String, String> {
     let mut text = String::new();
     text.push_str(&String::from_utf8_lossy(&output.stdout));
     text.push_str(&String::from_utf8_lossy(&output.stderr));
+
+    // Surface the raw output so the user can see exactly what Spine printed (e.g. the launcher
+    // version vs the editor version) when diagnosing a wrong detection.
+    for line in text.lines().filter(|l| !l.trim().is_empty()) {
+        let _ = window.emit("spine-log", format!("[--version] {line}"));
+    }
 
     parse_spine_version(&text).ok_or_else(|| {
         if text.trim().is_empty() {
@@ -304,6 +315,10 @@ fn validate_settings(
         }
     } else if output_policy == "sourceFolderName" {
         errors.push("Policy folder theo tên source cần chọn output root.".to_string());
+    } else if output_policy == "linkedProject" {
+        // The frontend passes the resolved Unity root as output_path; empty means no
+        // Linked Project / type has been selected yet.
+        errors.push("Linked Project cần chọn Project và Type.".to_string());
     } else {
         output_warning = true;
     }
@@ -509,6 +524,12 @@ async fn start_batch_export(
         OutputPolicy::SourceFolderName => {
             let _ = window.emit("spine-log", "Output policy: source folder name");
         }
+        OutputPolicy::LinkedProject => {
+            let _ = window.emit(
+                "spine-log",
+                format!("Output policy: linked project → {}", request.linked_dest_type),
+            );
+        }
     }
 
     let shared_request = Arc::new(request);
@@ -673,6 +694,24 @@ async fn open_path(path: String) -> Result<(), String> {
     Ok(())
 }
 
+/// List immediate subdirectory names of `path` (sorted). Used by the Linked Project modal's
+/// "Auto-fill from Unity root" — each subfolder becomes a candidate destination type.
+#[tauri::command]
+fn list_subdirectories(path: String) -> Result<Vec<String>, String> {
+    let root = PathBuf::from(path.trim_matches('"'));
+    if !root.is_dir() {
+        return Err("Path không phải thư mục hợp lệ.".to_string());
+    }
+    let mut names: Vec<String> = fs::read_dir(&root)
+        .map_err(|e| e.to_string())?
+        .filter_map(Result::ok)
+        .filter(|entry| entry.path().is_dir())
+        .filter_map(|entry| entry.file_name().into_string().ok())
+        .collect();
+    names.sort();
+    Ok(names)
+}
+
 /// Scan `output_dir` for at least one file with a recognised Spine output
 /// extension (`.skel`, `.json`, `.atlas`). Returns `true` when at least one
 /// such file is found, `false` otherwise.
@@ -711,7 +750,34 @@ async fn export_one_file(
         Ok(dir) => dir,
         Err(e) => return FileOutcome::Failed(e),
     };
-    let export_plan = match resolve_export_plan(&request, &input_file, &output_dir) {
+
+    // Unicode workaround: when enabled and the input or output path contains non-ASCII
+    // characters (SpineCLI can mis-handle these on some setups), run the export against an
+    // ASCII temp copy of the project, then copy the result back. The guard removes the temp
+    // dirs on any exit path.
+    let use_workaround =
+        request.unicode_workaround && (has_non_ascii(file) || has_non_ascii(&output_dir));
+    let mut unicode_temps: Vec<PathBuf> = Vec::new();
+    let (effective_input, effective_output) = if use_workaround {
+        match copy_spine_to_temp(&input_file) {
+            Ok((temp_input, temp_in_dir)) => {
+                let temp_out_dir = unicode_temp_dir("out");
+                unicode_temps.push(temp_in_dir);
+                unicode_temps.push(temp_out_dir.clone());
+                let _ = window.emit(
+                    "spine-log",
+                    format!("Unicode workaround: exporting via ASCII temp for {file}"),
+                );
+                (temp_input, path_to_string(&temp_out_dir))
+            }
+            Err(e) => return FileOutcome::Failed(format!("Unicode workaround copy failed: {e}")),
+        }
+    } else {
+        (input_file.clone(), output_dir.clone())
+    };
+    let _temp_guard = TempDirGuard(unicode_temps);
+
+    let export_plan = match resolve_export_plan(&request, &effective_input, &effective_output) {
         Ok(plan) => plan,
         Err(e) => {
             // FallbackMode::Skip produces an Err — treat it as Skipped, not Failed.
@@ -723,8 +789,8 @@ async fn export_one_file(
         }
     };
 
-    if !output_dir.trim().is_empty() {
-        if let Err(e) = fs::create_dir_all(&output_dir) {
+    if !effective_output.trim().is_empty() {
+        if let Err(e) = fs::create_dir_all(&effective_output) {
             return FileOutcome::Failed(e.to_string());
         }
     }
@@ -737,14 +803,15 @@ async fn export_one_file(
         ),
     );
 
+    let effective_input_str = path_to_string(&effective_input);
     let mut cmd = Command::new(&request.spine_path);
     cmd.arg(format!("-Xmx{}", request.max_memory))
         .arg("--update")
         .arg(&request.target_version)
         .arg("--input")
-        .arg(file)
+        .arg(&effective_input_str)
         .arg("--output")
-        .arg(&output_dir);
+        .arg(&effective_output);
 
     if request.clean {
         cmd.arg("--clean");
@@ -831,10 +898,17 @@ async fn export_one_file(
     }
 
     // Requirement 8.1 / 8.2: CLI exited 0 — verify that at least one output file exists.
-    if !has_output_files(&output_dir) {
+    if !has_output_files(&effective_output) {
         let warn = format!("CLI exit 0 nhưng không tìm thấy file output: {file}");
         let _ = window.emit("spine-log", format!("[WARNING] {warn}"));
         return FileOutcome::Failed(warn);
+    }
+
+    // Unicode workaround: bring the exported files back from the ASCII temp dir to the real output.
+    if use_workaround {
+        if let Err(e) = copy_dir_recursive(Path::new(&effective_output), Path::new(&output_dir)) {
+            return FileOutcome::Failed(format!("Copy output back failed: {e}"));
+        }
     }
 
     let _ = window.emit("spine-log", format!("Completed: {file}"));
@@ -899,7 +973,59 @@ fn resolve_output_dir(
             output_dir.push(folder_name);
             Ok(path_to_string(&output_dir))
         }
+        OutputPolicy::LinkedProject => {
+            if output_root.is_empty() {
+                return Err("Linked Project cần Unity root (output path).".to_string());
+            }
+            if request.linked_dest_type.trim().is_empty() {
+                return Err("Linked Project cần chọn Type đích.".to_string());
+            }
+
+            let source_folder_name = parent
+                .file_name()
+                .and_then(|name| name.to_str())
+                .ok_or_else(|| "Không xác định được tên folder chứa file .spine.".to_string())?;
+            // The id token is the part before the first underscore, e.g. "4001_Char" -> "4001".
+            let id = clean_source_folder_name(source_folder_name);
+
+            // base = unityRoot/<destType>
+            let mut base = PathBuf::from(output_root.trim_matches('"'));
+            base.push(request.linked_dest_type.trim());
+
+            // Reuse an existing id folder if one is found, else create a new folder named after
+            // the source folder (so "0001_Fighter" reuses "Heroes/0001_Fighter" instead of "Heroes/0001").
+            let folder = find_existing_id_folder(&base, id).unwrap_or_else(|| source_folder_name.to_string());
+            base.push(folder);
+            Ok(path_to_string(&base))
+        }
     }
+}
+
+/// Find an already-existing destination folder under `base` that belongs to `id`, in priority order:
+/// 1. a folder whose name is exactly `id`, then
+/// 2. a folder whose name starts with `{id}_` (e.g. id "0001" → "0001_Fighter").
+/// Returns `None` when neither exists (caller then creates a new folder). Among multiple prefix
+/// matches the first in sorted order is chosen for determinism.
+fn find_existing_id_folder(base: &Path, id: &str) -> Option<String> {
+    if id.is_empty() || !base.is_dir() {
+        return None;
+    }
+
+    let mut subdirs: Vec<String> = fs::read_dir(base)
+        .ok()?
+        .filter_map(Result::ok)
+        .filter(|entry| entry.path().is_dir())
+        .filter_map(|entry| entry.file_name().into_string().ok())
+        .collect();
+    subdirs.sort();
+
+    // 1. Exact match.
+    if let Some(exact) = subdirs.iter().find(|name| name.as_str() == id) {
+        return Some(exact.clone());
+    }
+    // 2. Prefix `{id}_` match.
+    let prefix = format!("{id}_");
+    subdirs.into_iter().find(|name| name.starts_with(&prefix))
 }
 
 /// Returns the resolved output directories that already exist and contain files,
@@ -1270,6 +1396,82 @@ fn path_to_string(path: &Path) -> String {
     path.to_string_lossy().to_string()
 }
 
+/// True when `s` contains any non-ASCII character (e.g. Vietnamese/Chinese path segments).
+fn has_non_ascii(s: &str) -> bool {
+    !s.is_ascii()
+}
+
+/// Build a unique ASCII temp directory path under the system temp dir.
+fn unicode_temp_dir(suffix: &str) -> PathBuf {
+    std::env::temp_dir().join(format!(
+        "spineforge-uni-{}-{}-{}",
+        std::process::id(),
+        chrono::Local::now().format("%Y%m%d%H%M%S%3f"),
+        suffix
+    ))
+}
+
+/// Copy a `.spine` file and every sibling file (images / atlas sources / `.export.json` live next
+/// to it) into a fresh ASCII temp directory. Returns `(temp_input_file, temp_input_dir)`; the
+/// caller is responsible for removing `temp_input_dir`. The file name is preserved (only the
+/// containing directory is made ASCII — the common failing case is a non-ASCII folder path).
+fn copy_spine_to_temp(input_file: &Path) -> Result<(PathBuf, PathBuf), String> {
+    let parent = input_file
+        .parent()
+        .ok_or_else(|| "Không xác định được folder nguồn.".to_string())?;
+    let file_name = input_file
+        .file_name()
+        .ok_or_else(|| "Không xác định được tên file .spine.".to_string())?;
+
+    let temp_dir = unicode_temp_dir("in");
+    let _ = fs::remove_dir_all(&temp_dir);
+    fs::create_dir_all(&temp_dir).map_err(|e| e.to_string())?;
+
+    for entry in fs::read_dir(parent).map_err(|e| e.to_string())?.filter_map(Result::ok) {
+        let path = entry.path();
+        if path.is_file() {
+            if let Some(name) = path.file_name() {
+                fs::copy(&path, temp_dir.join(name)).map_err(|e| e.to_string())?;
+            }
+        }
+    }
+
+    Ok((temp_dir.join(file_name), temp_dir))
+}
+
+/// Recursively copy every file/subdir from `src` into `dst` (creating `dst` as needed).
+fn copy_dir_recursive(src: &Path, dst: &Path) -> Result<(), String> {
+    fs::create_dir_all(dst).map_err(|e| e.to_string())?;
+    for entry in WalkDir::new(src).min_depth(1).into_iter().filter_map(Result::ok) {
+        let rel = entry
+            .path()
+            .strip_prefix(src)
+            .map_err(|e| e.to_string())?;
+        let target = dst.join(rel);
+        if entry.file_type().is_dir() {
+            fs::create_dir_all(&target).map_err(|e| e.to_string())?;
+        } else if entry.file_type().is_file() {
+            if let Some(p) = target.parent() {
+                fs::create_dir_all(p).map_err(|e| e.to_string())?;
+            }
+            fs::copy(entry.path(), &target).map_err(|e| e.to_string())?;
+        }
+    }
+    Ok(())
+}
+
+/// Removes the held temp directories when dropped, so the Unicode workaround cleans up on any
+/// exit path (success, failure, or timeout).
+struct TempDirGuard(Vec<PathBuf>);
+
+impl Drop for TempDirGuard {
+    fn drop(&mut self) {
+        for dir in &self.0 {
+            let _ = fs::remove_dir_all(dir);
+        }
+    }
+}
+
 fn built_in_preset_dirs(app: &AppHandle) -> Vec<PathBuf> {
     let mut dirs = Vec::new();
 
@@ -1342,11 +1544,33 @@ fn validate_export_json_content(content: &str) -> Result<(), String> {
     Ok(())
 }
 
-/// Parse the first semver-like version string (`\d+\.\d+\.\d+`) from Spine CLI output.
-/// Works across multi-line output — scans every whitespace/punctuation-delimited token
-/// and returns the first token that matches the pattern, regardless of the exact version.
+/// Parse the Spine *editor* version (`\d+\.\d+\.\d+`) from `Spine.com --version` output.
+///
+/// The CLI prints several version-like tokens, e.g.:
+/// ```text
+/// Spine Launcher 4.3.05                  <- launcher, NOT what --update wants
+/// Windows 10 Pro amd64 10.0
+/// Starting: Spine 4.3.17 Professional    <- the editor version we want
+/// Spine 4.3.17 Professional
+/// ```
+/// Taking the first semver token would return the launcher version. Instead, prefer a line that
+/// mentions "Spine" but not "Launcher" (the editor lines), and only fall back to the first token
+/// anywhere if no such line is found.
 fn parse_spine_version(output: &str) -> Option<String> {
-    for token in output.split(|ch: char| ch.is_whitespace() || ch == ',' || ch == ';') {
+    for line in output.lines() {
+        let lower = line.to_ascii_lowercase();
+        if lower.contains("spine") && !lower.contains("launcher") {
+            if let Some(version) = first_semver_in(line) {
+                return Some(version);
+            }
+        }
+    }
+    first_semver_in(output)
+}
+
+/// Return the first `\d+\.\d+\.\d+` token in `text`, trimming surrounding punctuation.
+fn first_semver_in(text: &str) -> Option<String> {
+    for token in text.split(|ch: char| ch.is_whitespace() || ch == ',' || ch == ';') {
         let trimmed = token.trim_matches(|ch: char| !ch.is_ascii_alphanumeric());
         if is_semver_token(trimmed) {
             return Some(trimmed.to_string());
@@ -1427,9 +1651,110 @@ pub fn run() {
             write_text_file,
             clean_timestamp_exports,
             open_path,
+            list_subdirectories,
             start_batch_export,
             stop_batch_export
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Create a unique empty temp directory for a test and return its path.
+    fn test_dir(tag: &str) -> PathBuf {
+        let dir = std::env::temp_dir().join(format!(
+            "spineforge-test-{}-{}-{}",
+            tag,
+            std::process::id(),
+            chrono::Local::now().format("%Y%m%d%H%M%S%6f")
+        ));
+        fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    #[test]
+    fn has_non_ascii_detects_unicode() {
+        assert!(!has_non_ascii("D:/Projects/Spine/Enemy/4001"));
+        assert!(has_non_ascii("D:/Dự án/Nhân vật"));
+        assert!(has_non_ascii("D:/项目/角色"));
+        assert!(!has_non_ascii(""));
+    }
+
+    #[test]
+    fn clean_source_folder_name_takes_id_token() {
+        assert_eq!(clean_source_folder_name("3001_Lucius"), "3001");
+        assert_eq!(clean_source_folder_name("0001_Fighter"), "0001");
+        // No underscore, or empty leading token → keep the whole name.
+        assert_eq!(clean_source_folder_name("4001"), "4001");
+        assert_eq!(clean_source_folder_name("_Lucius"), "_Lucius");
+    }
+
+    #[test]
+    fn find_existing_id_folder_priority_exact_then_prefix_then_none() {
+        let base = test_dir("find-id");
+        fs::create_dir_all(base.join("0001_Fighter")).unwrap();
+        fs::create_dir_all(base.join("0002")).unwrap();
+        fs::create_dir_all(base.join("0003_A")).unwrap();
+        fs::create_dir_all(base.join("00030_B")).unwrap(); // must NOT match id "0003" prefix
+
+        // Exact match wins.
+        assert_eq!(find_existing_id_folder(&base, "0002").as_deref(), Some("0002"));
+        // Prefix `{id}_` match when no exact folder exists.
+        assert_eq!(find_existing_id_folder(&base, "0001").as_deref(), Some("0001_Fighter"));
+        assert_eq!(find_existing_id_folder(&base, "0003").as_deref(), Some("0003_A"));
+        // No match → None (so caller creates a fresh folder).
+        assert_eq!(find_existing_id_folder(&base, "9999"), None);
+        // Empty id never matches.
+        assert_eq!(find_existing_id_folder(&base, ""), None);
+
+        let _ = fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn find_existing_id_folder_none_when_base_missing() {
+        let missing = std::env::temp_dir().join("spineforge-test-missing-xyz-does-not-exist");
+        let _ = fs::remove_dir_all(&missing);
+        assert_eq!(find_existing_id_folder(&missing, "0001"), None);
+    }
+
+    #[test]
+    fn parse_spine_version_prefers_editor_over_launcher() {
+        let output = "Spine Launcher 4.3.05\n\
+            Esoteric Software LLC (C) 2013-2026 | http://esotericsoftware.com\n\
+            Windows 10 Pro amd64 10.0\n\
+            Starting: Spine 4.3.17 Professional\n\
+            Spine 4.3.17 Professional\n\
+            Complete.";
+        assert_eq!(parse_spine_version(output).as_deref(), Some("4.3.17"));
+    }
+
+    #[test]
+    fn parse_spine_version_handles_single_line_and_windows_build() {
+        // A lone editor line.
+        assert_eq!(parse_spine_version("Spine 3.8.99 Professional").as_deref(), Some("3.8.99"));
+        // The Windows build token (10.0.19045) must not win over the editor line.
+        let output = "Spine Launcher 4.3.05\n\
+            Windows 10 Pro amd64 10.0.19045\n\
+            Spine 4.3.17 Professional";
+        assert_eq!(parse_spine_version(output).as_deref(), Some("4.3.17"));
+    }
+
+    #[test]
+    fn copy_dir_recursive_copies_nested_files() {
+        let src = test_dir("copy-src");
+        let dst = test_dir("copy-dst");
+        fs::create_dir_all(src.join("sub")).unwrap();
+        fs::write(src.join("a.atlas"), b"atlas").unwrap();
+        fs::write(src.join("sub/b.png"), b"png").unwrap();
+
+        copy_dir_recursive(&src, &dst).unwrap();
+        assert!(dst.join("a.atlas").is_file());
+        assert!(dst.join("sub/b.png").is_file());
+
+        let _ = fs::remove_dir_all(&src);
+        let _ = fs::remove_dir_all(&dst);
+    }
 }
