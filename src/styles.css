@@ -1335,6 +1335,13 @@ input.field-invalid:focus {
   margin-bottom: 0;
 }
 
+/* Output policy options are now single-line (descriptions moved to hover Hint), so drop the
+   tall "detailed" height and center the radio + label vertically for two balanced cards. */
+.output-policy-grid .mode-option.detailed {
+  min-height: 0;
+  align-items: center;
+}
+
 /* ----- Setup wizard ----- */
 .wizard {
   display: flex;
