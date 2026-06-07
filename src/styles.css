@@ -260,6 +260,7 @@ textarea {
 }
 
 .sidebar {
+  position: relative;
   display: flex;
   flex-direction: column;
   flex: 0 0 auto;
@@ -269,6 +270,31 @@ textarea {
   background: var(--sidebar);
   -webkit-backdrop-filter: blur(22px) saturate(180%);
   backdrop-filter: blur(22px) saturate(180%);
+}
+
+/* Right-edge drag handle to resize the sidebar (min/max clamped in JS). */
+.sidebar-resizer {
+  position: absolute;
+  top: 0;
+  right: -3px;
+  bottom: 0;
+  width: 6px;
+  cursor: col-resize;
+  z-index: 5;
+  background: transparent;
+  transition: background 0.15s var(--ease);
+}
+
+.sidebar-resizer:hover,
+.sidebar-resizer:focus-visible,
+body.col-resizing .sidebar-resizer {
+  background: color-mix(in srgb, var(--accent, #4a90d9) 55%, transparent);
+  outline: none;
+}
+
+body.col-resizing {
+  cursor: col-resize;
+  user-select: none;
 }
 
 .sidebar-header {

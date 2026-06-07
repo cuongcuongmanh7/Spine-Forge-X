@@ -15,6 +15,20 @@ import { basename } from '../sessions';
 import type { Project, Session } from '../config';
 import { useApp } from '../useAppController';
 
+const SIDEBAR_MIN = 200;
+const SIDEBAR_MAX = 420;
+const SIDEBAR_DEFAULT = 240;
+const SIDEBAR_KEY = 'spineforge.sidebarWidth';
+
+function clampWidth(value: number): number {
+  return Math.min(SIDEBAR_MAX, Math.max(SIDEBAR_MIN, value));
+}
+
+function readSidebarWidth(): number {
+  const raw = Number(localStorage.getItem(SIDEBAR_KEY));
+  return Number.isFinite(raw) && raw > 0 ? clampWidth(raw) : SIDEBAR_DEFAULT;
+}
+
 function sessionSubtitle(session: Session): string {
   const path = session.config.inputPath.trim();
   if (path) return path;
@@ -303,9 +317,30 @@ function ProjectGroup({ project }: { project: Project }) {
 
 export function Sidebar() {
   const { t, projects, setProjectDialogOpen, setSettingsOpen } = useApp();
+  const [width, setWidth] = useState(readSidebarWidth);
+
+  useEffect(() => {
+    localStorage.setItem(SIDEBAR_KEY, String(width));
+  }, [width]);
+
+  // Drag the right-edge handle to resize; width is clamped to [MIN, MAX] and persisted.
+  function startResize(event: React.PointerEvent) {
+    event.preventDefault();
+    const startX = event.clientX;
+    const startW = width;
+    document.body.classList.add('col-resizing');
+    const onMove = (e: PointerEvent) => setWidth(clampWidth(startW + (e.clientX - startX)));
+    const onUp = () => {
+      document.body.classList.remove('col-resizing');
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+    };
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp);
+  }
 
   return (
-    <aside className="sidebar">
+    <aside className="sidebar" style={{ width }}>
       <div className="sidebar-header">
         <span className="sidebar-title">{t.projects}</span>
         <button className="sidebar-new" title={t.newProject} aria-label={t.newProject} onClick={() => setProjectDialogOpen(true)}>
@@ -325,6 +360,28 @@ export function Sidebar() {
           <span>{t.settings}</span>
         </button>
       </div>
+      <div
+        className="sidebar-resizer"
+        role="separator"
+        aria-orientation="vertical"
+        aria-label={t.resizeSidebar}
+        aria-valuenow={width}
+        aria-valuemin={SIDEBAR_MIN}
+        aria-valuemax={SIDEBAR_MAX}
+        tabIndex={0}
+        title={t.resizeSidebar}
+        onPointerDown={startResize}
+        onDoubleClick={() => setWidth(SIDEBAR_DEFAULT)}
+        onKeyDown={(event) => {
+          if (event.key === 'ArrowLeft') {
+            event.preventDefault();
+            setWidth((w) => clampWidth(w - 16));
+          } else if (event.key === 'ArrowRight') {
+            event.preventDefault();
+            setWidth((w) => clampWidth(w + 16));
+          }
+        }}
+      />
     </aside>
   );
 }
