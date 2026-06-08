@@ -75,34 +75,35 @@ Shipped ở commit `c133cac`.
 
 ---
 
-## v0.2.8 — Test coverage hoàn tất + Validation polish 📋 Planned
+## v0.2.8 — Test coverage hoàn tất + Validation polish 🚧 In progress
 
 **Mục tiêu:** đóng nốt các mục treo sau v0.2.7, **không thêm tính năng user-facing lớn**. Đóng cổng verify e2e v0.2.6 (đang là điều kiện coi v0.2.6 thực sự xong). Chi tiết task tham chiếu `.kiro/specs/spineforge-x/tasks.md`.
 
 ### A. Frontend hook-level tests (Vitest + React Testing Library) — ưu tiên 1
-- [ ] Thêm `@testing-library/react`; mock `@tauri-apps/api` (`invoke`/`event.listen`) trong `src/test-setup.ts` để render được `useAppController`
-- [ ] P3 — Session isolation: switch session **không mất** runtime (logs/files) của session khác (`runtimeByIdRef`)
-- [ ] P4 — Xóa project → xóa hết session con
-- [ ] P14 — Log routing: `spine-log` event vào đúng slot session đang chạy kể cả sau khi switch
-- _tasks.md 10.2, 11.2_
+- [x] Thêm `@testing-library/react`; mock `@tauri-apps/api` (`invoke`/`event.listen`) trong `src/test-setup.ts` để render được `useAppController`
+- [x] P3 — Session isolation: switch session **không mất** runtime (logs/files) của session khác (`runtimeByIdRef`)
+- [x] P4 — Xóa project → xóa hết session con
+- [x] P14 — Log routing: `spine-log` event vào đúng slot session đang chạy kể cả sau khi switch
+- _tasks.md 10.2, 11.2 — `src/useAppController.test.tsx`_
 
 ### B. Backend property tests còn lại
-- [ ] P1 — `scan_spine_files` chỉ trả `.spine` hợp lệ, bỏ file tạm `.~`/`~` (_tasks.md 1.2_)
-- [ ] P7 — timestamp folder name khớp đúng pattern chrono (_tasks.md 6.1_)
-- [ ] P11 — `stop_requested` ngăn bắt đầu file mới giữa batch (_tasks.md 2.3_)
-- [ ] P12 — `FallbackMode` tác động đúng khi thiếu `.export.json` (_tasks.md 6.2_)
+- [x] P1 — `scan_spine_files` chỉ trả `.spine` hợp lệ, bỏ file tạm `.~`/`~` (_tasks.md 1.2_)
+- [x] P7 — timestamp folder name khớp đúng pattern chrono (_tasks.md 6.1_)
+- [x] P11 — `stop_requested` ngăn bắt đầu file mới giữa batch — qua helper `may_start_next` (_tasks.md 2.3_)
+- [x] P12 — `FallbackMode` tác động đúng khi thiếu `.export.json` (_tasks.md 6.2_)
 - _Ghi chú: P8 (`clean_source_folder_name`) và P16 (`find_existing_id_folder`) đã có example test; nâng lên proptest là optional._
 
 ### C. UX validation Linked Project + đóng cổng v0.2.6
-- [ ] `FieldStatus` trong `LinkedProjectModal`: cảnh báo tên project rỗng, `sourceName` trùng nhau, Unity root chưa tồn tại (mục #6 review UI) — thêm chuỗi i18n vi/en
+- [x] `FieldStatus` trong `LinkedProjectModal`: cảnh báo tên project rỗng, `sourceName` trùng nhau, Unity root chưa tồn tại (mục #6 review UI) — thêm chuỗi i18n vi/en + command `path_exists`
 - [ ] (optional) Nút "+ Add" ngay đầu `.linked-list`, cân nhắc gọn nút ở footer (#7)
-- [ ] **Đóng cổng verify e2e v0.2.6**: `npm run tauri dev`, chạy kịch bản Linked Project ("FD") + Unicode workaround (tasks.md 13.6) → tick mục verify ở v0.2.6
+- [ ] **Đóng cổng verify e2e v0.2.6**: `npm run tauri dev`, chạy kịch bản Linked Project ("FD") + Unicode workaround (tasks.md 13.6) → tick mục verify ở v0.2.6 _(cần chạy tay)_
 
 ### Verify v0.2.8 (end-to-end)
-1. `cd src-tauri && cargo test` — thêm ~4 property test mới, tất cả xanh.
-2. `npm test` — thêm ~3 hook-level test (jsdom + RTL), tất cả xanh.
-3. `npm run build` — tsc + vite không lỗi.
-4. Bump `0.2.7 → 0.2.8` (`package.json`/`Cargo.toml`/`tauri.conf.json`); push tag → CI release tự build installer.
+1. [x] `cd src-tauri && cargo test` — thêm 4 property test mới (P1/P7/P11/P12), tất cả xanh (22/22).
+2. [x] `npm test` — thêm 3 hook-level test (P3/P4/P14, jsdom + RTL), tất cả xanh (25/25).
+3. [x] `npm run build` — tsc + vite không lỗi.
+4. [x] Bump `0.2.7 → 0.2.8` (`package.json`/`Cargo.toml`/`tauri.conf.json`).
+5. [ ] Push tag → CI release tự build installer (sau khi đóng cổng e2e ở C).
 
 > Sau v0.2.8, v0.2.6 và toàn bộ test-suite coi như khóa hẳn → đủ điều kiện bắt đầu **v0.3.0 (macOS)**.
 

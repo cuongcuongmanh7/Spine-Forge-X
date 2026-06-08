@@ -1,7 +1,9 @@
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { FolderOpen, Plus, Trash2, Wand2, X } from 'lucide-react';
 import { open } from '@tauri-apps/plugin-dialog';
+import { invoke } from '@tauri-apps/api/core';
 import { useApp } from '../useAppController';
+import { FieldStatus } from './common';
 import type { LinkedType } from '../config';
 
 export function LinkedProjectModal() {
@@ -18,6 +20,46 @@ export function LinkedProjectModal() {
   // Master–detail: a scrollable list on the left, the selected project's editor on the right.
   const [selectedId, setSelectedId] = useState<string | null>(linkedProjects[0]?.id ?? null);
   const selected = linkedProjects.find((p) => p.id === selectedId) ?? null;
+
+  // ----- Validation feedback (non-blocking warnings) -----
+  // Source names that appear on more than one Type row (collisions break routing).
+  const dupSourceNames = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const ty of selected?.types ?? []) {
+      const key = ty.sourceName.trim();
+      if (key) counts.set(key, (counts.get(key) ?? 0) + 1);
+    }
+    return new Set([...counts].filter(([, n]) => n > 1).map(([key]) => key));
+  }, [selected?.types]);
+
+  // Whether the selected project's Unity root exists on disk (debounced backend check).
+  const unityRoot = selected?.unityRoot.trim() ?? '';
+  const [unityRootCheck, setUnityRootCheck] = useState<{ path: string; exists: boolean | null }>({
+    path: '',
+    exists: null
+  });
+  useEffect(() => {
+    if (!unityRoot) {
+      setUnityRootCheck({ path: '', exists: null });
+      return;
+    }
+    let cancelled = false;
+    const timer = window.setTimeout(() => {
+      void (async () => {
+        try {
+          const exists = await invoke<boolean>('path_exists', { path: unityRoot });
+          if (!cancelled) setUnityRootCheck({ path: unityRoot, exists });
+        } catch {
+          if (!cancelled) setUnityRootCheck({ path: unityRoot, exists: null });
+        }
+      })();
+    }, 400);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [unityRoot]);
+  const unityRootMissing = unityRootCheck.path === unityRoot && unityRootCheck.exists === false;
 
   function close() {
     setLinkedModalOpen(false);
@@ -115,6 +157,7 @@ export function LinkedProjectModal() {
                 <div className="form-row">
                   <label>{t.linkedName}</label>
                   <input value={selected.name} onChange={(e) => updateLinkedProject(selected.id, { name: e.target.value })} placeholder="FD" />
+                  {!selected.name.trim() && <FieldStatus warning message={t.linkedWarnNameEmpty} />}
                 </div>
                 <div className="form-row">
                   <label>{t.unityRoot}</label>
@@ -122,6 +165,7 @@ export function LinkedProjectModal() {
                   <button className="icon-button" title={t.unityRoot} aria-label={t.unityRoot} onClick={() => browse(selected.id, 'unityRoot', selected.unityRoot)}>
                     <FolderOpen size={18} />
                   </button>
+                  {unityRootMissing && <FieldStatus warning message={t.linkedWarnUnityRootMissing} />}
                 </div>
                 <div className="form-row">
                   <label>{t.sourceRoot}</label>
@@ -146,6 +190,7 @@ export function LinkedProjectModal() {
                           placeholder={t.linkedSourceName}
                           onChange={(e) => setType(selected.id, selected.types, i, { sourceName: e.target.value })}
                         />
+                        {dupSourceNames.has(ty.sourceName.trim()) && <FieldStatus warning message={t.linkedWarnDupSource} />}
                         <span className="linked-arrow">→</span>
                         <input
                           value={ty.destName}

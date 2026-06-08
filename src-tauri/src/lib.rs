@@ -546,7 +546,7 @@ async fn start_batch_export(
 
     for (index, file) in shared_request.files.iter().enumerate() {
         // Check stop flag BEFORE queuing so a Stop request drains the queue immediately.
-        if state_arc.stop_requested.load(Ordering::SeqCst) {
+        if !may_start_next(&state_arc.stop_requested) {
             let _ = window.emit("spine-log", "Batch stopped by user.");
             break;
         }
@@ -561,7 +561,7 @@ async fn start_batch_export(
 
         join_set.spawn(async move {
             // Check stop flag once before blocking on the semaphore.
-            if app_state.stop_requested.load(Ordering::SeqCst) {
+            if !may_start_next(&app_state.stop_requested) {
                 return (index, FileOutcome::Skipped, None);
             }
 
@@ -570,7 +570,7 @@ async fn start_batch_export(
             let _permit = sem.acquire().await;
 
             // Re-check stop flag after acquiring the permit (could have been set while waiting).
-            if app_state.stop_requested.load(Ordering::SeqCst) {
+            if !may_start_next(&app_state.stop_requested) {
                 return (index, FileOutcome::Skipped, None);
             }
 
@@ -658,6 +658,14 @@ async fn stop_batch_export(state: State<'_, Arc<AppState>>) -> Result<(), String
     }
 
     Ok(())
+}
+
+/// True when `path` exists on disk. Used by the UI to warn (not block) when a
+/// configured directory — e.g. a Linked Project's Unity root — is missing.
+#[tauri::command]
+fn path_exists(path: String) -> bool {
+    let trimmed = path.trim().trim_matches('"');
+    !trimmed.is_empty() && PathBuf::from(trimmed).exists()
 }
 
 #[tauri::command]
@@ -1396,6 +1404,13 @@ fn is_temp_spine_file(path: &Path) -> bool {
         .unwrap_or(false)
 }
 
+/// Stop-gate used by the batch export loop: returns true when no Stop has been
+/// requested and the next file may start. Centralised here so the invariant
+/// "a Stop request prevents any new file from starting" stays unit-testable.
+fn may_start_next(stop_requested: &AtomicBool) -> bool {
+    !stop_requested.load(Ordering::SeqCst)
+}
+
 fn path_to_string(path: &Path) -> String {
     path.to_string_lossy().to_string()
 }
@@ -1655,6 +1670,7 @@ pub fn run() {
             write_text_file,
             clean_timestamp_exports,
             open_path,
+            path_exists,
             list_subdirectories,
             start_batch_export,
             stop_batch_export
@@ -1668,12 +1684,17 @@ mod tests {
     use super::*;
 
     /// Create a unique empty temp directory for a test and return its path.
+    /// A process-wide sequence counter guarantees uniqueness even when called
+    /// many times within the same microsecond (e.g. inside a proptest loop).
     fn test_dir(tag: &str) -> PathBuf {
+        static SEQ: AtomicUsize = AtomicUsize::new(0);
+        let seq = SEQ.fetch_add(1, Ordering::SeqCst);
         let dir = std::env::temp_dir().join(format!(
-            "spineforge-test-{}-{}-{}",
+            "spineforge-test-{}-{}-{}-{}",
             tag,
             std::process::id(),
-            chrono::Local::now().format("%Y%m%d%H%M%S%6f")
+            chrono::Local::now().format("%Y%m%d%H%M%S%6f"),
+            seq
         ));
         fs::create_dir_all(&dir).unwrap();
         dir
@@ -1809,15 +1830,15 @@ mod tests {
 
     use proptest::prelude::*;
 
-    /// Build a `BatchExportRequest` for routing tests. Only the fields that
-    /// `resolve_output_dir` reads matter; everything else gets a neutral value.
-    fn linked_request(output_path: &str, linked_dest_type: &str) -> BatchExportRequest {
+    /// Build a neutral `BatchExportRequest` with every field defaulted. Tests
+    /// override only the handful of fields relevant to the behaviour under test.
+    fn base_request() -> BatchExportRequest {
         BatchExportRequest {
             spine_path: String::new(),
             input_root: String::new(),
             files: Vec::new(),
-            output_path: output_path.to_string(),
-            output_policy: OutputPolicy::LinkedProject,
+            output_path: String::new(),
+            output_policy: OutputPolicy::SourceFolderName,
             target_version: String::new(),
             export_mode: ExportMode::GlobalJson,
             fallback_mode: FallbackMode::GlobalJson,
@@ -1873,7 +1894,17 @@ mod tests {
             preserve_relative_paths: false,
             clean_folder_name: false,
             unicode_workaround: false,
+            linked_dest_type: String::new(),
+        }
+    }
+
+    /// Build a `BatchExportRequest` for LinkedProject routing tests.
+    fn linked_request(output_path: &str, linked_dest_type: &str) -> BatchExportRequest {
+        BatchExportRequest {
+            output_path: output_path.to_string(),
+            output_policy: OutputPolicy::LinkedProject,
             linked_dest_type: linked_dest_type.to_string(),
+            ..base_request()
         }
     }
 
@@ -1928,8 +1959,11 @@ mod tests {
         /// Property 10: validate_preset_file_name accepts a clean *.export.json
         /// name and rejects anything with a path separator, colon, or the bare
         /// ".export.json".
+        // The leading char is constrained to a non-space so the trimmed stem is
+        // never empty — a whitespace-only stem would collapse to the bare
+        // ".export.json", which the validator legitimately rejects.
         #[test]
-        fn prop_validate_preset_file_name(stem in "[a-zA-Z0-9 _-]{1,30}") {
+        fn prop_validate_preset_file_name(stem in "[a-zA-Z0-9_-][a-zA-Z0-9 _-]{0,29}") {
             let valid = format!("{stem}.export.json");
             prop_assert_eq!(validate_preset_file_name(&valid).unwrap(), valid.trim().to_string());
 
@@ -1971,6 +2005,56 @@ mod tests {
             let parsed = parse_spine_version(&output);
             prop_assert_eq!(parsed.as_deref(), Some(editor.as_str()));
         }
+
+        /// Property 7: the timestamp export folder name always has the shape
+        /// `export_{sanitized-version}_{ddmmyyyy_hhmmss}` — a sanitized version
+        /// token (no underscores, since `_` is not allowed) followed by an
+        /// 8-digit date, `_`, and a 6-digit time. (tasks.md 6.1)
+        #[test]
+        fn prop_export_folder_name_matches_pattern(version in ".{0,40}") {
+            let name = make_export_folder_name(&version);
+            let rest = name.strip_prefix("export_").expect("must start with export_");
+
+            // The last 15 chars are the chrono timestamp `ddmmyyyy_hhmmss`.
+            prop_assert!(rest.len() >= 16, "name too short: {}", name);
+            let split = rest.len() - 15;
+            // The char just before the timestamp is the separating underscore.
+            prop_assert_eq!(&rest[split - 1..split], "_");
+            let stamp = &rest[split..];
+            let digits: Vec<char> = stamp.chars().collect();
+            for (i, ch) in digits.iter().enumerate() {
+                if i == 8 {
+                    prop_assert_eq!(*ch, '_');
+                } else {
+                    prop_assert!(ch.is_ascii_digit(), "non-digit in timestamp: {}", stamp);
+                }
+            }
+
+            // The middle token is exactly the sanitized version (never empty).
+            let version_token = &rest[..split - 1];
+            prop_assert_eq!(version_token, sanitize_folder_part(&version));
+            prop_assert!(!version_token.is_empty());
+            prop_assert!(!version_token.contains('_'));
+        }
+
+        /// Property 11: once a Stop is requested, no further file may start.
+        /// Models the batch loop's stop-gate (`may_start_next`) over the real
+        /// AtomicBool: setting the flag at index `stop_at` means exactly
+        /// `min(stop_at, total)` files start. (tasks.md 2.3)
+        #[test]
+        fn prop_stop_gate_blocks_new_files(total in 1usize..30, stop_at in 0usize..30) {
+            let stop = AtomicBool::new(false);
+            let mut started = 0usize;
+            for i in 0..total {
+                if i == stop_at {
+                    stop.store(true, Ordering::SeqCst);
+                }
+                if may_start_next(&stop) {
+                    started += 1;
+                }
+            }
+            prop_assert_eq!(started, stop_at.min(total));
+        }
     }
 
     /// Property 17 (example-based, FS-backed): resolve_output_dir for the
@@ -2002,5 +2086,97 @@ mod tests {
         assert!(resolve_output_dir(&bad, &input, "run").is_err());
 
         let _ = fs::remove_dir_all(&unity_root);
+    }
+
+    /// Property 12 (FS-backed, example-based): when no `.export.json` sits next
+    /// to the input file, PerProjectJson falls back per `FallbackMode`:
+    /// BuiltIn → the built-in preset, GlobalJson → the global path (error when
+    /// empty), Skip → always an error. (tasks.md 6.2)
+    #[test]
+    fn fallback_mode_when_no_export_json() {
+        let dir = test_dir("fallback"); // empty dir → find_per_project_export_json returns None
+        let input = dir.join("hero.spine");
+
+        // BuiltIn → uses the built-in preset string.
+        let built_in = BatchExportRequest {
+            export_mode: ExportMode::PerProjectJson,
+            fallback_mode: FallbackMode::BuiltIn,
+            built_in_export: "binary+pack".to_string(),
+            ..base_request()
+        };
+        assert_eq!(
+            resolve_export_arg(&built_in, &input).unwrap().as_deref(),
+            Some("binary+pack")
+        );
+
+        // GlobalJson with a non-empty path → uses that path.
+        let global_ok = BatchExportRequest {
+            export_mode: ExportMode::PerProjectJson,
+            fallback_mode: FallbackMode::GlobalJson,
+            global_json_path: Some("D:/presets/global.export.json".to_string()),
+            ..base_request()
+        };
+        assert_eq!(
+            resolve_export_arg(&global_ok, &input).unwrap().as_deref(),
+            Some("D:/presets/global.export.json")
+        );
+
+        // GlobalJson with an empty/blank path → error.
+        let global_empty = BatchExportRequest {
+            export_mode: ExportMode::PerProjectJson,
+            fallback_mode: FallbackMode::GlobalJson,
+            global_json_path: Some("   ".to_string()),
+            ..base_request()
+        };
+        assert!(resolve_export_arg(&global_empty, &input).is_err());
+
+        // Skip → always an error (file is skipped, not exported).
+        let skip = BatchExportRequest {
+            export_mode: ExportMode::PerProjectJson,
+            fallback_mode: FallbackMode::Skip,
+            built_in_export: "binary+pack".to_string(),
+            ..base_request()
+        };
+        assert!(resolve_export_arg(&skip, &input).is_err());
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    // FS-backed property tests run fewer cases — each one builds a real temp
+    // directory tree, so the default 256 cases would be needlessly slow.
+    proptest! {
+        #![proptest_config(ProptestConfig::with_cases(32))]
+
+        /// Property 1: scan_spine_files returns only valid `.spine` files (not
+        /// temp `~`/`.~` ones) in `files`, routes temp `.spine` to `skipped`,
+        /// and ignores non-spine files entirely. (tasks.md 1.2)
+        #[test]
+        fn prop_scan_spine_files_filters_temp_and_non_spine(kinds in prop::collection::vec(0u8..4, 0..12)) {
+            let dir = test_dir("scan-spine");
+            let mut expected_files = Vec::new();
+            let mut expected_skipped = Vec::new();
+
+            for (i, kind) in kinds.iter().enumerate() {
+                let (name, bucket): (String, Option<&mut Vec<String>>) = match kind {
+                    0 => (format!("f{i}.spine"), Some(&mut expected_files)),       // valid
+                    1 => (format!("~f{i}.spine"), Some(&mut expected_skipped)),    // temp (~)
+                    2 => (format!(".~f{i}.spine"), Some(&mut expected_skipped)),   // temp (.~)
+                    _ => (format!("f{i}.txt"), None),                              // non-spine → ignored
+                };
+                let path = dir.join(&name);
+                fs::write(&path, b"x").unwrap();
+                if let Some(bucket) = bucket {
+                    bucket.push(path_to_string(&path));
+                }
+            }
+            expected_files.sort();
+            expected_skipped.sort();
+
+            let result = scan_spine_files(path_to_string(&dir)).unwrap();
+            prop_assert_eq!(result.files, expected_files);
+            prop_assert_eq!(result.skipped, expected_skipped);
+
+            let _ = fs::remove_dir_all(&dir);
+        }
     }
 }
