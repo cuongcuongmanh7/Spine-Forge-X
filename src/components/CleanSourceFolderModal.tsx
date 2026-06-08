@@ -14,7 +14,7 @@ function formatBytes(bytes: number): string {
 }
 
 export function CleanSourceFolderModal() {
-  const { t, merged, isCleaningSourceFolder, scanSourceFolders, cleanSourceFolders, setCleanSourceFolderOpen } =
+  const { t, merged, isCleaningSourceFolder, scanSourceFolders, cleanSourceFolders, moveFolderUnused, setCleanSourceFolderOpen } =
     useApp();
 
   const [root, setRoot] = useState(merged.inputPath ?? '');
@@ -55,6 +55,34 @@ export function CleanSourceFolderModal() {
       // Re-scan so the table reflects the cleaned state (now 0 unused).
       await scan();
     }
+  }
+
+  /** Mark a folder as cleaned in local state so its dot/counts update without a re-scan. */
+  function markFolderCleaned(rowIndex: number) {
+    setSummary((prev) => {
+      if (!prev) return prev;
+      const units = prev.units.map((u, i) => (i === rowIndex ? { ...u, unused: [], unusedBytes: 0 } : u));
+      return {
+        ...prev,
+        units,
+        totalUnused: units.reduce((sum, u) => sum + u.unused.length, 0),
+        totalUnusedBytes: units.reduce((sum, u) => sum + u.unusedBytes, 0)
+      };
+    });
+  }
+
+  /** Move just one folder's unused images (uses the already-scanned paths). */
+  async function moveFolder(rowIndex: number) {
+    if (!summary || isCleaningSourceFolder) return;
+    const unit = summary.units[rowIndex];
+    if (!unit || unit.error || unit.unused.length === 0) return;
+    const ok = await confirm(t.cleanSourceConfirm.replace('{count}', String(unit.unused.length)), {
+      title: t.cleanSourceTitle,
+      kind: 'warning'
+    });
+    if (!ok) return;
+    const backup = await moveFolderUnused(unit.imagesDir, unit.unused.map((u) => u.absolutePath));
+    if (backup) markFolderCleaned(rowIndex);
   }
 
   const busy = scanning || isCleaningSourceFolder;
@@ -98,6 +126,7 @@ export function CleanSourceFolderModal() {
                     <th>{t.cleanSourceColUsed}</th>
                     <th>{t.cleanSourceColUnused}</th>
                     <th>{t.cleanSourceColIssues}</th>
+                    <th aria-label={t.cleanSourceMove} />
                   </tr>
                 </thead>
                 <tbody>
@@ -129,6 +158,22 @@ export function CleanSourceFolderModal() {
                         </td>
                         <td title={[...unit.missing, ...unit.ambiguous].join(', ')}>
                           {unit.error ? <span className="field-status error">{unit.error}</span> : issues || ''}
+                        </td>
+                        <td>
+                          {!unit.error && unit.unused.length > 0 && (
+                            <button
+                              className="icon-button danger"
+                              title={t.cleanSourceMove}
+                              aria-label={t.cleanSourceMove}
+                              disabled={busy}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                void moveFolder(rowIndex);
+                              }}
+                            >
+                              <Trash2 size={16} />
+                            </button>
+                          )}
                         </td>
                       </tr>
                     );
@@ -163,6 +208,7 @@ export function CleanSourceFolderModal() {
         units={summary.units}
         index={detailIndex}
         onIndexChange={setDetailIndex}
+        onMoved={markFolderCleaned}
         onClose={() => setDetailIndex(null)}
       />
     )}

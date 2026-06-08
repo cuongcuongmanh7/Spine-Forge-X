@@ -1303,6 +1303,26 @@ export function useAppControllerValue() {
     }
   }
 
+  /** Move one folder's already-scanned unused images to its _unused_backup. Returns backup dir or null. */
+  async function moveFolderUnused(imagesDir: string, files: string[]): Promise<string | null> {
+    if (!files.length || isCleaningSourceFolder) return null;
+    setIsCleaningSourceFolder(true);
+    try {
+      const backupDir = await invoke<string>('move_unused_images', { imagesDir, files });
+      const body = t.cleanSourceDone.replace('{count}', String(files.length));
+      appendLog(body);
+      pushToast(body, 'success');
+      return backupDir;
+    } catch (error) {
+      const body = String(error);
+      appendLog(`${t.cleanSourceFailed}: ${body}`);
+      pushToast(`${t.cleanSourceFailed}: ${body}`, 'error');
+      return null;
+    } finally {
+      setIsCleaningSourceFolder(false);
+    }
+  }
+
   /** Read a local image as a base64 data URL for thumbnail display. Null on failure. */
   async function readImageDataUrl(path: string): Promise<string | null> {
     try {
@@ -1802,6 +1822,7 @@ export function useAppControllerValue() {
     isCleaningSourceFolder,
     scanSourceFolders,
     cleanSourceFolders,
+    moveFolderUnused,
     readImageDataUrl,
 
     // Linked Projects

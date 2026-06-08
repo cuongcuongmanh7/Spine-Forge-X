@@ -1000,6 +1000,27 @@ async fn run_clean_units(
     results.into_iter().flatten().collect()
 }
 
+/// Move a specific folder's already-scanned unused images to its own
+/// `_unused_backup/<timestamp>`. Reuses the paths from a prior scan, so it does
+/// not re-export the `.spine`. Returns the backup directory.
+#[tauri::command]
+fn move_unused_images(images_dir: String, files: Vec<String>) -> Result<String, String> {
+    if files.is_empty() {
+        return Err("Không có ảnh thừa để chuyển.".to_string());
+    }
+    let dir = PathBuf::from(images_dir.trim_matches('"'));
+    let entries: Vec<cleaner::ImageEntry> = files
+        .into_iter()
+        .map(|absolute_path| cleaner::ImageEntry {
+            absolute_path,
+            relative_path: String::new(),
+            size_bytes: 0,
+        })
+        .collect();
+    let stamp = chrono::Local::now().format("%Y-%m-%d_%H-%M-%S").to_string();
+    cleaner::move_unused(&dir, &entries, &stamp)
+}
+
 /// Scan source folders under `root` for unused image assets (no files touched).
 #[tauri::command]
 async fn scan_source_folders(
@@ -2153,6 +2174,7 @@ pub fn run() {
             read_image_data_url,
             scan_source_folders,
             clean_source_folders,
+            move_unused_images,
             list_subdirectories,
             start_batch_export,
             stop_batch_export

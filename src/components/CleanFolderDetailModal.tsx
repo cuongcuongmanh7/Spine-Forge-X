@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
-import { X, ChevronLeft, ChevronRight, AlertTriangle } from 'lucide-react';
+import { X, ChevronLeft, ChevronRight, AlertTriangle, Trash2 } from 'lucide-react';
+import { confirm } from '@tauri-apps/plugin-dialog';
 import { useApp } from '../useAppController';
 import type { FolderScan, ImageEntry } from '../types';
 
@@ -46,20 +47,33 @@ export function CleanFolderDetailModal({
   units,
   index,
   onIndexChange,
+  onMoved,
   onClose
 }: {
   units: FolderScan[];
   index: number;
   onIndexChange: (next: number) => void;
+  onMoved: (index: number) => void;
   onClose: () => void;
 }) {
-  const { t, readImageDataUrl } = useApp();
+  const { t, readImageDataUrl, moveFolderUnused, isCleaningSourceFolder } = useApp();
   // Thumbnail cache keyed by absolute path — kept across folder navigation.
   const [thumbs, setThumbs] = useState<Record<string, string | null>>({});
   const cancelledRef = useRef(false);
 
   const unit = units[index];
   const folderName = unit.folder.replace(/\\/g, '/').split('/').pop() || unit.folder;
+
+  async function moveThisFolder() {
+    if (unit.error || unit.unused.length === 0 || isCleaningSourceFolder) return;
+    const ok = await confirm(t.cleanSourceConfirm.replace('{count}', String(unit.unused.length)), {
+      title: t.cleanSourceTitle,
+      kind: 'warning'
+    });
+    if (!ok) return;
+    const backup = await moveFolderUnused(unit.imagesDir, unit.unused.map((e) => e.absolutePath));
+    if (backup) onMoved(index);
+  }
 
   // Load the current folder's not-yet-cached thumbnails when the folder changes.
   useEffect(() => {
@@ -149,6 +163,13 @@ export function CleanFolderDetailModal({
             {index + 1}/{units.length}
           </span>
           <span className="footer-spacer" />
+          <button
+            className="danger-button"
+            disabled={isCleaningSourceFolder || unit.unused.length === 0}
+            onClick={moveThisFolder}
+          >
+            <Trash2 size={16} /> {t.cleanSourceMove}
+          </button>
           <button className="primary-button" onClick={onClose}>
             {t.done}
           </button>
