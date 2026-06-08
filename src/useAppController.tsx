@@ -135,9 +135,32 @@ export function useAppControllerValue() {
   const [linkedModalOpen, setLinkedModalOpen] = useState(false);
   const [cleanSourceFolderOpen, setCleanSourceFolderOpen] = useState(false);
   const [isCleaningSourceFolder, setIsCleaningSourceFolder] = useState(false);
-  // Cached so reopening the modal doesn't re-run the (slow) per-folder CLI scan.
-  const [cleanScanRoot, setCleanScanRoot] = useState('');
-  const [cleanScanSummary, setCleanScanSummary] = useState<BatchScanSummary | null>(null);
+  // Clean-source scan cache, keyed per session so each session keeps its own
+  // scanned root + result. Reopening the modal shows that session's cache instead
+  // of re-running the slow per-folder CLI scan; the user re-scans manually.
+  const [cleanScanBySession, setCleanScanBySession] = useState<
+    Record<string, { root: string; summary: BatchScanSummary | null }>
+  >({});
+  const cleanScanKey = activeSessionId ?? '__global__';
+  const cleanScanEntry = cleanScanBySession[cleanScanKey] ?? { root: '', summary: null };
+  const cleanScanRoot = cleanScanEntry.root;
+  const cleanScanSummary = cleanScanEntry.summary;
+  function setCleanScanRoot(value: string | ((prev: string) => string)) {
+    setCleanScanBySession((map) => {
+      const prev = map[cleanScanKey] ?? { root: '', summary: null };
+      const root = typeof value === 'function' ? value(prev.root) : value;
+      return { ...map, [cleanScanKey]: { ...prev, root } };
+    });
+  }
+  function setCleanScanSummary(
+    value: BatchScanSummary | null | ((prev: BatchScanSummary | null) => BatchScanSummary | null)
+  ) {
+    setCleanScanBySession((map) => {
+      const prev = map[cleanScanKey] ?? { root: '', summary: null };
+      const summary = typeof value === 'function' ? value(prev.summary) : value;
+      return { ...map, [cleanScanKey]: { ...prev, summary } };
+    });
+  }
   // Warning shown at the Output step when input files don't all map to one linked Type.
   const [linkedTypeWarning, setLinkedTypeWarning] = useState('');
   const [projectDialogOpen, setProjectDialogOpen] = useState(false);
