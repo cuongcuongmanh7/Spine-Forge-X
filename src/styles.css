@@ -2271,6 +2271,58 @@ progress {
   cursor: not-allowed;
 }
 
+.status-dot {
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  margin-right: 8px;
+  vertical-align: middle;
+}
+.status-dot.green {
+  background: #16a34a;
+}
+.status-dot.red {
+  background: #dc2626;
+}
+.status-dot.neutral {
+  background: var(--border-strong);
+}
+
+/* Detail modal header: folder name + Unused/Used stat chips with status dots. */
+.detail-title {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+.detail-title h2 {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.stat-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+.stat-chip::before {
+  content: '';
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+}
+.stat-chip.unused::before {
+  background: #dc2626;
+}
+.stat-chip.used::before {
+  background: #16a34a;
+}
+
 .clean-source-table tr.clickable {
   cursor: pointer;
 }

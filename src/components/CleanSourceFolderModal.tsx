@@ -114,7 +114,12 @@ export function CleanSourceFolderModal() {
                         onClick={() => !unit.error && setDetailIndex(rowIndex)}
                         title={unit.error ? unit.folder : t.cleanSourceViewDetail}
                       >
-                        <td title={unit.folder}>{name}</td>
+                        <td title={unit.folder}>
+                          <span
+                            className={`status-dot ${unit.error ? 'neutral' : unit.unused.length ? 'red' : 'green'}`}
+                          />
+                          {name}
+                        </td>
                         <td>{unit.error ? '—' : unit.used}</td>
                         <td>
                           {unit.error ? '—' : unit.unused.length}

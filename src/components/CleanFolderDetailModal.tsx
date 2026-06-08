@@ -85,7 +85,15 @@ export function CleanFolderDetailModal({
     <div className="modal-backdrop" onClick={onClose}>
       <div className="modal linked-modal clean-source-modal" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
-          <h2 title={unit.folder}>{folderName}</h2>
+          <div className="detail-title">
+            <h2 title={unit.folder}>{folderName}</h2>
+            <span className="stat-chip unused">
+              {t.cleanSourceColUnused} ({unit.unused.length})
+            </span>
+            <span className="stat-chip used">
+              {t.cleanSourceColUsed} ({unit.usedImages.length})
+            </span>
+          </div>
           <button className="modal-close" title={t.cancel} aria-label={t.cancel} onClick={onClose}>
             <X size={18} />
           </button>
