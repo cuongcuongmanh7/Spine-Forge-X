@@ -728,13 +728,17 @@ fn has_output_files(output_dir: &str) -> bool {
             if !p.is_file() {
                 return false;
             }
-            p.extension()
-                .and_then(|ext| ext.to_str())
-                .map(|ext| {
-                    let lower = ext.to_ascii_lowercase();
-                    lower == "skel" || lower == "json" || lower == "atlas"
-                })
-                .unwrap_or(false)
+            let Some(name) = p.file_name().and_then(|n| n.to_str()) else {
+                return false;
+            };
+            let lower = name.to_ascii_lowercase();
+            // Bỏ qua Unity .meta sidecar để tránh false positive khi chỉ còn .meta.
+            if lower.ends_with(".meta") {
+                return false;
+            }
+            // Match trong cả tên file (không chỉ đuôi cuối) để nhận các đuôi Unity như
+            // .skel.bytes và .atlas.txt, không chỉ .skel/.json/.atlas thuần.
+            lower.contains(".skel") || lower.contains(".atlas") || lower.ends_with(".json")
         })
 }
 
@@ -1756,6 +1760,44 @@ mod tests {
 
         let _ = fs::remove_dir_all(&src);
         let _ = fs::remove_dir_all(&dst);
+    }
+
+    #[test]
+    fn has_output_files_recognizes_unity_double_extensions() {
+        let dir = test_dir("has-output-unity");
+        // Unity Spine runtime convention: skeleton .skel.bytes + atlas .atlas.txt.
+        fs::write(dir.join("3004_Gale.skel.bytes"), b"skel").unwrap();
+        fs::write(dir.join("3004_Gale.atlas.txt"), b"atlas").unwrap();
+        fs::write(dir.join("3004_Gale.png"), b"png").unwrap();
+        assert!(has_output_files(&path_to_string(&dir)));
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn has_output_files_recognizes_plain_extensions() {
+        let dir = test_dir("has-output-plain");
+        fs::write(dir.join("hero.json"), b"{}").unwrap();
+        fs::write(dir.join("hero.atlas"), b"atlas").unwrap();
+        assert!(has_output_files(&path_to_string(&dir)));
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn has_output_files_false_when_only_meta_or_textures() {
+        let dir = test_dir("has-output-meta");
+        // Only Unity .meta sidecars and textures — no real skeleton/atlas output.
+        fs::write(dir.join("3004_Gale.skel.bytes.meta"), b"meta").unwrap();
+        fs::write(dir.join("3004_Gale.atlas.txt.meta"), b"meta").unwrap();
+        fs::write(dir.join("3004_Gale.png"), b"png").unwrap();
+        assert!(!has_output_files(&path_to_string(&dir)));
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn has_output_files_false_when_dir_missing() {
+        let missing = std::env::temp_dir().join("spineforge-test-output-missing-xyz");
+        let _ = fs::remove_dir_all(&missing);
+        assert!(!has_output_files(&path_to_string(&missing)));
     }
 
     // ---- Property tests (proptest) ----------------------------------------

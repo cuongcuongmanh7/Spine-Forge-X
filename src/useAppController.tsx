@@ -24,6 +24,7 @@ import {
 } from './config';
 import { formatMessage, formatSummary, getCopy, type Translations } from './i18n';
 import { computeCanStart, statusFromValidation } from './validation';
+import { commonParentPath } from './paths';
 import {
   basename,
   cloneSession,
@@ -79,6 +80,15 @@ function resolveLinkedTarget(cfg: MergedConfig): { unityRoot: string; destName: 
   const type = project.types.find((t) => t.sourceName === cfg.linkedTypeName);
   if (!type) return null;
   return { unityRoot: project.unityRoot, destName: type.destName };
+}
+
+/** Resolve the destination type folder ("unityRoot/destType") for a linked-project config, or ''. */
+function linkedDestFolder(cfg: MergedConfig): string {
+  const linked = cfg.outputPolicy === 'linkedProject' ? resolveLinkedTarget(cfg) : null;
+  if (!linked || !linked.unityRoot.trim()) return '';
+  const root = linked.unityRoot.replace(/[\\/]+$/, '');
+  const sep = root.includes('\\') ? '\\' : '/';
+  return linked.destName.trim() ? `${root}${sep}${linked.destName.trim()}` : root;
 }
 
 /** Token before the first underscore, e.g. "0001_Fighter" -> "0001". Mirrors backend clean_source_folder_name. */
@@ -1601,8 +1611,17 @@ export function useAppControllerValue() {
 
   function resolveOpenOutputTarget() {
     if (lastOutputFolders.length === 1) return lastOutputFolders[0];
-    if (lastOutputFolders.length > 1 && merged.outputPath.trim()) return merged.outputPath;
-    if (lastOutputFolders.length > 0) return lastOutputFolders[0];
+    if (lastOutputFolders.length > 1) {
+      // Open the shared parent of all exported folders (e.g. unityRoot/Heroes), not just the
+      // first child. In linkedProject mode outputPath is empty, so derive it from the folders.
+      const parent = commonParentPath(lastOutputFolders);
+      if (parent) return parent;
+      if (merged.outputPath.trim()) return merged.outputPath;
+      return lastOutputFolders[0];
+    }
+    // No run recorded yet: prefer the linked destination folder over the raw input path.
+    const linkedFolder = linkedDestFolder(merged);
+    if (linkedFolder) return linkedFolder;
     if (merged.outputPath.trim()) return merged.outputPath;
     return merged.inputPath.trim() || '';
   }
