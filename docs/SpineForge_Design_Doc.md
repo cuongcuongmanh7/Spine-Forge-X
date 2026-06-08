@@ -404,3 +404,15 @@ Không nên copy nguyên:
 * UI: radio output policy `Linked Project`, select Project/Type, nút "Manage…" mở modal CRUD (Browse `unityRoot`/`sourceRoot`, bảng type + "Auto-fill từ Unity root"), và dòng preview thư mục đích trước khi Run.
 
 **Pha 2 (roadmap tương lai — ngoài phạm vi):** Kích hoạt pipeline export trực tiếp từ Unity Editor qua chế độ headless CLI của SpineForge X (Unity Headless Trigger) — yêu cầu tách core export khỏi GUI, parse CLI args, job file và trả log về Unity console. Sẽ lên plan riêng sau khi Pha 1 được verify.
+
+---
+
+## X. CLEAN SOURCE FOLDER (v0.2.9)
+
+Công cụ gỡ ảnh không còn được skeleton tham chiếu khỏi thư mục nguồn — quan trọng ở chế độ **pack folder** (`packSource = imagefolders`) vì Spine pack cả thư mục ảnh. Chi tiết hướng dẫn: [clean-source.md](clean-source.md).
+
+* **Module thuần** `src-tauri/src/cleaner.rs` (port matcher từ Spine-Cleaner): `extract_json_references`, image index + matcher (exact → no-ext → unique-basename; **ambiguous được coi là used, không move**), `move_unused` (backup `_unused_backup/<timestamp>`, từ chối file ngoài `images_dir`). Có unit test.
+* **Nguồn refs:** export `.spine` → JSON tạm qua Spine CLI rồi parse (`.spine` binary không parse thẳng; JSON cạnh ảnh hay stale → bỏ qua).
+* **Commands:** `scan_source_folders` (có `excluded` để tôn trọng list không-export), `clean_source_folders`, `move_unused_images` (move 1 folder bằng paths đã scan), `read_image_data_url` (thumbnail base64), `path_exists`. Discovery bằng `WalkDir`, xử lý song song có giới hạn, emit `spine-progress`, tôn trọng Stop; temp dir mỗi unit là duy nhất.
+* **UI:** nút global ở Sidebar mở `CleanSourceFolderModal` (bảng per-folder + dot trạng thái, move tổng/từng folder, cache scan theo session) và `CleanFolderDetailModal` (thumbnail Used/Unused + điều hướng Back/Next). Notice gợi ý ở bước Output khi pack-folder. **Không** auto-clean trước export (rủi ro) — chỉ thủ công.
+* **Liên quan:** tùy chọn "tự mở folder output khi export xong" (Output), dedup folder vừa mở.

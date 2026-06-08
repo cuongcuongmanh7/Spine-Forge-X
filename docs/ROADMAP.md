@@ -109,25 +109,27 @@ Shipped ở commit `c133cac`.
 
 ---
 
-## v0.2.9 — Clean Source Folder (gỡ ảnh thừa) 🚧 In progress
+## v0.2.9 — Clean Source Folder (gỡ ảnh thừa) ✅ Done
 
-**Mục tiêu:** ở chế độ **pack folder** (`packSource = imagefolders`), Spine pack cả thư mục ảnh nên ảnh thừa làm phình atlas. Thêm công cụ quét + chuyển ảnh không được skeleton tham chiếu sang `_unused_backup`. Port logic match từ Spine-Cleaner sang Rust.
+**Mục tiêu:** ở chế độ **pack folder** (`packSource = imagefolders`), Spine pack cả thư mục ảnh nên ảnh thừa làm phình atlas. Thêm công cụ quét + chuyển ảnh không được skeleton tham chiếu sang `_unused_backup`. Port logic match từ Spine-Cleaner sang Rust. Hướng dẫn: [clean-source.md](clean-source.md).
 
 ### Backend
 - [x] Module `src-tauri/src/cleaner.rs`: path utils, `extract_json_references`, image index + matcher (exact → no-ext → unique-basename), `move_unused` (backup timestamp, từ chối file ngoài images_dir). Ảnh thuộc ref **ambiguous được coi là used** (không xóa nhầm). 8 unit test.
 - [x] Nguồn refs = **export `.spine` → JSON tạm qua Spine CLI** rồi parse (`.spine` là binary; JSON cạnh ảnh bị bỏ qua vì hay stale).
-- [x] Command `scan_source_folders` / `clean_source_folders`: `WalkDir` tìm mọi `.spine` dưới root (1 hoặc nhiều folder con), mỗi unit độc lập, match cô lập theo `images_dir`, chạy song song (cap 4) + emit `spine-progress`, tôn trọng Stop. Backup riêng `_unused_backup/<timestamp>` mỗi folder.
+- [x] Command `scan_source_folders` / `clean_source_folders` (nhận `excluded` để bỏ qua file ngoài export-set) + `move_unused_images` (move 1 folder bằng paths đã scan, không export lại) + `read_image_data_url` (thumbnail base64). `WalkDir` tìm mọi `.spine` dưới root, mỗi unit độc lập, match cô lập theo `images_dir`, chạy song song (cap 4) + `spine-progress`, tôn trọng Stop. Backup riêng `_unused_backup/<timestamp>` mỗi folder. Temp dir mỗi unit là duy nhất (counter) tránh đụng nhau khi chạy song song.
 
 ### Frontend
-- [x] `CleanSourceFolderModal`: chọn thư mục → Scan (bảng per-folder: used/unused/issues + dung lượng) → Move unused (confirm). Nút mở trong OutputSection.
-- [x] Pack-folder mode (`packSource ∈ {imagefolders, folder}`, đọc từ generated settings hoặc preset đang chọn): notice gợi ý dọn source ở bước Output + log nhắc lúc export. **Không** auto-clean (move file tự động trước export bị bỏ vì rủi ro — clean là thao tác thủ công có chủ đích).
-- [x] Command `path_exists` tái dùng; i18n vi/en.
+- [x] `CleanSourceFolderModal`: nút công cụ **global ở sidebar**; chọn thư mục → Scan (bảng per-folder: dot trạng thái, used/unused/issues + dung lượng) → Move unused tổng hoặc **từng folder**. Tôn trọng list "không export" của session.
+- [x] `CleanFolderDetailModal`: bấm 1 folder → xem thumbnail **Unused/Used** (lazy-load, cache), header có stat + dot, footer **Back/Next** duyệt folder cùng đợt + nút Move riêng.
+- [x] **Cache scan theo từng session** (root + summary) → mở lại modal không phải scan lại; user bấm Scan để làm mới.
+- [x] Detect pack-folder từ **generated settings hoặc preset đang chọn** (`packSource ∈ {imagefolders, folder}`): notice gợi ý dọn source ở bước Output + log nhắc lúc export. **Không** auto-clean (đã bỏ vì rủi ro).
+- [x] Checkbox **"tự mở folder output khi export xong"** (opt-in, dedup folder vừa mở). Command `path_exists`; i18n vi/en.
 
 ### Verify v0.2.9
 1. [x] `cargo test` — +8 test cleaner, tất cả xanh (30/30).
-2. [x] `npm test` — không vỡ (25/25); `npm run build` ok.
-3. [ ] **E2E (cần chạy tay)**: `npm run tauri dev` với folder mẫu `3001_Lucius` → Scan kỳ vọng 0 unused (80 ref = 80 ảnh), bỏ qua `images/Lucius.json` stale; thêm ảnh rác → Scan đúng 1 unused → Move → kiểm `_unused_backup/<timestamp>`. Thử thư mục tổng nhiều folder con + Stop giữa chừng.
-4. [ ] Bump `0.2.8 → 0.2.9` đã làm; push tag sau khi e2e xanh.
+2. [x] `npm test` (25/25) + `npm run build` ok.
+3. [x] **E2E**: Scan folder mẫu + thư mục tổng nhiều folder con, thumbnail, move từng folder/tổng, tôn trọng exclude — đã xanh.
+4. [x] Bump `0.2.8 → 0.2.9`; merge `main` + tag `v0.2.9`.
 
 ---
 
