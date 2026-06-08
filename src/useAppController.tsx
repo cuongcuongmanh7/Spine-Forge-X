@@ -1515,15 +1515,10 @@ export function useAppControllerValue() {
     const sid = activeSessionId;
     if (!sid) return;
 
-    // Pre-export: in pack-folder mode (packSource = imagefolders), unused images
-    // would be packed into the atlas. Clean them first when auto-clean is on, else hint.
+    // Pre-export reminder: in pack-folder mode unused images get packed into the
+    // atlas. We only hint — cleaning is a deliberate manual action (no auto-move).
     if (isPackFolder && merged.inputPath.trim()) {
-      if (merged.autoCleanSourceFolderBeforeExport) {
-        appendLog(t.cleanSourcePreExport);
-        await cleanSourceFolders(merged.inputPath);
-      } else {
-        appendLog(t.packFolderCleanHint);
-      }
+      appendLog(t.packFolderCleanHint);
     }
 
     // Warn before overwriting output folders that already exist.

@@ -120,7 +120,7 @@ Shipped ở commit `c133cac`.
 
 ### Frontend
 - [x] `CleanSourceFolderModal`: chọn thư mục → Scan (bảng per-folder: used/unused/issues + dung lượng) → Move unused (confirm). Nút mở trong OutputSection.
-- [x] Checkbox `autoCleanSourceFolderBeforeExport` (hiện ở pack-folder mode) + hook pre-export trong `startExport` (tự dọn hoặc gợi ý khi `packSource ∈ {imagefolders, folder}`).
+- [x] Pack-folder mode (`packSource ∈ {imagefolders, folder}`, đọc từ generated settings hoặc preset đang chọn): notice gợi ý dọn source ở bước Output + log nhắc lúc export. **Không** auto-clean (move file tự động trước export bị bỏ vì rủi ro — clean là thao tác thủ công có chủ đích).
 - [x] Command `path_exists` tái dùng; i18n vi/en.
 
 ### Verify v0.2.9

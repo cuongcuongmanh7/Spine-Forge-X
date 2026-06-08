@@ -105,10 +105,7 @@ export const defaultSessionConfig = {
   generatedForceAll: false,
   // When enabled, the backend copies .spine files to an ASCII temp path before calling
   // SpineCLI, to work around SpineCLI failures with non-ASCII (Unicode) paths.
-  unicodeWorkaround: false,
-  // When enabled, run "clean source folder" (move unused images to backup) before exporting
-  // in pack-folder mode (packSource = imagefolders), so the atlas doesn't pack stale art.
-  autoCleanSourceFolderBeforeExport: false
+  unicodeWorkaround: false
 };
 
 export type SessionConfig = typeof defaultSessionConfig;

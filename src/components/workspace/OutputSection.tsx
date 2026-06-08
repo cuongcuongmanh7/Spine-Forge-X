@@ -218,19 +218,6 @@ export function OutputSection() {
             </label>
           </div>
         )}
-        {isPackFolder && (
-          <div className="output-option">
-            <label className="checkbox-line">
-              <input
-                type="checkbox"
-                checked={merged.autoCleanSourceFolderBeforeExport}
-                onChange={(event) => updateSetting('autoCleanSourceFolderBeforeExport', event.target.checked)}
-              />
-              {t.autoCleanBeforeExport}
-              <Hint text={t.packFolderCleanHint} />
-            </label>
-          </div>
-        )}
       </div>
     </Section>
   );
