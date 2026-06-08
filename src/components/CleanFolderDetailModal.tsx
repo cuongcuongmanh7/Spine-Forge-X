@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { X } from 'lucide-react';
+import { X, ChevronLeft, ChevronRight, AlertTriangle } from 'lucide-react';
 import { useApp } from '../useAppController';
 import type { FolderScan, ImageEntry } from '../types';
 
@@ -42,31 +42,48 @@ function Thumb({ entry, url }: { entry: ImageEntry; url: string | null | undefin
   );
 }
 
-export function CleanFolderDetailModal({ unit, onClose }: { unit: FolderScan; onClose: () => void }) {
+export function CleanFolderDetailModal({
+  units,
+  index,
+  onIndexChange,
+  onClose
+}: {
+  units: FolderScan[];
+  index: number;
+  onIndexChange: (next: number) => void;
+  onClose: () => void;
+}) {
   const { t, readImageDataUrl } = useApp();
+  // Thumbnail cache keyed by absolute path — kept across folder navigation.
   const [thumbs, setThumbs] = useState<Record<string, string | null>>({});
   const cancelledRef = useRef(false);
 
+  const unit = units[index];
   const folderName = unit.folder.replace(/\\/g, '/').split('/').pop() || unit.folder;
 
+  // Load the current folder's not-yet-cached thumbnails when the folder changes.
   useEffect(() => {
     cancelledRef.current = false;
-    const paths = [...unit.unused, ...unit.usedImages].map((e) => e.absolutePath);
-    void loadThumbs(
-      paths,
-      readImageDataUrl,
-      (path, url) => setThumbs((current) => ({ ...current, [path]: url })),
-      () => cancelledRef.current
-    );
+    const paths = [...unit.unused, ...unit.usedImages]
+      .map((e) => e.absolutePath)
+      .filter((p) => !(p in thumbs));
+    if (paths.length) {
+      void loadThumbs(
+        paths,
+        readImageDataUrl,
+        (path, url) => setThumbs((current) => ({ ...current, [path]: url })),
+        () => cancelledRef.current
+      );
+    }
     return () => {
       cancelledRef.current = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [unit.folder]);
+  }, [index]);
 
   return (
     <div className="modal-backdrop" onClick={onClose}>
-      <div className="modal linked-modal" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
+      <div className="modal linked-modal clean-source-modal" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
           <h2 title={unit.folder}>{folderName}</h2>
           <button className="modal-close" title={t.cancel} aria-label={t.cancel} onClick={onClose}>
@@ -75,6 +92,13 @@ export function CleanFolderDetailModal({ unit, onClose }: { unit: FolderScan; on
         </div>
 
         <div className="modal-body">
+          {unit.error && (
+            <div className="notice warning" role="status">
+              <AlertTriangle size={18} />
+              <span>{unit.error}</span>
+            </div>
+          )}
+
           <section className="thumb-section">
             <h3 className="thumb-section-title unused">
               {t.cleanSourceColUnused} ({unit.unused.length})
@@ -103,6 +127,20 @@ export function CleanFolderDetailModal({ unit, onClose }: { unit: FolderScan; on
         </div>
 
         <div className="modal-footer">
+          <button className="secondary-button" disabled={index <= 0} onClick={() => onIndexChange(index - 1)}>
+            <ChevronLeft size={16} /> {t.cleanSourcePrev}
+          </button>
+          <button
+            className="secondary-button"
+            disabled={index >= units.length - 1}
+            onClick={() => onIndexChange(index + 1)}
+          >
+            {t.cleanSourceNext} <ChevronRight size={16} />
+          </button>
+          <span className="footer-counter">
+            {index + 1}/{units.length}
+          </span>
+          <span className="footer-spacer" />
           <button className="primary-button" onClick={onClose}>
             {t.done}
           </button>

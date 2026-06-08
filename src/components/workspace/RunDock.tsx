@@ -57,10 +57,14 @@ export function RunDock() {
             {isOpeningOutput ? <RotateCw className="spin" size={18} /> : <FolderOpen size={18} />}
             {t.openOutput}
           </button>
-          <button className="secondary-button" disabled={!merged.inputPath || isCleaningTimestamp} onClick={cleanTimestampExports}>
-            {isCleaningTimestamp ? <RotateCw className="spin" size={18} /> : <Trash2 size={18} />}
-            {t.cleanTimestamp}
-          </button>
+          {/* The clean-timestamp action only applies to the timestamp output policy,
+              which is currently hidden — so hide this button alongside it. */}
+          {merged.outputPolicy === 'timestamp' && (
+            <button className="secondary-button" disabled={!merged.inputPath || isCleaningTimestamp} onClick={cleanTimestampExports}>
+              {isCleaningTimestamp ? <RotateCw className="spin" size={18} /> : <Trash2 size={18} />}
+              {t.cleanTimestamp}
+            </button>
+          )}
         </div>
       </div>
     </div>

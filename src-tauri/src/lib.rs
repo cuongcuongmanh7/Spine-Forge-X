@@ -703,6 +703,30 @@ fn discover_clean_units(root: &Path) -> Vec<CleanUnit> {
     units
 }
 
+/// Normalised path for case/slash-insensitive comparison against the UI's file list.
+fn normalize_path_for_compare(p: &str) -> String {
+    p.replace('\\', "/").to_lowercase()
+}
+
+/// Drop units whose `.spine` is in the `excluded` list (files the user removed
+/// from the export set) so cleaning respects the same selection as exporting.
+fn filter_excluded_units(units: Vec<CleanUnit>, excluded: &[String]) -> Vec<CleanUnit> {
+    if excluded.is_empty() {
+        return units;
+    }
+    let excluded: Vec<String> = excluded
+        .iter()
+        .map(|p| normalize_path_for_compare(p.trim_matches('"')))
+        .collect();
+    units
+        .into_iter()
+        .filter(|unit| {
+            let key = normalize_path_for_compare(&path_to_string(&unit.spine_file));
+            !excluded.contains(&key)
+        })
+        .collect()
+}
+
 #[derive(Debug, Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
 struct FolderScan {
@@ -983,6 +1007,7 @@ async fn scan_source_folders(
     spine_path: String,
     target_version: String,
     root: String,
+    excluded: Vec<String>,
 ) -> Result<BatchScanSummary, String> {
     let root_path = PathBuf::from(root.trim_matches('"'));
     if !root_path.exists() {
@@ -992,7 +1017,7 @@ async fn scan_source_folders(
         return Err("Chưa chọn Spine executable.".to_string());
     }
 
-    let units = discover_clean_units(&root_path);
+    let units = filter_excluded_units(discover_clean_units(&root_path), &excluded);
     if units.is_empty() {
         return Err("Không tìm thấy file .spine nào trong thư mục.".to_string());
     }
@@ -1030,6 +1055,7 @@ async fn clean_source_folders(
     spine_path: String,
     target_version: String,
     root: String,
+    excluded: Vec<String>,
 ) -> Result<BatchCleanResult, String> {
     let root_path = PathBuf::from(root.trim_matches('"'));
     if !root_path.exists() {
@@ -1039,7 +1065,7 @@ async fn clean_source_folders(
         return Err("Chưa chọn Spine executable.".to_string());
     }
 
-    let units = discover_clean_units(&root_path);
+    let units = filter_excluded_units(discover_clean_units(&root_path), &excluded);
     if units.is_empty() {
         return Err("Không tìm thấy file .spine nào trong thư mục.".to_string());
     }

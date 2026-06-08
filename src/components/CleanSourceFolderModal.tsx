@@ -4,7 +4,7 @@ import { open } from '@tauri-apps/plugin-dialog';
 import { confirm } from '@tauri-apps/plugin-dialog';
 import { useApp } from '../useAppController';
 import { CleanFolderDetailModal } from './CleanFolderDetailModal';
-import type { BatchScanSummary, FolderScan } from '../types';
+import type { BatchScanSummary } from '../types';
 
 function formatBytes(bytes: number): string {
   if (bytes <= 0) return '0 B';
@@ -20,7 +20,7 @@ export function CleanSourceFolderModal() {
   const [root, setRoot] = useState(merged.inputPath ?? '');
   const [summary, setSummary] = useState<BatchScanSummary | null>(null);
   const [scanning, setScanning] = useState(false);
-  const [detail, setDetail] = useState<FolderScan | null>(null);
+  const [detailIndex, setDetailIndex] = useState<number | null>(null);
 
   function close() {
     setCleanSourceFolderOpen(false);
@@ -62,7 +62,7 @@ export function CleanSourceFolderModal() {
   return (
     <>
     <div className="modal-backdrop" onClick={close}>
-      <div className="modal linked-modal" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
+      <div className="modal linked-modal clean-source-modal" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
           <h2>{t.cleanSourceTitle}</h2>
           <button className="modal-close" title={t.cancel} aria-label={t.cancel} onClick={close}>
@@ -101,7 +101,7 @@ export function CleanSourceFolderModal() {
                   </tr>
                 </thead>
                 <tbody>
-                  {summary.units.map((unit) => {
+                  {summary.units.map((unit, rowIndex) => {
                     const issues = unit.missing.length + unit.ambiguous.length;
                     const name = unit.folder.replace(/\\/g, '/').split('/').pop() || unit.folder;
                     const cls = [unit.error ? 'has-error' : unit.unused.length ? 'has-unused' : '', unit.error ? '' : 'clickable']
@@ -111,7 +111,7 @@ export function CleanSourceFolderModal() {
                       <tr
                         key={unit.folder}
                         className={cls}
-                        onClick={() => !unit.error && setDetail(unit)}
+                        onClick={() => !unit.error && setDetailIndex(rowIndex)}
                         title={unit.error ? unit.folder : t.cleanSourceViewDetail}
                       >
                         <td title={unit.folder}>{name}</td>
@@ -153,7 +153,14 @@ export function CleanSourceFolderModal() {
         </div>
       </div>
     </div>
-    {detail && <CleanFolderDetailModal unit={detail} onClose={() => setDetail(null)} />}
+    {detailIndex !== null && summary && summary.units[detailIndex] && (
+      <CleanFolderDetailModal
+        units={summary.units}
+        index={detailIndex}
+        onIndexChange={setDetailIndex}
+        onClose={() => setDetailIndex(null)}
+      />
+    )}
     </>
   );
 }

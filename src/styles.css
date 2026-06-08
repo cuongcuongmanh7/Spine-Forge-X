@@ -2345,3 +2345,28 @@ progress {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+/* Clean-source modals: scrollable body, pinned footer (so the footer buttons
+   stay visible even with many folders / thumbnails). */
+.clean-source-modal .modal-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+}
+.clean-source-modal .modal-footer {
+  flex: 0 0 auto;
+  margin-top: 0;
+  padding: 14px 18px;
+  border-top: 1px solid var(--border);
+  background: color-mix(in srgb, var(--surface), var(--bg) 20%);
+  align-items: center;
+  gap: 8px;
+}
+.clean-source-modal .footer-spacer {
+  flex: 1 1 auto;
+}
+.clean-source-modal .footer-counter {
+  color: var(--text-muted);
+  font-size: 12px;
+  white-space: nowrap;
+}

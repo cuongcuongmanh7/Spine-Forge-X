@@ -1266,7 +1266,8 @@ export function useAppControllerValue() {
       return await invoke<BatchScanSummary>('scan_source_folders', {
         spinePath: merged.spinePath,
         targetVersion: merged.targetVersion,
-        root: target
+        root: target,
+        excluded: sessionConfig.excludedFiles ?? []
       });
     } catch (error) {
       const body = String(error);
@@ -1285,7 +1286,8 @@ export function useAppControllerValue() {
       const result = await invoke<BatchCleanResult>('clean_source_folders', {
         spinePath: merged.spinePath,
         targetVersion: merged.targetVersion,
-        root: target
+        root: target,
+        excluded: sessionConfig.excludedFiles ?? []
       });
       const body = t.cleanSourceDone.replace('{count}', String(result.totalMoved));
       appendLog(body);
