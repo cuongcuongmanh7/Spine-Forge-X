@@ -223,6 +223,9 @@ export function useAppControllerValue() {
   const runtimeByIdRef = useRef<Record<string, SessionRuntime>>({});
   const activeIdRef = useRef<string | null>(activeSessionId);
   const runningIdRef = useRef<string | null>(null);
+  // Last output folder the app opened (auto or manual) — used to avoid re-opening
+  // the same folder right after another export.
+  const lastOpenedOutputRef = useRef<string | null>(null);
   // Session ids already auto-scanned this app run, so we scan a folder session at most once automatically.
   const autoScannedRef = useRef<Set<string>>(new Set());
 
@@ -1510,6 +1513,20 @@ export function useAppControllerValue() {
     return buildExportRequestFrom(merged, files);
   }
 
+  /** Open the export's output folder when enabled, skipping if it's the one we just opened. */
+  async function maybeAutoOpenOutput(folders: string[]) {
+    if (!merged.autoOpenOutputAfterExport || folders.length === 0) return;
+    const target =
+      folders.length === 1 ? folders[0] : commonParentPath(folders) || merged.outputPath.trim() || folders[0];
+    if (!target || target === lastOpenedOutputRef.current) return;
+    try {
+      await invoke('open_path', { path: target });
+      lastOpenedOutputRef.current = target;
+    } catch (error) {
+      appendLog(`${t.openOutputFailed}: ${String(error)}`);
+    }
+  }
+
   async function startExport() {
     if (!canStart || anyRunning) return;
     const sid = activeSessionId;
@@ -1554,6 +1571,7 @@ export function useAppControllerValue() {
         recordRunLog(stamp(t.finished));
         await message(body, { title: t.exportSuccessTitle, kind: 'info' });
       }
+      await maybeAutoOpenOutput(result.outputFolders);
     } catch (error) {
       const body = String(error);
       recordRunLog(stamp(`${t.batchFailed}: ${body}`));
@@ -1668,6 +1686,7 @@ export function useAppControllerValue() {
     setLiveProgress({ current: 0, total: 0, file: '' });
 
     let exported = 0;
+    const allOutputFolders: string[] = [];
     for (let i = 0; i < plan.length; i += 1) {
       const { session: s, files: sessionFiles } = plan[i];
       setBatchProgress({ index: i + 1, count: plan.length });
@@ -1684,6 +1703,7 @@ export function useAppControllerValue() {
           request: buildExportRequestFrom({ ...appConfig, ...s.config }, sessionFiles)
         });
         recordRunOutput(result.outputFolders);
+        allOutputFolders.push(...result.outputFolders);
         recordRunLog(
           stamp(
             result.stopped
@@ -1703,6 +1723,7 @@ export function useAppControllerValue() {
     }
 
     setBatchProgress(null);
+    await maybeAutoOpenOutput(allOutputFolders);
     pushToast(
       t.exportAllDone.replace('{exported}', String(exported)).replace('{skipped}', String(targets.length - exported)),
       'success'
@@ -1779,6 +1800,7 @@ export function useAppControllerValue() {
     setIsOpeningOutput(true);
     try {
       await invoke('open_path', { path: target });
+      lastOpenedOutputRef.current = target;
     } catch (error) {
       appendLog(`${t.openOutputFailed}: ${String(error)}`);
       pushToast(`${t.openOutputFailed}: ${String(error)}`, 'error');

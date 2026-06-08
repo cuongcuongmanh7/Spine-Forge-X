@@ -205,6 +205,17 @@ export function OutputSection() {
             <Hint text={t.unicodeWorkaroundHelp} />
           </label>
         </div>
+        <div className="output-option">
+          <label className="checkbox-line">
+            <input
+              type="checkbox"
+              checked={merged.autoOpenOutputAfterExport}
+              onChange={(event) => updateSetting('autoOpenOutputAfterExport', event.target.checked)}
+            />
+            {t.autoOpenOutput}
+            <Hint text={t.autoOpenOutputHelp} />
+          </label>
+        </div>
         {merged.outputPolicy === 'sourceFolderName' && (
           <div className="output-option">
             <label className="checkbox-line">

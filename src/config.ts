@@ -105,7 +105,10 @@ export const defaultSessionConfig = {
   generatedForceAll: false,
   // When enabled, the backend copies .spine files to an ASCII temp path before calling
   // SpineCLI, to work around SpineCLI failures with non-ASCII (Unicode) paths.
-  unicodeWorkaround: false
+  unicodeWorkaround: false,
+  // When enabled, open the output folder automatically after an export finishes
+  // (skips re-opening if the app just opened that same folder).
+  autoOpenOutputAfterExport: false
 };
 
 export type SessionConfig = typeof defaultSessionConfig;
