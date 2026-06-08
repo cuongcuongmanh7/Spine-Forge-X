@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { AlertTriangle, FolderOpen, RotateCw, Link2, Wand2 } from 'lucide-react';
+import { AlertTriangle, FolderOpen, RotateCw, Link2, Wand2, Info } from 'lucide-react';
 import { Section, FieldStatus, Hint } from '../common';
 import { useApp } from '../../useAppController';
 import { basename } from '../../sessions';
@@ -63,7 +63,8 @@ export function OutputSection() {
     setLinkedModalOpen,
     files,
     autoDetectLinkedType,
-    linkedTypeWarning
+    linkedTypeWarning,
+    setCleanSourceFolderOpen
   } = useApp();
 
   const isPackFolder = merged.generatedPackSource === 'imagefolders' || merged.generatedPackSource === 'folder';
@@ -173,6 +174,17 @@ export function OutputSection() {
             {t.manageLinkedProjects}
           </button>
           <LinkedDestPreview />
+        </div>
+      )}
+      {isPackFolder && (
+        <div className="notice info" role="status">
+          <Info size={18} />
+          <span>
+            {t.packFolderCleanHint}{' '}
+            <button type="button" className="link-button" onClick={() => setCleanSourceFolderOpen(true)}>
+              {t.cleanSourceFolder}
+            </button>
+          </span>
         </div>
       )}
       <div className="output-options">
