@@ -272,6 +272,27 @@ export function useAppControllerValue() {
     [exportPresets, merged.globalJsonPath]
   );
 
+  // Whether the effective export packs from image folders ("pack folder" mode):
+  // generatedSettings → the generatedPackSource field; globalJson → the selected
+  // preset's `packSource`. Drives the clean-source hint + auto-clean wiring.
+  const isPackFolder = useMemo(() => {
+    const isFolderValue = (value: unknown) => {
+      const v = String(value ?? '').toLowerCase();
+      return v === 'imagefolders' || v === 'folder';
+    };
+    if (merged.exportMode === 'generatedSettings') {
+      return isFolderValue(merged.generatedPackSource);
+    }
+    if (merged.exportMode === 'globalJson') {
+      try {
+        return isFolderValue((JSON.parse(presetPreview) as { packSource?: unknown }).packSource);
+      } catch {
+        return false;
+      }
+    }
+    return false;
+  }, [merged.exportMode, merged.generatedPackSource, presetPreview]);
+
   useEffect(() => {
     activeIdRef.current = activeSessionId;
   }, [activeSessionId]);
@@ -415,14 +436,16 @@ export function useAppControllerValue() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeSessionId]);
 
+  // Load the selected preset's JSON content (built-in or user) so we can both
+  // preview it and detect its packSource (pack-folder hint/clean wiring).
   useEffect(() => {
-    if (!selectedExportPreset || selectedExportPreset.builtIn) {
+    if (!selectedExportPreset) {
       setPresetPreview('');
       return;
     }
-    void loadUserPresetContent(selectedExportPreset.name);
+    void loadPresetContent(selectedExportPreset.path);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedExportPreset?.name, selectedExportPreset?.builtIn]);
+  }, [selectedExportPreset?.path]);
 
   useEffect(() => {
     return () => {
@@ -910,13 +933,13 @@ export function useAppControllerValue() {
     }
   }
 
-  async function loadUserPresetContent(name: string) {
+  async function loadPresetContent(path: string) {
     try {
-      const content = await invoke<string>('read_user_export_preset', { name });
+      const content = await invoke<string>('read_export_preset', { path });
       setPresetPreview(content);
     } catch (error) {
+      setPresetPreview('');
       appendLog(`${t.presetLoadFailed}: ${String(error)}`);
-      pushToast(t.presetLoadFailed, 'error');
     }
   }
 
@@ -968,7 +991,7 @@ export function useAppControllerValue() {
       const preset = await invoke<ExportPreset>('import_user_export_preset', { sourcePath: selected });
       await loadExportPresets();
       updateSessionConfig('globalJsonPath', preset.path);
-      await loadUserPresetContent(preset.name);
+      await loadPresetContent(preset.path);
       appendLog(`${t.presetImported}: ${preset.name}`);
       pushToast(`${t.presetImported}: ${preset.name}`, 'success');
       flashPresetTick();
@@ -1054,7 +1077,7 @@ export function useAppControllerValue() {
       });
       await loadExportPresets();
       updateSessionConfig('globalJsonPath', preset.path);
-      await loadUserPresetContent(preset.name);
+      await loadPresetContent(preset.path);
       closePresetEditor();
       appendLog(`${t.presetSaved}: ${preset.name}`);
       pushToast(`${t.presetSaved}: ${presetDisplayName(preset.name)}`, 'success');
@@ -1494,8 +1517,7 @@ export function useAppControllerValue() {
 
     // Pre-export: in pack-folder mode (packSource = imagefolders), unused images
     // would be packed into the atlas. Clean them first when auto-clean is on, else hint.
-    const packFolder = merged.generatedPackSource === 'imagefolders' || merged.generatedPackSource === 'folder';
-    if (packFolder && merged.inputPath.trim()) {
+    if (isPackFolder && merged.inputPath.trim()) {
       if (merged.autoCleanSourceFolderBeforeExport) {
         appendLog(t.cleanSourcePreExport);
         await cleanSourceFolders(merged.inputPath);
@@ -1897,6 +1919,7 @@ export function useAppControllerValue() {
 
     exportPresets,
     selectedExportPreset,
+    isPackFolder,
     presetPreview,
     isPresetBusy,
     presetImportedTick,

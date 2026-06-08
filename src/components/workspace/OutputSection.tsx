@@ -64,10 +64,9 @@ export function OutputSection() {
     files,
     autoDetectLinkedType,
     linkedTypeWarning,
-    setCleanSourceFolderOpen
+    setCleanSourceFolderOpen,
+    isPackFolder
   } = useApp();
-
-  const isPackFolder = merged.generatedPackSource === 'imagefolders' || merged.generatedPackSource === 'folder';
 
   const selectedLinked = linkedProjects.find((p) => p.id === merged.linkedProjectId);
   const isLinked = merged.outputPolicy === 'linkedProject';
