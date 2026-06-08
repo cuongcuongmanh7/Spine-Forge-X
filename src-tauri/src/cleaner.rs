@@ -273,7 +273,7 @@ fn match_reference(reference: &str, images: &[ImageAsset], index: &ImageIndex) -
 
 #[derive(Debug, Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
-pub struct UnusedImage {
+pub struct ImageEntry {
     pub absolute_path: String,
     pub relative_path: String,
     pub size_bytes: u64,
@@ -284,7 +284,9 @@ pub struct UnusedImage {
 pub struct ScanResult {
     pub total_images: usize,
     pub used: usize,
-    pub unused: Vec<UnusedImage>,
+    /// Images the skeleton references (kept). Useful for the detail thumbnail view.
+    pub used_images: Vec<ImageEntry>,
+    pub unused: Vec<ImageEntry>,
     /// References that matched no image at all.
     pub missing: Vec<String>,
     /// References that matched several images by basename (kept, not moved).
@@ -323,15 +325,22 @@ pub fn scan(references: &[String], images: &[ImageAsset]) -> ScanResult {
         }
     }
 
-    let unused: Vec<UnusedImage> = images
+    let to_entry = |image: &ImageAsset| ImageEntry {
+        absolute_path: image.absolute_path.to_string_lossy().to_string(),
+        relative_path: image.relative_path.clone(),
+        size_bytes: image.size_bytes,
+    };
+    let used_images: Vec<ImageEntry> = images
+        .iter()
+        .enumerate()
+        .filter(|(i, _)| referenced.contains(i))
+        .map(|(_, image)| to_entry(image))
+        .collect();
+    let unused: Vec<ImageEntry> = images
         .iter()
         .enumerate()
         .filter(|(i, _)| !referenced.contains(i))
-        .map(|(_, image)| UnusedImage {
-            absolute_path: image.absolute_path.to_string_lossy().to_string(),
-            relative_path: image.relative_path.clone(),
-            size_bytes: image.size_bytes,
-        })
+        .map(|(_, image)| to_entry(image))
         .collect();
 
     missing.sort();
@@ -342,6 +351,7 @@ pub fn scan(references: &[String], images: &[ImageAsset]) -> ScanResult {
     ScanResult {
         total_images: images.len(),
         used: referenced.len(),
+        used_images,
         unused,
         missing,
         ambiguous,
@@ -351,7 +361,7 @@ pub fn scan(references: &[String], images: &[ImageAsset]) -> ScanResult {
 /// Move `unused` images into `<parent-of-images_dir>/_unused_backup/<stamp>`,
 /// preserving their sub-folder structure. Refuses to move any file that does
 /// not live under `images_dir`. Returns the backup directory path.
-pub fn move_unused(images_dir: &Path, unused: &[UnusedImage], stamp: &str) -> Result<String, String> {
+pub fn move_unused(images_dir: &Path, unused: &[ImageEntry], stamp: &str) -> Result<String, String> {
     let parent = images_dir
         .parent()
         .ok_or_else(|| "Images dir has no parent for backup.".to_string())?;
@@ -484,7 +494,7 @@ mod tests {
         let junk = images_dir.join("skin/junk.png");
         fs::write(&junk, b"x").unwrap();
 
-        let unused = vec![UnusedImage {
+        let unused = vec![ImageEntry {
             absolute_path: junk.to_string_lossy().to_string(),
             relative_path: "skin/junk.png".to_string(),
             size_bytes: 1,
@@ -499,7 +509,7 @@ mod tests {
         // A file outside images_dir is rejected.
         let outside = root.join("outside.png");
         fs::write(&outside, b"x").unwrap();
-        let bad = vec![UnusedImage {
+        let bad = vec![ImageEntry {
             absolute_path: outside.to_string_lossy().to_string(),
             relative_path: "outside.png".to_string(),
             size_bytes: 1,

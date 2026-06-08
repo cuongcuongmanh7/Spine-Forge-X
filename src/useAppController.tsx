@@ -1301,6 +1301,15 @@ export function useAppControllerValue() {
     }
   }
 
+  /** Read a local image as a base64 data URL for thumbnail display. Null on failure. */
+  async function readImageDataUrl(path: string): Promise<string | null> {
+    try {
+      return await invoke<string>('read_image_data_url', { path });
+    } catch {
+      return null;
+    }
+  }
+
   // ----- Validation & export -----
 
   async function validateSettings() {
@@ -1791,6 +1800,7 @@ export function useAppControllerValue() {
     isCleaningSourceFolder,
     scanSourceFolders,
     cleanSourceFolders,
+    readImageDataUrl,
 
     // Linked Projects
     linkedProjects: appConfig.linkedProjects,

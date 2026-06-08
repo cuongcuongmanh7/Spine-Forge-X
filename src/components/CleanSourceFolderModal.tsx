@@ -3,7 +3,8 @@ import { FolderOpen, Trash2, X, Search } from 'lucide-react';
 import { open } from '@tauri-apps/plugin-dialog';
 import { confirm } from '@tauri-apps/plugin-dialog';
 import { useApp } from '../useAppController';
-import type { BatchScanSummary } from '../types';
+import { CleanFolderDetailModal } from './CleanFolderDetailModal';
+import type { BatchScanSummary, FolderScan } from '../types';
 
 function formatBytes(bytes: number): string {
   if (bytes <= 0) return '0 B';
@@ -19,6 +20,7 @@ export function CleanSourceFolderModal() {
   const [root, setRoot] = useState(merged.inputPath ?? '');
   const [summary, setSummary] = useState<BatchScanSummary | null>(null);
   const [scanning, setScanning] = useState(false);
+  const [detail, setDetail] = useState<FolderScan | null>(null);
 
   function close() {
     setCleanSourceFolderOpen(false);
@@ -58,6 +60,7 @@ export function CleanSourceFolderModal() {
   const busy = scanning || isCleaningSourceFolder;
 
   return (
+    <>
     <div className="modal-backdrop" onClick={close}>
       <div className="modal linked-modal" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
@@ -101,8 +104,16 @@ export function CleanSourceFolderModal() {
                   {summary.units.map((unit) => {
                     const issues = unit.missing.length + unit.ambiguous.length;
                     const name = unit.folder.replace(/\\/g, '/').split('/').pop() || unit.folder;
+                    const cls = [unit.error ? 'has-error' : unit.unused.length ? 'has-unused' : '', unit.error ? '' : 'clickable']
+                      .filter(Boolean)
+                      .join(' ');
                     return (
-                      <tr key={unit.folder} className={unit.error ? 'has-error' : unit.unused.length ? 'has-unused' : ''}>
+                      <tr
+                        key={unit.folder}
+                        className={cls}
+                        onClick={() => !unit.error && setDetail(unit)}
+                        title={unit.error ? unit.folder : t.cleanSourceViewDetail}
+                      >
                         <td title={unit.folder}>{name}</td>
                         <td>{unit.error ? '—' : unit.used}</td>
                         <td>
@@ -142,5 +153,7 @@ export function CleanSourceFolderModal() {
         </div>
       </div>
     </div>
+    {detail && <CleanFolderDetailModal unit={detail} onClose={() => setDetail(null)} />}
+    </>
   );
 }

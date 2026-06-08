@@ -711,7 +711,8 @@ struct FolderScan {
     spine_file: String,
     total_images: usize,
     used: usize,
-    unused: Vec<cleaner::UnusedImage>,
+    used_images: Vec<cleaner::ImageEntry>,
+    unused: Vec<cleaner::ImageEntry>,
     unused_bytes: u64,
     missing: Vec<String>,
     ambiguous: Vec<String>,
@@ -727,6 +728,7 @@ impl FolderScan {
             spine_file: path_to_string(&unit.spine_file),
             total_images: 0,
             used: 0,
+            used_images: Vec::new(),
             unused: Vec::new(),
             unused_bytes: 0,
             missing: Vec::new(),
@@ -893,6 +895,7 @@ async fn scan_unit(
                 total_images: result.total_images,
                 used: result.used,
                 unused_bytes: result.unused_bytes(),
+                used_images: result.used_images,
                 unused: result.unused,
                 missing: result.missing,
                 ambiguous: result.ambiguous,
@@ -1080,6 +1083,35 @@ async fn clean_source_folders(
 fn path_exists(path: String) -> bool {
     let trimmed = path.trim().trim_matches('"');
     !trimmed.is_empty() && PathBuf::from(trimmed).exists()
+}
+
+/// Read an image file and return it as a base64 data URL, for thumbnail display
+/// in the webview (used by the Clean Source Folder detail view). Size-capped so
+/// a stray huge file can't blow up the UI.
+#[tauri::command]
+fn read_image_data_url(path: String) -> Result<String, String> {
+    use base64::Engine;
+    let p = PathBuf::from(path.trim_matches('"'));
+    let meta = fs::metadata(&p).map_err(|e| e.to_string())?;
+    if meta.len() > 16 * 1024 * 1024 {
+        return Err("Ảnh quá lớn để xem thumbnail.".to_string());
+    }
+    let bytes = fs::read(&p).map_err(|e| e.to_string())?;
+    let mime = match p
+        .extension()
+        .and_then(|e| e.to_str())
+        .map(|e| e.to_lowercase())
+        .as_deref()
+    {
+        Some("png") => "image/png",
+        Some("jpg") | Some("jpeg") => "image/jpeg",
+        Some("webp") => "image/webp",
+        Some("bmp") => "image/bmp",
+        Some("gif") => "image/gif",
+        _ => "application/octet-stream",
+    };
+    let encoded = base64::engine::general_purpose::STANDARD.encode(&bytes);
+    Ok(format!("data:{mime};base64,{encoded}"))
 }
 
 #[tauri::command]
@@ -2085,6 +2117,7 @@ pub fn run() {
             clean_timestamp_exports,
             open_path,
             path_exists,
+            read_image_data_url,
             scan_source_folders,
             clean_source_folders,
             list_subdirectories,

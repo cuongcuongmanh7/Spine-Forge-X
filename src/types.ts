@@ -35,7 +35,7 @@ export type CleanResult = {
 
 // ----- Clean Source Folder (v0.2.9) -----
 
-export type UnusedImage = {
+export type ImageEntry = {
   absolutePath: string;
   relativePath: string;
   sizeBytes: number;
@@ -47,7 +47,8 @@ export type FolderScan = {
   spineFile: string;
   totalImages: number;
   used: number;
-  unused: UnusedImage[];
+  usedImages: ImageEntry[];
+  unused: ImageEntry[];
   unusedBytes: number;
   missing: string[];
   ambiguous: string[];
