@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { AlertTriangle, FolderOpen, RotateCw, Link2, Wand2 } from 'lucide-react';
+import { AlertTriangle, FolderOpen, RotateCw, Link2, Wand2, Trash2 } from 'lucide-react';
 import { Section, FieldStatus, Hint } from '../common';
 import { useApp } from '../../useAppController';
 import { basename } from '../../sessions';
@@ -63,8 +63,11 @@ export function OutputSection() {
     setLinkedModalOpen,
     files,
     autoDetectLinkedType,
-    linkedTypeWarning
+    linkedTypeWarning,
+    setCleanSourceFolderOpen
   } = useApp();
+
+  const isPackFolder = merged.generatedPackSource === 'imagefolders' || merged.generatedPackSource === 'folder';
 
   const selectedLinked = linkedProjects.find((p) => p.id === merged.linkedProjectId);
   const isLinked = merged.outputPolicy === 'linkedProject';
@@ -205,7 +208,23 @@ export function OutputSection() {
             </label>
           </div>
         )}
+        {isPackFolder && (
+          <div className="output-option">
+            <label className="checkbox-line">
+              <input
+                type="checkbox"
+                checked={merged.autoCleanSourceFolderBeforeExport}
+                onChange={(event) => updateSetting('autoCleanSourceFolderBeforeExport', event.target.checked)}
+              />
+              {t.autoCleanBeforeExport}
+              <Hint text={t.packFolderCleanHint} />
+            </label>
+          </div>
+        )}
       </div>
+      <button className="secondary-button" onClick={() => setCleanSourceFolderOpen(true)}>
+        <Trash2 size={16} /> {t.cleanSourceFolder}
+      </button>
     </Section>
   );
 }

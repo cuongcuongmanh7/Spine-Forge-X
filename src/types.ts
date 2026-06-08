@@ -33,6 +33,46 @@ export type CleanResult = {
   failed: string[];
 };
 
+// ----- Clean Source Folder (v0.2.9) -----
+
+export type UnusedImage = {
+  absolutePath: string;
+  relativePath: string;
+  sizeBytes: number;
+};
+
+export type FolderScan = {
+  folder: string;
+  imagesDir: string;
+  spineFile: string;
+  totalImages: number;
+  used: number;
+  unused: UnusedImage[];
+  unusedBytes: number;
+  missing: string[];
+  ambiguous: string[];
+  error: string | null;
+};
+
+export type BatchScanSummary = {
+  units: FolderScan[];
+  totalUnused: number;
+  totalUnusedBytes: number;
+};
+
+export type FolderCleanResult = {
+  folder: string;
+  moved: number;
+  backupDir: string | null;
+  error: string | null;
+};
+
+export type BatchCleanResult = {
+  units: FolderCleanResult[];
+  totalMoved: number;
+  stopped: boolean;
+};
+
 export type ExportPreset = {
   name: string;
   path: string;

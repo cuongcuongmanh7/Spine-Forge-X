@@ -105,7 +105,29 @@ Shipped ở commit `c133cac`.
 4. [x] Bump `0.2.7 → 0.2.8` (`package.json`/`Cargo.toml`/`tauri.conf.json`).
 5. [ ] Push tag → CI release tự build installer (sau khi đóng cổng e2e ở C).
 
-> Sau v0.2.8, v0.2.6 và toàn bộ test-suite coi như khóa hẳn → đủ điều kiện bắt đầu **v0.3.0 (macOS)**.
+> Sau v0.2.8, v0.2.6 và toàn bộ test-suite coi như khóa hẳn.
+
+---
+
+## v0.2.9 — Clean Source Folder (gỡ ảnh thừa) 🚧 In progress
+
+**Mục tiêu:** ở chế độ **pack folder** (`packSource = imagefolders`), Spine pack cả thư mục ảnh nên ảnh thừa làm phình atlas. Thêm công cụ quét + chuyển ảnh không được skeleton tham chiếu sang `_unused_backup`. Port logic match từ Spine-Cleaner sang Rust.
+
+### Backend
+- [x] Module `src-tauri/src/cleaner.rs`: path utils, `extract_json_references`, image index + matcher (exact → no-ext → unique-basename), `move_unused` (backup timestamp, từ chối file ngoài images_dir). Ảnh thuộc ref **ambiguous được coi là used** (không xóa nhầm). 8 unit test.
+- [x] Nguồn refs = **export `.spine` → JSON tạm qua Spine CLI** rồi parse (`.spine` là binary; JSON cạnh ảnh bị bỏ qua vì hay stale).
+- [x] Command `scan_source_folders` / `clean_source_folders`: `WalkDir` tìm mọi `.spine` dưới root (1 hoặc nhiều folder con), mỗi unit độc lập, match cô lập theo `images_dir`, chạy song song (cap 4) + emit `spine-progress`, tôn trọng Stop. Backup riêng `_unused_backup/<timestamp>` mỗi folder.
+
+### Frontend
+- [x] `CleanSourceFolderModal`: chọn thư mục → Scan (bảng per-folder: used/unused/issues + dung lượng) → Move unused (confirm). Nút mở trong OutputSection.
+- [x] Checkbox `autoCleanSourceFolderBeforeExport` (hiện ở pack-folder mode) + hook pre-export trong `startExport` (tự dọn hoặc gợi ý khi `packSource ∈ {imagefolders, folder}`).
+- [x] Command `path_exists` tái dùng; i18n vi/en.
+
+### Verify v0.2.9
+1. [x] `cargo test` — +8 test cleaner, tất cả xanh (30/30).
+2. [x] `npm test` — không vỡ (25/25); `npm run build` ok.
+3. [ ] **E2E (cần chạy tay)**: `npm run tauri dev` với folder mẫu `3001_Lucius` → Scan kỳ vọng 0 unused (80 ref = 80 ảnh), bỏ qua `images/Lucius.json` stale; thêm ảnh rác → Scan đúng 1 unused → Move → kiểm `_unused_backup/<timestamp>`. Thử thư mục tổng nhiều folder con + Stop giữa chừng.
+4. [ ] Bump `0.2.8 → 0.2.9` đã làm; push tag sau khi e2e xanh.
 
 ---
 

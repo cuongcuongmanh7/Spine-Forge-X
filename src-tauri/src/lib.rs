@@ -1,5 +1,7 @@
 #![recursion_limit = "256"]
 
+mod cleaner;
+
 use serde::{Deserialize, Serialize};
 use std::{
     fs,
@@ -658,6 +660,418 @@ async fn stop_batch_export(state: State<'_, Arc<AppState>>) -> Result<(), String
     }
 
     Ok(())
+}
+
+// ===== Clean source folder (v0.2.9) ========================================
+//
+// For a "pack folder" (packSource = imagefolders) workflow, Spine packs the
+// whole image folder, so unused images bloat the atlas. This finds images the
+// skeleton no longer references and moves them to a per-folder backup.
+//
+// References come from the *current* `.spine`, exported to a temporary JSON
+// skeleton via the Spine CLI (the `.spine` binary can't be parsed directly, and
+// any JSON next to the images is often stale). The pure matching/move logic
+// lives in `cleaner`.
+
+/// One source folder to clean: its `.spine` file and the image directory.
+struct CleanUnit {
+    spine_file: PathBuf,
+    images_dir: PathBuf,
+    folder: PathBuf,
+}
+
+/// Discover every `.spine` under `root` (recursive), pairing each with its image
+/// directory (`<folder>/images` when present, else the folder itself). Supports
+/// a single source folder or a parent containing many of them.
+fn discover_clean_units(root: &Path) -> Vec<CleanUnit> {
+    let mut units = Vec::new();
+    for entry in WalkDir::new(root).into_iter().filter_map(Result::ok) {
+        let path = entry.path();
+        if !entry.file_type().is_file() || !is_spine_file(path) || is_temp_spine_file(path) {
+            continue;
+        }
+        let Some(folder) = path.parent() else { continue };
+        let images = folder.join("images");
+        let images_dir = if images.is_dir() { images } else { folder.to_path_buf() };
+        units.push(CleanUnit {
+            spine_file: path.to_path_buf(),
+            images_dir,
+            folder: folder.to_path_buf(),
+        });
+    }
+    units.sort_by(|a, b| a.spine_file.cmp(&b.spine_file));
+    units
+}
+
+#[derive(Debug, Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+struct FolderScan {
+    folder: String,
+    images_dir: String,
+    spine_file: String,
+    total_images: usize,
+    used: usize,
+    unused: Vec<cleaner::UnusedImage>,
+    unused_bytes: u64,
+    missing: Vec<String>,
+    ambiguous: Vec<String>,
+    /// Per-folder failure (export/parse) — does not abort the whole batch.
+    error: Option<String>,
+}
+
+impl FolderScan {
+    fn empty(unit: &CleanUnit, error: Option<String>) -> Self {
+        FolderScan {
+            folder: path_to_string(&unit.folder),
+            images_dir: path_to_string(&unit.images_dir),
+            spine_file: path_to_string(&unit.spine_file),
+            total_images: 0,
+            used: 0,
+            unused: Vec::new(),
+            unused_bytes: 0,
+            missing: Vec::new(),
+            ambiguous: Vec::new(),
+            error,
+        }
+    }
+}
+
+#[derive(Debug, Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+struct BatchScanSummary {
+    units: Vec<FolderScan>,
+    total_unused: usize,
+    total_unused_bytes: u64,
+}
+
+#[derive(Debug, Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+struct FolderCleanResult {
+    folder: String,
+    moved: usize,
+    backup_dir: Option<String>,
+    error: Option<String>,
+}
+
+#[derive(Debug, Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+struct BatchCleanResult {
+    units: Vec<FolderCleanResult>,
+    total_moved: usize,
+    stopped: bool,
+}
+
+/// Minimal JSON-export settings: export the skeleton as JSON only (no atlas pack).
+fn write_temp_json_export_settings(out_dir: &Path, spine_file: &Path) -> Result<PathBuf, String> {
+    let settings = serde_json::json!({
+        "class": "export-json",
+        "extension": ".json",
+        "format": "JSON",
+        "packAtlas": null,
+        "packSource": "attachments",
+        "nonessential": false,
+        "cleanUp": false,
+        "output": path_to_string(out_dir),
+        "input": path_to_string(spine_file),
+        "open": false
+    });
+    let settings_path = out_dir.join("clean-export.export.json");
+    fs::write(
+        &settings_path,
+        serde_json::to_string_pretty(&settings).map_err(|e| e.to_string())?,
+    )
+    .map_err(|e| e.to_string())?;
+    Ok(settings_path)
+}
+
+/// Export `spine_file` to a temp JSON skeleton via the Spine CLI and return its
+/// parsed attachment references. The temp dir is removed before returning.
+async fn references_from_spine(
+    state: &Arc<AppState>,
+    spine_path: &str,
+    target_version: &str,
+    spine_file: &Path,
+) -> Result<Vec<String>, String> {
+    let out_dir = unicode_temp_dir("clean");
+    let _ = fs::remove_dir_all(&out_dir);
+    fs::create_dir_all(&out_dir).map_err(|e| e.to_string())?;
+    let _guard = TempDirGuard(vec![out_dir.clone()]);
+
+    let settings = write_temp_json_export_settings(&out_dir, spine_file)?;
+
+    let mut cmd = Command::new(spine_path.trim_matches('"'));
+    cmd.arg("--update")
+        .arg(target_version)
+        .arg("--input")
+        .arg(path_to_string(spine_file))
+        .arg("--output")
+        .arg(path_to_string(&out_dir))
+        .arg("--export")
+        .arg(path_to_string(&settings))
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+    apply_no_window(&mut cmd);
+
+    let mut child = cmd.spawn().map_err(|e| e.to_string())?;
+    let pid = child.id();
+    if let Some(pid) = pid {
+        state.running_children.lock().await.push(pid);
+    }
+    // Drain stdout/stderr so the child can't block on a full pipe buffer.
+    let stdout_task = child.stdout.take().map(|s| {
+        tokio::spawn(async move {
+            let mut lines = BufReader::new(s).lines();
+            while let Ok(Some(_)) = lines.next_line().await {}
+        })
+    });
+    let stderr_task = child.stderr.take().map(|s| {
+        tokio::spawn(async move {
+            let mut lines = BufReader::new(s).lines();
+            while let Ok(Some(_)) = lines.next_line().await {}
+        })
+    });
+
+    let status = match time::timeout(Duration::from_secs(120), child.wait()).await {
+        Ok(Ok(s)) => s,
+        Ok(Err(e)) => return Err(e.to_string()),
+        Err(_) => {
+            let _ = child.kill().await;
+            return Err("Timeout khi export .spine để quét.".to_string());
+        }
+    };
+    if let Some(pid) = pid {
+        state.running_children.lock().await.retain(|v| *v != pid);
+    }
+    if let Some(t) = stdout_task {
+        let _ = t.await;
+    }
+    if let Some(t) = stderr_task {
+        let _ = t.await;
+    }
+    if !status.success() {
+        return Err(format!("Spine CLI export thất bại (status {status})."));
+    }
+
+    // The skeleton .json (not the *.export.json settings) is what we parse.
+    let json_path = fs::read_dir(&out_dir)
+        .map_err(|e| e.to_string())?
+        .filter_map(Result::ok)
+        .map(|e| e.path())
+        .find(|p| {
+            p.is_file()
+                && p.extension()
+                    .and_then(|e| e.to_str())
+                    .map(|e| e.eq_ignore_ascii_case("json"))
+                    .unwrap_or(false)
+                && !p
+                    .file_name()
+                    .and_then(|n| n.to_str())
+                    .map(|n| n.ends_with(".export.json"))
+                    .unwrap_or(false)
+        })
+        .ok_or_else(|| "Không tìm thấy JSON skeleton sau khi export.".to_string())?;
+
+    let content = fs::read_to_string(&json_path).map_err(|e| e.to_string())?;
+    Ok(cleaner::extract_json_references(&content))
+}
+
+/// Export + scan a single unit (no file moves).
+async fn scan_unit(
+    state: &Arc<AppState>,
+    spine_path: &str,
+    target_version: &str,
+    unit: &CleanUnit,
+) -> FolderScan {
+    match references_from_spine(state, spine_path, target_version, &unit.spine_file).await {
+        Ok(refs) => {
+            let images = cleaner::collect_images(&unit.images_dir);
+            let result = cleaner::scan(&refs, &images);
+            FolderScan {
+                folder: path_to_string(&unit.folder),
+                images_dir: path_to_string(&unit.images_dir),
+                spine_file: path_to_string(&unit.spine_file),
+                total_images: result.total_images,
+                used: result.used,
+                unused_bytes: result.unused_bytes(),
+                unused: result.unused,
+                missing: result.missing,
+                ambiguous: result.ambiguous,
+                error: None,
+            }
+        }
+        Err(e) => FolderScan::empty(unit, Some(e)),
+    }
+}
+
+/// Run every unit concurrently (bounded), optionally moving unused files.
+/// Returns each unit's scan plus, when `do_move`, its (moved-count, backup-dir).
+async fn run_clean_units(
+    window: &Window,
+    state: &Arc<AppState>,
+    spine_path: &str,
+    target_version: &str,
+    units: Vec<CleanUnit>,
+    do_move: bool,
+) -> Vec<(FolderScan, Option<(usize, String)>)> {
+    let total = units.len();
+    let parallel = 4usize.min(total.max(1));
+    let semaphore = Arc::new(Semaphore::new(parallel));
+    let completed = Arc::new(AtomicUsize::new(0));
+    // One backup timestamp per run (each folder gets its own _unused_backup/<stamp>).
+    let stamp = chrono::Local::now().format("%Y-%m-%d_%H-%M-%S").to_string();
+
+    let mut join_set: JoinSet<(usize, FolderScan, Option<(usize, String)>)> = JoinSet::new();
+    for (index, unit) in units.into_iter().enumerate() {
+        if !may_start_next(&state.stop_requested) {
+            break;
+        }
+        let sem = Arc::clone(&semaphore);
+        let st = Arc::clone(state);
+        let win = window.clone();
+        let sp = spine_path.to_string();
+        let tv = target_version.to_string();
+        let stamp = stamp.clone();
+        let counter = Arc::clone(&completed);
+        join_set.spawn(async move {
+            let _permit = sem.acquire().await;
+            if !may_start_next(&st.stop_requested) {
+                return (index, FolderScan::empty(&unit, Some("Đã dừng.".to_string())), None);
+            }
+            let mut scan = scan_unit(&st, &sp, &tv, &unit).await;
+            let mut moved_info = None;
+            if do_move && scan.error.is_none() && !scan.unused.is_empty() {
+                match cleaner::move_unused(&unit.images_dir, &scan.unused, &stamp) {
+                    Ok(backup) => moved_info = Some((scan.unused.len(), backup)),
+                    Err(e) => scan.error = Some(e),
+                }
+            }
+            let current = counter.fetch_add(1, Ordering::SeqCst) + 1;
+            let _ = win.emit(
+                "spine-progress",
+                ProgressPayload {
+                    current,
+                    total,
+                    file: scan.folder.clone(),
+                },
+            );
+            let _ = win.emit(
+                "spine-log",
+                format!("[{current}/{total}] {} — {} unused", scan.folder, scan.unused.len()),
+            );
+            (index, scan, moved_info)
+        });
+    }
+
+    let mut results: Vec<Option<(FolderScan, Option<(usize, String)>)>> =
+        (0..total).map(|_| None).collect();
+    while let Some(joined) = join_set.join_next().await {
+        if let Ok((index, scan, moved)) = joined {
+            results[index] = Some((scan, moved));
+        }
+    }
+    results.into_iter().flatten().collect()
+}
+
+/// Scan source folders under `root` for unused image assets (no files touched).
+#[tauri::command]
+async fn scan_source_folders(
+    window: Window,
+    state: State<'_, Arc<AppState>>,
+    spine_path: String,
+    target_version: String,
+    root: String,
+) -> Result<BatchScanSummary, String> {
+    let root_path = PathBuf::from(root.trim_matches('"'));
+    if !root_path.exists() {
+        return Err("Path không tồn tại.".to_string());
+    }
+    if spine_path.trim().is_empty() {
+        return Err("Chưa chọn Spine executable.".to_string());
+    }
+
+    let units = discover_clean_units(&root_path);
+    if units.is_empty() {
+        return Err("Không tìm thấy file .spine nào trong thư mục.".to_string());
+    }
+
+    state.stop_requested.store(false, Ordering::SeqCst);
+    let total = units.len();
+    let _ = window.emit("spine-log", format!("Quét {total} folder để tìm ảnh thừa…"));
+
+    let state_arc: Arc<AppState> = Arc::clone(&state);
+    let scans = run_clean_units(&window, &state_arc, &spine_path, &target_version, units, false).await;
+
+    let mut total_unused = 0usize;
+    let mut total_unused_bytes = 0u64;
+    let units_out: Vec<FolderScan> = scans
+        .into_iter()
+        .map(|(scan, _)| {
+            total_unused += scan.unused.len();
+            total_unused_bytes += scan.unused_bytes;
+            scan
+        })
+        .collect();
+
+    Ok(BatchScanSummary {
+        units: units_out,
+        total_unused,
+        total_unused_bytes,
+    })
+}
+
+/// Scan + move unused images to a per-folder timestamped backup.
+#[tauri::command]
+async fn clean_source_folders(
+    window: Window,
+    state: State<'_, Arc<AppState>>,
+    spine_path: String,
+    target_version: String,
+    root: String,
+) -> Result<BatchCleanResult, String> {
+    let root_path = PathBuf::from(root.trim_matches('"'));
+    if !root_path.exists() {
+        return Err("Path không tồn tại.".to_string());
+    }
+    if spine_path.trim().is_empty() {
+        return Err("Chưa chọn Spine executable.".to_string());
+    }
+
+    let units = discover_clean_units(&root_path);
+    if units.is_empty() {
+        return Err("Không tìm thấy file .spine nào trong thư mục.".to_string());
+    }
+
+    state.stop_requested.store(false, Ordering::SeqCst);
+    let total = units.len();
+    let _ = window.emit("spine-log", format!("Dọn ảnh thừa cho {total} folder…"));
+
+    let state_arc: Arc<AppState> = Arc::clone(&state);
+    let scans = run_clean_units(&window, &state_arc, &spine_path, &target_version, units, true).await;
+
+    let mut total_moved = 0usize;
+    let units_out: Vec<FolderCleanResult> = scans
+        .into_iter()
+        .map(|(scan, moved)| {
+            let (moved_count, backup_dir) = match moved {
+                Some((count, dir)) => (count, Some(dir)),
+                None => (0, None),
+            };
+            total_moved += moved_count;
+            FolderCleanResult {
+                folder: scan.folder,
+                moved: moved_count,
+                backup_dir,
+                error: scan.error,
+            }
+        })
+        .collect();
+
+    let stopped = state.stop_requested.load(Ordering::SeqCst);
+    Ok(BatchCleanResult {
+        units: units_out,
+        total_moved,
+        stopped,
+    })
 }
 
 /// True when `path` exists on disk. Used by the UI to warn (not block) when a
@@ -1671,6 +2085,8 @@ pub fn run() {
             clean_timestamp_exports,
             open_path,
             path_exists,
+            scan_source_folders,
+            clean_source_folders,
             list_subdirectories,
             start_batch_export,
             stop_batch_export

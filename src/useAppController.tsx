@@ -43,7 +43,9 @@ import {
   persistTheme
 } from './sessions';
 import type {
+  BatchCleanResult,
   BatchExportResult,
+  BatchScanSummary,
   CleanResult,
   ExportPreset,
   Language,
@@ -131,6 +133,8 @@ export function useAppControllerValue() {
   );
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [linkedModalOpen, setLinkedModalOpen] = useState(false);
+  const [cleanSourceFolderOpen, setCleanSourceFolderOpen] = useState(false);
+  const [isCleaningSourceFolder, setIsCleaningSourceFolder] = useState(false);
   // Warning shown at the Output step when input files don't all map to one linked Type.
   const [linkedTypeWarning, setLinkedTypeWarning] = useState('');
   const [projectDialogOpen, setProjectDialogOpen] = useState(false);
@@ -1245,6 +1249,58 @@ export function useAppControllerValue() {
     }
   }
 
+  // ----- Clean source folder (unused image assets) -----
+
+  /** Scan `root` (a source folder or a parent of many) for unused image assets. No files touched. */
+  async function scanSourceFolders(root: string): Promise<BatchScanSummary | null> {
+    const target = root.trim();
+    if (!target) {
+      pushToast(t.inputEmpty, 'warning');
+      return null;
+    }
+    if (!merged.spinePath.trim()) {
+      pushToast(t.cleanSourceNoSpine, 'warning');
+      return null;
+    }
+    try {
+      return await invoke<BatchScanSummary>('scan_source_folders', {
+        spinePath: merged.spinePath,
+        targetVersion: merged.targetVersion,
+        root: target
+      });
+    } catch (error) {
+      const body = String(error);
+      appendLog(`${t.cleanSourceFailed}: ${body}`);
+      pushToast(`${t.cleanSourceFailed}: ${body}`, 'error');
+      return null;
+    }
+  }
+
+  /** Scan + move unused images under `root` to a per-folder timestamped backup. */
+  async function cleanSourceFolders(root: string): Promise<BatchCleanResult | null> {
+    const target = root.trim();
+    if (!target || !merged.spinePath.trim() || isCleaningSourceFolder) return null;
+    setIsCleaningSourceFolder(true);
+    try {
+      const result = await invoke<BatchCleanResult>('clean_source_folders', {
+        spinePath: merged.spinePath,
+        targetVersion: merged.targetVersion,
+        root: target
+      });
+      const body = t.cleanSourceDone.replace('{count}', String(result.totalMoved));
+      appendLog(body);
+      pushToast(body, 'success');
+      return result;
+    } catch (error) {
+      const body = String(error);
+      appendLog(`${t.cleanSourceFailed}: ${body}`);
+      pushToast(`${t.cleanSourceFailed}: ${body}`, 'error');
+      return null;
+    } finally {
+      setIsCleaningSourceFolder(false);
+    }
+  }
+
   // ----- Validation & export -----
 
   async function validateSettings() {
@@ -1378,6 +1434,18 @@ export function useAppControllerValue() {
     if (!canStart || anyRunning) return;
     const sid = activeSessionId;
     if (!sid) return;
+
+    // Pre-export: in pack-folder mode (packSource = imagefolders), unused images
+    // would be packed into the atlas. Clean them first when auto-clean is on, else hint.
+    const packFolder = merged.generatedPackSource === 'imagefolders' || merged.generatedPackSource === 'folder';
+    if (packFolder && merged.inputPath.trim()) {
+      if (merged.autoCleanSourceFolderBeforeExport) {
+        appendLog(t.cleanSourcePreExport);
+        await cleanSourceFolders(merged.inputPath);
+      } else {
+        appendLog(t.packFolderCleanHint);
+      }
+    }
 
     // Warn before overwriting output folders that already exist.
     try {
@@ -1716,6 +1784,13 @@ export function useAppControllerValue() {
 
     settingsOpen,
     setSettingsOpen,
+
+    // Clean source folder
+    cleanSourceFolderOpen,
+    setCleanSourceFolderOpen,
+    isCleaningSourceFolder,
+    scanSourceFolders,
+    cleanSourceFolders,
 
     // Linked Projects
     linkedProjects: appConfig.linkedProjects,

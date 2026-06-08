@@ -2216,3 +2216,57 @@ progress {
     animation: none !important;
   }
 }
+
+/* ----- Clean Source Folder modal (v0.2.9) ----- */
+.clean-source-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 12px;
+  font-size: 13px;
+}
+.clean-source-table th,
+.clean-source-table td {
+  text-align: left;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--border);
+}
+.clean-source-table th {
+  color: var(--text-muted);
+  font-weight: 600;
+}
+.clean-source-table td:not(:first-child),
+.clean-source-table th:not(:first-child) {
+  text-align: right;
+  width: 1%;
+  white-space: nowrap;
+}
+.clean-source-table tr.has-unused td {
+  color: var(--text-strong);
+}
+.clean-source-table tr.has-error td {
+  color: #b91c1c;
+}
+.clean-source-table .muted {
+  color: var(--text-muted);
+}
+
+.danger-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  border-radius: var(--radius-lg);
+  border: 1px solid color-mix(in srgb, #dc2626, var(--border) 40%);
+  background: color-mix(in srgb, #dc2626, var(--surface) 86%);
+  color: #b91c1c;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s var(--ease);
+}
+.danger-button:hover:not(:disabled) {
+  background: color-mix(in srgb, #dc2626, var(--surface) 78%);
+}
+.danger-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
