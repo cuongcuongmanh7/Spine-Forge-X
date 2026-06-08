@@ -981,10 +981,11 @@ async fn run_clean_units(
                     file: scan.folder.clone(),
                 },
             );
-            let _ = win.emit(
-                "spine-log",
-                format!("[{current}/{total}] {} — {} unused", scan.folder, scan.unused.len()),
-            );
+            let detail = match &scan.error {
+                Some(err) => format!("LỖI: {err}"),
+                None => format!("{} unused", scan.unused.len()),
+            };
+            let _ = win.emit("spine-log", format!("[{current}/{total}] {} — {detail}", scan.folder));
             (index, scan, moved_info)
         });
     }
@@ -1894,11 +1895,17 @@ fn has_non_ascii(s: &str) -> bool {
 
 /// Build a unique ASCII temp directory path under the system temp dir.
 fn unicode_temp_dir(suffix: &str) -> PathBuf {
+    // A process-wide counter guarantees uniqueness even when several temp dirs
+    // are requested within the same millisecond (e.g. concurrent clean units),
+    // so parallel tasks never stomp on each other's directory (Windows os error 3).
+    static SEQ: AtomicUsize = AtomicUsize::new(0);
+    let seq = SEQ.fetch_add(1, Ordering::SeqCst);
     std::env::temp_dir().join(format!(
-        "spineforge-uni-{}-{}-{}",
+        "spineforge-uni-{}-{}-{}-{}",
         std::process::id(),
         chrono::Local::now().format("%Y%m%d%H%M%S%3f"),
-        suffix
+        suffix,
+        seq
     ))
 }
 
