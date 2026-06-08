@@ -6,6 +6,7 @@ import {
   Folder,
   MoreHorizontal,
   Pencil,
+  Eraser,
   Play,
   Plus,
   Settings,
@@ -316,7 +317,7 @@ function ProjectGroup({ project }: { project: Project }) {
 }
 
 export function Sidebar() {
-  const { t, projects, setProjectDialogOpen, setSettingsOpen } = useApp();
+  const { t, projects, setProjectDialogOpen, setSettingsOpen, setCleanSourceFolderOpen } = useApp();
   const [width, setWidth] = useState(readSidebarWidth);
 
   useEffect(() => {
@@ -355,6 +356,10 @@ export function Sidebar() {
         )}
       </div>
       <div className="sidebar-footer">
+        <button className="sidebar-settings" onClick={() => setCleanSourceFolderOpen(true)}>
+          <Eraser size={16} />
+          <span>{t.cleanSourceFolder}</span>
+        </button>
         <button className="sidebar-settings" onClick={() => setSettingsOpen(true)}>
           <Settings size={16} />
           <span>{t.settings}</span>

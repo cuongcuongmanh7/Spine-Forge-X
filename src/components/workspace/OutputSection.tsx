@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { AlertTriangle, FolderOpen, RotateCw, Link2, Wand2, Trash2 } from 'lucide-react';
+import { AlertTriangle, FolderOpen, RotateCw, Link2, Wand2 } from 'lucide-react';
 import { Section, FieldStatus, Hint } from '../common';
 import { useApp } from '../../useAppController';
 import { basename } from '../../sessions';
@@ -63,8 +63,7 @@ export function OutputSection() {
     setLinkedModalOpen,
     files,
     autoDetectLinkedType,
-    linkedTypeWarning,
-    setCleanSourceFolderOpen
+    linkedTypeWarning
   } = useApp();
 
   const isPackFolder = merged.generatedPackSource === 'imagefolders' || merged.generatedPackSource === 'folder';
@@ -222,9 +221,6 @@ export function OutputSection() {
           </div>
         )}
       </div>
-      <button className="secondary-button" onClick={() => setCleanSourceFolderOpen(true)}>
-        <Trash2 size={16} /> {t.cleanSourceFolder}
-      </button>
     </Section>
   );
 }
