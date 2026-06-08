@@ -1,10 +1,9 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { FolderOpen, Trash2, X, Search } from 'lucide-react';
 import { open } from '@tauri-apps/plugin-dialog';
 import { confirm } from '@tauri-apps/plugin-dialog';
 import { useApp } from '../useAppController';
 import { CleanFolderDetailModal } from './CleanFolderDetailModal';
-import type { BatchScanSummary } from '../types';
 
 function formatBytes(bytes: number): string {
   if (bytes <= 0) return '0 B';
@@ -14,13 +13,34 @@ function formatBytes(bytes: number): string {
 }
 
 export function CleanSourceFolderModal() {
-  const { t, merged, isCleaningSourceFolder, scanSourceFolders, cleanSourceFolders, moveFolderUnused, setCleanSourceFolderOpen } =
-    useApp();
+  const {
+    t,
+    merged,
+    isCleaningSourceFolder,
+    scanSourceFolders,
+    cleanSourceFolders,
+    moveFolderUnused,
+    setCleanSourceFolderOpen,
+    cleanScanRoot,
+    setCleanScanRoot,
+    cleanScanSummary,
+    setCleanScanSummary
+  } = useApp();
 
-  const [root, setRoot] = useState(merged.inputPath ?? '');
-  const [summary, setSummary] = useState<BatchScanSummary | null>(null);
+  // Root + scan result are cached in the controller, so they survive closing/reopening
+  // the modal — the user re-scans manually with the Scan button when they want fresh data.
+  const root = cleanScanRoot;
+  const setRoot = setCleanScanRoot;
+  const summary = cleanScanSummary;
+  const setSummary = setCleanScanSummary;
   const [scanning, setScanning] = useState(false);
   const [detailIndex, setDetailIndex] = useState<number | null>(null);
+
+  // First open with no cached root yet → default to the session input path.
+  useEffect(() => {
+    if (!cleanScanRoot && merged.inputPath) setCleanScanRoot(merged.inputPath);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   function close() {
     setCleanSourceFolderOpen(false);

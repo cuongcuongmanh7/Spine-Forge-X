@@ -135,6 +135,9 @@ export function useAppControllerValue() {
   const [linkedModalOpen, setLinkedModalOpen] = useState(false);
   const [cleanSourceFolderOpen, setCleanSourceFolderOpen] = useState(false);
   const [isCleaningSourceFolder, setIsCleaningSourceFolder] = useState(false);
+  // Cached so reopening the modal doesn't re-run the (slow) per-folder CLI scan.
+  const [cleanScanRoot, setCleanScanRoot] = useState('');
+  const [cleanScanSummary, setCleanScanSummary] = useState<BatchScanSummary | null>(null);
   // Warning shown at the Output step when input files don't all map to one linked Type.
   const [linkedTypeWarning, setLinkedTypeWarning] = useState('');
   const [projectDialogOpen, setProjectDialogOpen] = useState(false);
@@ -1824,6 +1827,10 @@ export function useAppControllerValue() {
     cleanSourceFolders,
     moveFolderUnused,
     readImageDataUrl,
+    cleanScanRoot,
+    setCleanScanRoot,
+    cleanScanSummary,
+    setCleanScanSummary,
 
     // Linked Projects
     linkedProjects: appConfig.linkedProjects,
