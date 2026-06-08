@@ -18,7 +18,7 @@ Shipped ở commit `c133cac`.
 
 ---
 
-## v0.2.6 — Linked Project + finish v0.2.5 🔧 In progress
+## v0.2.6 — Linked Project + finish v0.2.5 ✅ Done
 
 **Mục tiêu:** export đi thẳng vào cây asset Unity (`unityRoot/<destType>/<idFolder>`); hoàn thiện Unicode workaround; đồng bộ version.
 
@@ -50,8 +50,8 @@ Shipped ở commit `c133cac`.
 - [x] C — Rà field rớt payload; bump version `package.json`/`Cargo.toml`/`tauri.conf.json` → `0.2.6`
 - [x] D — Backend unit tests: `find_existing_id_folder`, `has_non_ascii`, `clean_source_folder_name`, `copy_dir_recursive`
 
-### Verify end-to-end (chưa làm)
-- [ ] Chạy `npm run tauri dev`, kiểm tra Linked Project + Unicode theo kịch bản (xem plan)
+### Verify end-to-end
+- [x] Chạy `npm run tauri dev`, kiểm tra Linked Project ("FD") + Unicode theo kịch bản — xanh (đóng cổng tại v0.2.8)
 
 ---
 
@@ -75,7 +75,7 @@ Shipped ở commit `c133cac`.
 
 ---
 
-## v0.2.8 — Test coverage hoàn tất + Validation polish 🚧 In progress
+## v0.2.8 — Test coverage hoàn tất + Validation polish ✅ Done
 
 **Mục tiêu:** đóng nốt các mục treo sau v0.2.7, **không thêm tính năng user-facing lớn**. Đóng cổng verify e2e v0.2.6 (đang là điều kiện coi v0.2.6 thực sự xong). Chi tiết task tham chiếu `.kiro/specs/spineforge-x/tasks.md`.
 
@@ -96,7 +96,7 @@ Shipped ở commit `c133cac`.
 ### C. UX validation Linked Project + đóng cổng v0.2.6
 - [x] `FieldStatus` trong `LinkedProjectModal`: cảnh báo tên project rỗng, `sourceName` trùng nhau, Unity root chưa tồn tại (mục #6 review UI) — thêm chuỗi i18n vi/en + command `path_exists`
 - [ ] (optional) Nút "+ Add" ngay đầu `.linked-list`, cân nhắc gọn nút ở footer (#7)
-- [ ] **Đóng cổng verify e2e v0.2.6**: `npm run tauri dev`, chạy kịch bản Linked Project ("FD") + Unicode workaround (tasks.md 13.6) → tick mục verify ở v0.2.6 _(cần chạy tay)_
+- [x] **Đóng cổng verify e2e v0.2.6**: `npm run tauri dev`, chạy kịch bản Linked Project ("FD") + Unicode workaround (tasks.md 13.6) → đã xanh, v0.2.6 khóa
 
 ### Verify v0.2.8 (end-to-end)
 1. [x] `cd src-tauri && cargo test` — thêm 4 property test mới (P1/P7/P11/P12), tất cả xanh (22/22).
