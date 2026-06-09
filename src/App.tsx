@@ -9,10 +9,11 @@ import { PresetEditorModal } from './components/PresetEditorModal';
 import { LinkedProjectModal } from './components/LinkedProjectModal';
 import { CleanSourceFolderModal } from './components/CleanSourceFolderModal';
 import { RunOverlay } from './components/RunOverlay';
+import { DropOverlay } from './components/DropOverlay';
 import { Toasts } from './components/Toasts';
 
 function Shell() {
-  const { settingsOpen, projectDialogOpen, sessionDialogOpen, presetEditorOpen, editingPreset, linkedModalOpen, cleanSourceFolderOpen, anyRunning, batchProgress } = useApp();
+  const { settingsOpen, projectDialogOpen, sessionDialogOpen, presetEditorOpen, editingPreset, linkedModalOpen, cleanSourceFolderOpen, anyRunning, batchProgress, isDragOver } = useApp();
   // Keep the overlay up for the whole "Export all" batch, even between sessions.
   const showRunOverlay = anyRunning || batchProgress !== null;
   return (
@@ -29,6 +30,7 @@ function Shell() {
       {linkedModalOpen && <LinkedProjectModal />}
       {cleanSourceFolderOpen && <CleanSourceFolderModal />}
       {showRunOverlay && <RunOverlay />}
+      {isDragOver && !anyRunning && <DropOverlay />}
       <Toasts />
     </div>
   );

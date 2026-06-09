@@ -136,6 +136,8 @@ export function useAppControllerValue() {
   const [linkedModalOpen, setLinkedModalOpen] = useState(false);
   const [cleanSourceFolderOpen, setCleanSourceFolderOpen] = useState(false);
   const [isCleaningSourceFolder, setIsCleaningSourceFolder] = useState(false);
+  // True while an OS drag is hovering the window — drives the drop overlay.
+  const [isDragOver, setIsDragOver] = useState(false);
   // Clean-source scan cache, keyed per session so each session keeps its own
   // scanned root + result. Reopening the modal shows that session's cache instead
   // of re-running the slow per-folder CLI scan; the user re-scans manually.
@@ -224,6 +226,8 @@ export function useAppControllerValue() {
   const runtimeByIdRef = useRef<Record<string, SessionRuntime>>({});
   const activeIdRef = useRef<string | null>(activeSessionId);
   const runningIdRef = useRef<string | null>(null);
+  // Latest drop handler, so the once-subscribed listener always sees fresh state.
+  const dropHandlerRef = useRef<(paths: string[]) => void | Promise<void>>(() => {});
   // Last output folder the app opened (auto or manual) — used to avoid re-opening
   // the same folder right after another export.
   const lastOpenedOutputRef = useRef<string | null>(null);
@@ -393,6 +397,29 @@ export function useAppControllerValue() {
     }
     return () => {
       unlisten?.then((callbacks) => callbacks.forEach((callback) => callback())).catch(() => undefined);
+    };
+  }, []);
+
+  // OS file drag-drop (Tauri v2): toggle the overlay on hover, set input on drop.
+  useEffect(() => {
+    let unlisten: Promise<() => void> | null = null;
+    try {
+      unlisten = getCurrentWindow().onDragDropEvent((event) => {
+        const payload = event.payload;
+        if (payload.type === 'over' || payload.type === 'enter') {
+          setIsDragOver(true);
+        } else if (payload.type === 'leave') {
+          setIsDragOver(false);
+        } else if (payload.type === 'drop') {
+          setIsDragOver(false);
+          void dropHandlerRef.current(payload.paths);
+        }
+      });
+    } catch (error) {
+      console.warn('Drag-drop unavailable:', error);
+    }
+    return () => {
+      unlisten?.then((fn) => fn()).catch(() => undefined);
     };
   }, []);
 
@@ -1196,6 +1223,56 @@ export function useAppControllerValue() {
     }
   }
 
+  /** Point the active session at a folder and scan it. Shared by Browse + drag-drop. */
+  async function applyInputFolder(selected: string) {
+    const id = ensureActiveSession();
+    setSessions((list) =>
+      list.map((s) => {
+        if (s.id !== id) return s;
+        const name = s.autoNamed ? basename(selected) || s.name : s.name;
+        // New folder → reset any exclusions from the previous folder.
+        return { ...s, name, config: { ...s.config, inputPath: selected, inputFiles: [], excludedFiles: [] }, updatedAt: Date.now() };
+      })
+    );
+    setIsScanning(true);
+    appendLog(`${t.scanning}: ${selected}`);
+    try {
+      await scanPath(selected, []);
+    } catch (error) {
+      appendLog(`${t.scanFailed}: ${String(error)}`);
+    } finally {
+      setIsScanning(false);
+    }
+  }
+
+  /** Merge explicit `.spine` files into the active session's file list. Shared by Browse + drag-drop. */
+  function applyInputFiles(spineFiles: string[]) {
+    if (!spineFiles.length) return;
+    const id = ensureActiveSession();
+    const combined = Array.from(new Set([...files, ...spineFiles])).sort();
+    setFiles(combined);
+    setSkippedFiles([]);
+    setCurrentIndex(0);
+    // Explicitly adding a file wins over a prior exclusion — un-exclude anything just added.
+    const added = new Set(spineFiles);
+    setSessions((list) =>
+      list.map((s) =>
+        s.id === id
+          ? {
+              ...s,
+              config: {
+                ...s.config,
+                inputFiles: combined,
+                excludedFiles: (s.config.excludedFiles ?? []).filter((p) => !added.has(p))
+              },
+              updatedAt: Date.now()
+            }
+          : s
+      )
+    );
+    appendLog(`${t.scanned} ${spineFiles.length} Spine files.`);
+  }
+
   async function chooseInputFolder() {
     if (isChoosingInputFolder || isScanning) return;
     setIsChoosingInputFolder(true);
@@ -1207,24 +1284,8 @@ export function useAppControllerValue() {
         defaultPath: merged.inputPath.trim() || undefined
       });
       if (typeof selected !== 'string') return;
-
-      const id = ensureActiveSession();
-      setSessions((list) =>
-        list.map((s) => {
-          if (s.id !== id) return s;
-          const name = s.autoNamed ? basename(selected) || s.name : s.name;
-          // New folder → reset any exclusions from the previous folder.
-          return { ...s, name, config: { ...s.config, inputPath: selected, inputFiles: [], excludedFiles: [] }, updatedAt: Date.now() };
-        })
-      );
-
-      setIsScanning(true);
-      appendLog(`${t.scanning}: ${selected}`);
-      await scanPath(selected, []);
-    } catch (error) {
-      appendLog(`${t.scanFailed}: ${String(error)}`);
+      await applyInputFolder(selected);
     } finally {
-      setIsScanning(false);
       setIsChoosingInputFolder(false);
     }
   }
@@ -1241,34 +1302,28 @@ export function useAppControllerValue() {
         filters: [{ name: 'Spine Project', extensions: ['spine'] }]
       });
       if (!Array.isArray(selected)) return;
-      const spineFiles = selected.filter((path) => path.toLowerCase().endsWith('.spine'));
-      const id = ensureActiveSession();
-      const combined = Array.from(new Set([...files, ...spineFiles])).sort();
-      setFiles(combined);
-      setSkippedFiles([]);
-      setCurrentIndex(0);
-      // Explicitly browsing a file wins over a prior exclusion — un-exclude anything just added.
-      const added = new Set(spineFiles);
-      setSessions((list) =>
-        list.map((s) =>
-          s.id === id
-            ? {
-                ...s,
-                config: {
-                  ...s.config,
-                  inputFiles: combined,
-                  excludedFiles: (s.config.excludedFiles ?? []).filter((p) => !added.has(p))
-                },
-                updatedAt: Date.now()
-              }
-            : s
-        )
-      );
-      appendLog(`${t.scanned} ${spineFiles.length} Spine files.`);
+      applyInputFiles(selected.filter((path) => path.toLowerCase().endsWith('.spine')));
     } finally {
       setIsChoosingInputFiles(false);
     }
   }
+
+  /**
+   * Handle OS file drop (Tauri v2 gives absolute paths). `.spine` files become an
+   * explicit file selection; a single dropped folder is scanned. Ignored mid-export.
+   */
+  async function handleDroppedPaths(paths: string[]) {
+    if (anyRunning || !paths.length) return;
+    const spineFiles = paths.filter((p) => p.toLowerCase().endsWith('.spine'));
+    if (spineFiles.length) {
+      applyInputFiles(spineFiles);
+    } else if (paths.length === 1) {
+      await applyInputFolder(paths[0]);
+    } else {
+      appendLog(t.dropUnsupported);
+    }
+  }
+  dropHandlerRef.current = handleDroppedPaths;
 
   async function chooseOutputFolder() {
     if (isChoosingOutputFolder) return;
@@ -1910,6 +1965,7 @@ export function useAppControllerValue() {
     // Clean source folder
     cleanSourceFolderOpen,
     setCleanSourceFolderOpen,
+    isDragOver,
     isCleaningSourceFolder,
     scanSourceFolders,
     countCleanUnits,
