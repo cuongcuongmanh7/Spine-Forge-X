@@ -26,6 +26,7 @@ import { commonParentPath } from './paths';
 import { useAppUpdater } from './useAppUpdater';
 import { useDragDrop } from './useDragDrop';
 import { useCleanSource } from './useCleanSource';
+import { usePresets } from './usePresets';
 import {
   basename,
   cloneSession,
@@ -170,25 +171,16 @@ export function useAppControllerValue() {
   const [isChoosingInputFolder, setIsChoosingInputFolder] = useState(false);
   const [isChoosingInputFiles, setIsChoosingInputFiles] = useState(false);
   const [isChoosingOutputFolder, setIsChoosingOutputFolder] = useState(false);
-  const [isChoosingGlobalJson, setIsChoosingGlobalJson] = useState(false);
   const [isCleaningTimestamp, setIsCleaningTimestamp] = useState(false);
   const [isStopping, setIsStopping] = useState(false);
   const [isOpeningOutput, setIsOpeningOutput] = useState(false);
   const [isAutoDetecting, setIsAutoDetecting] = useState(false);
   const [isDetectingVersion, setIsDetectingVersion] = useState(false);
 
-  const [exportPresets, setExportPresets] = useState<ExportPreset[]>([]);
-  const [presetPreview, setPresetPreview] = useState('');
-  const [isPresetBusy, setIsPresetBusy] = useState(false);
-  const [presetImportedTick, setPresetImportedTick] = useState(false);
-  const [presetEditorOpen, setPresetEditorOpen] = useState(false);
-  // The preset currently open in the editor. builtIn → must be saved under a new name.
-  const [editingPreset, setEditingPreset] = useState<{ name: string; content: string; builtIn: boolean } | null>(null);
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [validation, setValidation] = useState<ValidateResult>({ ok: false, warnings: [], errors: [] });
 
   const toastIdRef = useRef(0);
-  const presetTickTimerRef = useRef<number | null>(null);
   const runtimeByIdRef = useRef<Record<string, SessionRuntime>>({});
   const activeIdRef = useRef<string | null>(activeSessionId);
   const runningIdRef = useRef<string | null>(null);
@@ -239,6 +231,32 @@ export function useAppControllerValue() {
     resetProgress: () => setLiveProgress({ current: 0, total: 0, file: '' })
   });
 
+  // Export presets (list/import/delete + editor + live preview) live in their own hook.
+  const {
+    exportPresets,
+    selectedExportPreset,
+    presetPreview,
+    isPresetBusy,
+    presetImportedTick,
+    presetEditorOpen,
+    editingPreset,
+    isChoosingGlobalJson,
+    chooseGlobalJsonFile,
+    importGlobalJsonPreset,
+    deleteUserPreset,
+    openPresetEditor,
+    closePresetEditor,
+    saveUserPreset,
+    newPreset,
+    duplicateSelectedPreset
+  } = usePresets({
+    globalJsonPath: merged.globalJsonPath,
+    setGlobalJsonPath: (path) => updateSessionConfig('globalJsonPath', path),
+    t,
+    appendLog,
+    pushToast
+  });
+
   const isRunning = runningSessionId !== null && runningSessionId === activeSessionId;
   const anyRunning = runningSessionId !== null;
   const progress = files.length === 0 ? 0 : Math.round((currentIndex / files.length) * 100);
@@ -264,11 +282,6 @@ export function useAppControllerValue() {
       : merged.outputPath
         ? t.outputHelperSelected
         : t.outputHelperAuto;
-  const selectedExportPreset = useMemo(
-    () => exportPresets.find((preset) => preset.path === merged.globalJsonPath),
-    [exportPresets, merged.globalJsonPath]
-  );
-
   // Whether the effective export packs from image folders ("pack folder" mode):
   // generatedSettings → the generatedPackSource field; globalJson → the selected
   // preset's `packSource`. Drives the clean-source hint + auto-clean wiring.
@@ -424,7 +437,6 @@ export function useAppControllerValue() {
 
   useEffect(() => {
     void autoDetectSpine(true);
-    void loadExportPresets();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -453,23 +465,6 @@ export function useAppControllerValue() {
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeSessionId]);
-
-  // Load the selected preset's JSON content (built-in or user) so we can both
-  // preview it and detect its packSource (pack-folder hint/clean wiring).
-  useEffect(() => {
-    if (!selectedExportPreset) {
-      setPresetPreview('');
-      return;
-    }
-    void loadPresetContent(selectedExportPreset.path);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedExportPreset?.path]);
-
-  useEffect(() => {
-    return () => {
-      if (presetTickTimerRef.current !== null) window.clearTimeout(presetTickTimerRef.current);
-    };
-  }, []);
 
   function dismissToast(id: number) {
     setToasts((items) => items.filter((item) => item.id !== id));
@@ -866,197 +861,6 @@ export function useAppControllerValue() {
       setActiveProjectId(fallbackProject ? fallbackProject.id : null);
       setActiveSessionId(fallbackSession ? fallbackSession.id : null);
       loadRuntime(fallbackSession);
-    }
-  }
-
-  // ----- Presets -----
-
-  async function loadExportPresets() {
-    try {
-      const presets = await invoke<ExportPreset[]>('list_export_presets');
-      setExportPresets(presets);
-    } catch (error) {
-      appendLog(`${t.presetLoadFailed}: ${String(error)}`);
-    }
-  }
-
-  async function loadPresetContent(path: string) {
-    try {
-      const content = await invoke<string>('read_export_preset', { path });
-      setPresetPreview(content);
-    } catch (error) {
-      setPresetPreview('');
-      appendLog(`${t.presetLoadFailed}: ${String(error)}`);
-    }
-  }
-
-  function flashPresetTick() {
-    setPresetImportedTick(true);
-    if (presetTickTimerRef.current !== null) window.clearTimeout(presetTickTimerRef.current);
-    presetTickTimerRef.current = window.setTimeout(() => {
-      setPresetImportedTick(false);
-      presetTickTimerRef.current = null;
-    }, 2500);
-  }
-
-  async function chooseGlobalJsonFile() {
-    if (isChoosingGlobalJson) return;
-    setIsChoosingGlobalJson(true);
-    try {
-      const selected = await open({
-        directory: false,
-        multiple: false,
-        title: t.globalExportJson,
-        filters: [{ name: 'Spine export settings', extensions: ['export.json'] }]
-      });
-      if (typeof selected !== 'string') return;
-      if (!selected.toLowerCase().endsWith('.export.json')) {
-        appendLog(t.invalidExportJsonFile);
-        return;
-      }
-      updateSessionConfig('globalJsonPath', selected);
-    } finally {
-      setIsChoosingGlobalJson(false);
-    }
-  }
-
-  async function importGlobalJsonPreset() {
-    if (isPresetBusy) return;
-    setIsPresetBusy(true);
-    try {
-      const selected = await open({
-        directory: false,
-        multiple: false,
-        title: t.importPreset,
-        filters: [{ name: 'Spine export settings', extensions: ['export.json'] }]
-      });
-      if (typeof selected !== 'string') return;
-      if (!selected.toLowerCase().endsWith('.export.json')) {
-        appendLog(t.invalidExportJsonFile);
-        return;
-      }
-      const preset = await invoke<ExportPreset>('import_user_export_preset', { sourcePath: selected });
-      await loadExportPresets();
-      updateSessionConfig('globalJsonPath', preset.path);
-      await loadPresetContent(preset.path);
-      appendLog(`${t.presetImported}: ${preset.name}`);
-      pushToast(`${t.presetImported}: ${preset.name}`, 'success');
-      flashPresetTick();
-    } catch (error) {
-      appendLog(`${t.presetImportFailed}: ${String(error)}`);
-      pushToast(t.presetImportFailed, 'error');
-    } finally {
-      setIsPresetBusy(false);
-    }
-  }
-
-  async function deleteUserPreset() {
-    if (isPresetBusy || !selectedExportPreset || selectedExportPreset.builtIn) return;
-    const ok = await confirm(`${t.deletePreset}: ${selectedExportPreset.name}?`, { title: t.deletePreset });
-    if (!ok) return;
-    setIsPresetBusy(true);
-    try {
-      await invoke('delete_user_export_preset', { name: selectedExportPreset.name });
-      updateSessionConfig('globalJsonPath', '');
-      setPresetPreview('');
-      await loadExportPresets();
-      appendLog(`${t.presetDeleted}: ${selectedExportPreset.name}`);
-      pushToast(`${t.presetDeleted}: ${selectedExportPreset.name}`, 'success');
-    } catch (error) {
-      appendLog(`${t.presetDeleteFailed}: ${String(error)}`);
-      pushToast(t.presetDeleteFailed, 'error');
-    } finally {
-      setIsPresetBusy(false);
-    }
-  }
-
-  // ----- Preset editor -----
-
-  function presetDisplayName(fileName: string): string {
-    return fileName.replace(/\.export\.json$/i, '');
-  }
-
-  function uniquePresetFileName(base: string): string {
-    const used = new Set(exportPresets.map((p) => p.name.toLowerCase()));
-    let candidate = `${base}.export.json`;
-    let index = 2;
-    while (used.has(candidate.toLowerCase())) {
-      candidate = `${base}-${index}.export.json`;
-      index += 1;
-    }
-    return candidate;
-  }
-
-  async function openPresetEditor(preset?: ExportPreset) {
-    try {
-      let content: string;
-      let name: string;
-      let builtIn = false;
-      if (preset) {
-        content = await invoke<string>('read_export_preset', { path: preset.path });
-        name = presetDisplayName(preset.name);
-        builtIn = preset.builtIn;
-      } else {
-        content = JSON.stringify(defaultExportPreset, null, 2);
-        name = '';
-      }
-      setEditingPreset({ name, content, builtIn });
-      setPresetEditorOpen(true);
-    } catch (error) {
-      appendLog(`${t.presetLoadFailed}: ${String(error)}`);
-      pushToast(t.presetLoadFailed, 'error');
-    }
-  }
-
-  function closePresetEditor() {
-    setPresetEditorOpen(false);
-    setEditingPreset(null);
-  }
-
-  /** Save edited content as a user preset file (name without extension), then select it. */
-  async function saveUserPreset(name: string, content: string) {
-    const trimmed = name.trim();
-    if (!trimmed) return;
-    try {
-      const preset = await invoke<ExportPreset>('save_user_export_preset', {
-        name: `${trimmed}.export.json`,
-        content
-      });
-      await loadExportPresets();
-      updateSessionConfig('globalJsonPath', preset.path);
-      await loadPresetContent(preset.path);
-      closePresetEditor();
-      appendLog(`${t.presetSaved}: ${preset.name}`);
-      pushToast(`${t.presetSaved}: ${presetDisplayName(preset.name)}`, 'success');
-    } catch (error) {
-      appendLog(`${t.presetSaveFailed}: ${String(error)}`);
-      pushToast(t.presetSaveFailed, 'error');
-    }
-  }
-
-  /** New blank preset from the default template. */
-  function newPreset() {
-    void openPresetEditor();
-  }
-
-  /** Duplicate the selected preset (built-in or user) into a new user copy. */
-  async function duplicateSelectedPreset() {
-    if (isPresetBusy || !selectedExportPreset) return;
-    setIsPresetBusy(true);
-    try {
-      const content = await invoke<string>('read_export_preset', { path: selectedExportPreset.path });
-      const base = `${presetDisplayName(selectedExportPreset.name)}-${t.presetCopySuffix}`;
-      const fileName = uniquePresetFileName(base);
-      const preset = await invoke<ExportPreset>('save_user_export_preset', { name: fileName, content });
-      await loadExportPresets();
-      updateSessionConfig('globalJsonPath', preset.path);
-      appendLog(`${t.presetSaved}: ${preset.name}`);
-      pushToast(`${t.presetSaved}: ${presetDisplayName(preset.name)}`, 'success');
-    } catch (error) {
-      appendLog(`${t.presetSaveFailed}: ${String(error)}`);
-      pushToast(t.presetSaveFailed, 'error');
-    } finally {
-      setIsPresetBusy(false);
     }
   }
 
