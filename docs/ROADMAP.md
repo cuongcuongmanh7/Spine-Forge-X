@@ -13,6 +13,8 @@ Source-of-truth tiến độ toàn dự án. Chi tiết kỹ thuật từng task
 - [x] **Clean Source Folder an toàn hơn**: đếm trước số `.spine` (`count_clean_units`) + cảnh báo khi > 50, overlay khóa khi scan (spinner + tiến độ `x/total`) với nút Stop, không đóng được modal giữa chừng. Chi tiết: [clean-source.md](clean-source.md) mục 3.
 - [x] **Drag-drop input**: kéo-thả folder hoặc file `.spine` vào app để đặt input (Tauri v2 `onDragDropEvent`); overlay gợi ý khi hover; bỏ qua khi đang export.
 - [x] **Dashboard per-project**: nút Dashboard ở sidebar mở modal tổng hợp lần export gần nhất của từng session (Xong/Lỗi/Bỏ qua/Tổng) + tổng cộng project. Lưu `lastExport` trong `SessionConfig` (persist qua `pickKnown`).
+- [x] **Chạy ngầm ở tray**: đóng (X) hoặc thu nhỏ → ẩn app xuống system tray thay vì thoát; icon tray có menu Show/Quit. Toggle trong Settings (mặc định bật), đồng bộ sang Rust qua `set_run_in_background`. Code tray ở `src-tauri/src/tray.rs`.
+- [x] **Guard kích thước file** + tách `useAppController` (god-hook 2106 dòng) thành các hook: `useAppUpdater`, `useDragDrop`, `useCleanSource`, `usePresets` (còn ~1700). Script `scripts/check-file-size.mjs` chặn file mới > 800 dòng.
 
 ---
 

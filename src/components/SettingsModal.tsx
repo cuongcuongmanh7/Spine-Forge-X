@@ -56,6 +56,18 @@ export function SettingsModal() {
             </div>
           </Section>
 
+          <Section title={t.behavior}>
+            <label className="checkbox-line">
+              <input
+                type="checkbox"
+                checked={merged.runInBackground}
+                onChange={(event) => updateAppConfig('runInBackground', event.target.checked)}
+              />
+              {t.runInBackground}
+            </label>
+            <p className="helper-text">{t.runInBackgroundHelp}</p>
+          </Section>
+
           <Section title={t.executable}>
             <div className="notice warning">
               <AlertTriangle size={18} />

@@ -28,6 +28,9 @@ export const defaultAppConfig = {
   parallelJobs: 1,
   maxMemory: '512m',
   timeoutSeconds: 300,
+  // When true, closing or minimizing the window hides the app to the system tray
+  // instead of quitting. Synced to the Rust side, which enforces it.
+  runInBackground: true,
   // Saved Unity links, reusable by any session via the `linkedProject` output policy.
   linkedProjects: [] as LinkedProject[]
 };

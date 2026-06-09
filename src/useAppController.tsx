@@ -440,6 +440,11 @@ export function useAppControllerValue() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Keep the Rust side in sync with the "run in background" preference (close/minimize to tray).
+  useEffect(() => {
+    void invoke('set_run_in_background', { enabled: appConfig.runInBackground }).catch(() => undefined);
+  }, [appConfig.runInBackground]);
+
   // Auto-scan the active folder session once (e.g. on open / first switch) so its file list shows
   // without a manual Scan. Only the active session is scanned; exclusions are respected.
   useEffect(() => {

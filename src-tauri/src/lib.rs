@@ -1,6 +1,7 @@
 #![recursion_limit = "256"]
 
 mod cleaner;
+mod tray;
 
 use serde::{Deserialize, Serialize};
 use std::{
@@ -23,10 +24,25 @@ use tokio::{
 };
 use walkdir::WalkDir;
 
-#[derive(Default)]
 struct AppState {
     stop_requested: AtomicBool,
     running_children: Mutex<Vec<u32>>,
+    /// When true, closing/minimizing the window hides it to the tray instead of quitting.
+    run_in_background: AtomicBool,
+    /// Set just before a real quit (tray "Quit") so the close handler lets the window close.
+    quitting: AtomicBool,
+}
+
+impl Default for AppState {
+    fn default() -> Self {
+        Self {
+            stop_requested: AtomicBool::new(false),
+            running_children: Mutex::new(Vec::new()),
+            // Default on; the frontend syncs the persisted user preference at startup.
+            run_in_background: AtomicBool::new(true),
+            quitting: AtomicBool::new(false),
+        }
+    }
 }
 
 #[derive(Debug, Deserialize)]
@@ -660,6 +676,13 @@ async fn stop_batch_export(state: State<'_, Arc<AppState>>) -> Result<(), String
     }
 
     Ok(())
+}
+
+/// Sync the user's "run in background" preference into shared state. The window
+/// close/minimize handler reads this to decide whether to hide to tray or quit.
+#[tauri::command]
+fn set_run_in_background(state: State<'_, Arc<AppState>>, enabled: bool) {
+    state.run_in_background.store(enabled, Ordering::SeqCst);
 }
 
 // ===== Clean source folder (v0.2.9) ========================================
@@ -2200,8 +2223,10 @@ pub fn run() {
             if let Some(window) = app.get_webview_window("main") {
                 let _ = window.emit("spine-log", "SpineForge X ready.");
             }
+            tray::build(app.handle())?;
             Ok(())
         })
+        .on_window_event(|window, event| tray::on_window_event(window, event))
         .invoke_handler(tauri::generate_handler![
             auto_detect_spine,
             detect_spine_version,
@@ -2226,7 +2251,8 @@ pub fn run() {
             move_unused_images,
             list_subdirectories,
             start_batch_export,
-            stop_batch_export
+            stop_batch_export,
+            set_run_in_background
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
