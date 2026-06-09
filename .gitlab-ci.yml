@@ -71,9 +71,21 @@ release:windows:
       $signature = (Get-Content $signaturePath -Raw).Trim()
       $downloadUrl = "https://gitlab.com/cuongondi/spineforge-x/-/releases/permalink/latest/downloads/$releaseAssetName"
 
+      $notes = "SpineForge X $version"
+      $changelogPath = "CHANGELOG.md"
+      if (Test-Path $changelogPath) {
+        $changelog = [System.IO.File]::ReadAllText((Join-Path (Get-Location) $changelogPath), [System.Text.UTF8Encoding]::new($false))
+        $pattern = "(?ms)^##\s+v" + [regex]::Escape($version) + "\b.*?\r?\n(.*?)(?=^##\s+v|\z)"
+        $match = [regex]::Match($changelog, $pattern)
+        if ($match.Success -and $match.Groups[1].Value.Trim()) {
+          $notes = $match.Groups[1].Value.Trim()
+        }
+      }
+      Write-Host "Release notes:`n$notes"
+
       $latest = [ordered]@{
         version = $version
-        notes = "SpineForge X $version"
+        notes = $notes
         pub_date = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
         platforms = [ordered]@{
           "windows-x86_64" = [ordered]@{
@@ -109,7 +121,7 @@ release:windows:
       $releasePayload = @{
         name = "SpineForge X $env:CI_COMMIT_TAG"
         tag_name = $env:CI_COMMIT_TAG
-        description = "SpineForge X $version"
+        description = $notes
         assets = @{
           links = @(
             @{

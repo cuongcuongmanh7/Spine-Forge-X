@@ -133,6 +133,18 @@ Shipped ở commit `c133cac`.
 
 ---
 
+## v0.2.10 — In-app changelog + preset discard guard ✅ Done
+
+**Mục tiêu:** cho user đọc được changelog ngay trong app, và chặn mất edit khi đóng nhầm modal preset.
+
+- [x] Badge version ở titlebar click ra trang releases (command Rust `open_url`)
+- [x] Updater hiện nút "What's new" lấy `notes` từ manifest (`UpdateUiState.notes`)
+- [x] `CHANGELOG.md` user-facing ở gốc repo; CI trích section theo version cho `latest.json` notes + description release (hết hardcode)
+- [x] `PresetEditorModal`: theo dõi dirty (name + nội dung + lỗi JSON) → confirm trước khi đóng (backdrop/X/Cancel); i18n `presetDiscard*`
+- [x] Bump `0.2.9 → 0.2.10`; tag `v0.2.10`
+
+---
+
 ## v0.3.0 — macOS Support 📋 Planned
 
 - [ ] Verify auto-detect path macOS + không cảnh báo `.exe`
