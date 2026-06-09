@@ -1870,6 +1870,12 @@ input.field-invalid:focus {
   animation: fade-in 0.16s var(--ease);
 }
 
+/* Scan overlay sits inside the clean-source modal (z-index 900), so it must
+   stack above it — but below toasts (1000). */
+.scan-overlay {
+  z-index: 950;
+}
+
 .run-overlay-card {
   display: flex;
   flex-direction: column;

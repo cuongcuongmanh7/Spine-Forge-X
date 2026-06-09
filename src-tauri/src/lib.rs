@@ -1021,6 +1021,18 @@ fn move_unused_images(images_dir: String, files: Vec<String>) -> Result<String, 
     cleaner::move_unused(&dir, &entries, &stamp)
 }
 
+/// Count how many `.spine` units live under `root` without exporting anything.
+/// Cheap (a single directory walk) — used to warn before a large scan that would
+/// otherwise spawn the Spine CLI once per skeleton.
+#[tauri::command]
+fn count_clean_units(root: String, excluded: Vec<String>) -> usize {
+    let root_path = PathBuf::from(root.trim_matches('"'));
+    if !root_path.exists() {
+        return 0;
+    }
+    filter_excluded_units(discover_clean_units(&root_path), &excluded).len()
+}
+
 /// Scan source folders under `root` for unused image assets (no files touched).
 #[tauri::command]
 async fn scan_source_folders(
@@ -2208,6 +2220,7 @@ pub fn run() {
             open_url,
             path_exists,
             read_image_data_url,
+            count_clean_units,
             scan_source_folders,
             clean_source_folders,
             move_unused_images,

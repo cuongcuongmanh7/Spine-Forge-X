@@ -1324,6 +1324,8 @@ export function useAppControllerValue() {
       pushToast(t.cleanSourceNoSpine, 'warning');
       return null;
     }
+    // Clear any leftover progress from a prior export so the scan overlay starts fresh.
+    setLiveProgress({ current: 0, total: 0, file: '' });
     try {
       return await invoke<BatchScanSummary>('scan_source_folders', {
         spinePath: merged.spinePath,
@@ -1336,6 +1338,20 @@ export function useAppControllerValue() {
       appendLog(`${t.cleanSourceFailed}: ${body}`);
       pushToast(`${t.cleanSourceFailed}: ${body}`, 'error');
       return null;
+    }
+  }
+
+  /** Count `.spine` units under `root` without exporting. Cheap; used to preview/warn before a scan. */
+  async function countCleanUnits(root: string): Promise<number> {
+    const target = root.trim();
+    if (!target) return 0;
+    try {
+      return await invoke<number>('count_clean_units', {
+        root: target,
+        excluded: sessionConfig.excludedFiles ?? []
+      });
+    } catch {
+      return 0;
     }
   }
 
@@ -1896,6 +1912,7 @@ export function useAppControllerValue() {
     setCleanSourceFolderOpen,
     isCleaningSourceFolder,
     scanSourceFolders,
+    countCleanUnits,
     cleanSourceFolders,
     moveFolderUnused,
     readImageDataUrl,

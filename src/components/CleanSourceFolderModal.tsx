@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { FolderOpen, Trash2, X, Search } from 'lucide-react';
+import { FolderOpen, Trash2, X, Search, RotateCw, CircleStop } from 'lucide-react';
 import { open } from '@tauri-apps/plugin-dialog';
 import { confirm } from '@tauri-apps/plugin-dialog';
 import { useApp } from '../useAppController';
@@ -12,12 +12,22 @@ function formatBytes(bytes: number): string {
   return `${(bytes / 1024 ** i).toFixed(i === 0 ? 0 : 1)} ${units[i]}`;
 }
 
+/** Reduce a full path to its last two segments, e.g. "3001_Lucius/hero.spine". */
+function shortenPath(path: string): string {
+  const segments = path.split(/[\\/]+/).filter(Boolean);
+  return segments.slice(-2).join('/');
+}
+
 export function CleanSourceFolderModal() {
   const {
     t,
     merged,
     isCleaningSourceFolder,
     scanSourceFolders,
+    countCleanUnits,
+    stopExport,
+    isStopping,
+    liveProgress,
     cleanSourceFolders,
     moveFolderUnused,
     setCleanSourceFolderOpen,
@@ -35,6 +45,13 @@ export function CleanSourceFolderModal() {
   const setSummary = setCleanScanSummary;
   const [scanning, setScanning] = useState(false);
   const [detailIndex, setDetailIndex] = useState<number | null>(null);
+  // Cheap pre-scan count of .spine units, so the user knows the scope before
+  // launching a scan that exports each skeleton through Spine. null = not counted yet.
+  const [unitCount, setUnitCount] = useState<number | null>(null);
+
+  // Above this many skeletons, confirm before scanning — a large folder can take
+  // minutes and spawn Spine once per file.
+  const LARGE_SCAN_THRESHOLD = 50;
 
   // First open with no cached root yet → default to the session input path.
   useEffect(() => {
@@ -42,7 +59,29 @@ export function CleanSourceFolderModal() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Re-count whenever the target folder changes (debounced — the user may be typing a path).
+  useEffect(() => {
+    const target = root.trim();
+    if (!target) {
+      setUnitCount(null);
+      return;
+    }
+    let cancelled = false;
+    const id = setTimeout(async () => {
+      const count = await countCleanUnits(target);
+      if (!cancelled) setUnitCount(count);
+    }, 400);
+    return () => {
+      cancelled = true;
+      clearTimeout(id);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [root]);
+
   function close() {
+    // Don't let the user dismiss the modal mid-scan — the scan runs in the
+    // backend and closing would orphan it. They must Stop or wait.
+    if (scanning) return;
     setCleanSourceFolderOpen(false);
   }
 
@@ -53,6 +92,15 @@ export function CleanSourceFolderModal() {
 
   async function scan() {
     if (scanning || !root.trim()) return;
+    // Confirm before launching a scan that would export a large number of skeletons.
+    const count = unitCount ?? (await countCleanUnits(root));
+    if (count > LARGE_SCAN_THRESHOLD) {
+      const ok = await confirm(t.cleanSourceLargeWarn.replace('{count}', String(count)), {
+        title: t.cleanSourceTitle,
+        kind: 'warning'
+      });
+      if (!ok) return;
+    }
     setScanning(true);
     setSummary(null);
     try {
@@ -107,6 +155,12 @@ export function CleanSourceFolderModal() {
 
   const busy = scanning || isCleaningSourceFolder;
 
+  // Progress for the scan overlay. Falls back to the pre-scan count until the
+  // first progress event arrives so the bar isn't stuck at 0/0.
+  const scanTotal = liveProgress.total || unitCount || 0;
+  const scanCurrent = liveProgress.current;
+  const scanPercent = scanTotal > 0 ? Math.min(100, Math.round((scanCurrent / scanTotal) * 100)) : 0;
+
   return (
     <>
     <div className="modal-backdrop" onClick={close}>
@@ -136,6 +190,14 @@ export function CleanSourceFolderModal() {
               <Search size={16} /> {scanning ? t.cleanSourceScanning : t.cleanSourceScan}
             </button>
           </div>
+
+          {!scanning && root.trim() && unitCount !== null && (
+            <p className={`helper-text ${unitCount > LARGE_SCAN_THRESHOLD ? 'field-status warning' : ''}`}>
+              {unitCount === 0
+                ? t.cleanSourceCountNone
+                : t.cleanSourceCount.replace('{count}', String(unitCount))}
+            </p>
+          )}
 
           {summary && (
             <>
@@ -223,6 +285,25 @@ export function CleanSourceFolderModal() {
         </div>
       </div>
     </div>
+    {scanning && (
+      <div className="run-overlay scan-overlay" role="alertdialog" aria-modal="true" aria-busy="true">
+        <div className="run-overlay-card">
+          <RotateCw className="spin run-overlay-spinner" size={26} />
+          <h2 className="run-overlay-title">{t.cleanSourceScanning}</h2>
+          <div className="run-overlay-progress">
+            <progress value={scanPercent} max={100} />
+            <span>{scanCurrent} / {scanTotal}</span>
+          </div>
+          {liveProgress.file && (
+            <p className="run-overlay-file" title={liveProgress.file}>{shortenPath(liveProgress.file)}</p>
+          )}
+          <button className="secondary-button" disabled={isStopping} onClick={() => void stopExport()}>
+            {isStopping ? <RotateCw className="spin" size={16} /> : <CircleStop size={16} />}
+            {isStopping ? t.stopRequested : t.stop}
+          </button>
+        </div>
+      </div>
+    )}
     {detailIndex !== null && summary && summary.units[detailIndex] && (
       <CleanFolderDetailModal
         units={summary.units}

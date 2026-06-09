@@ -31,6 +31,14 @@ Chọn một thư mục tổng chứa nhiều folder con (mỗi folder 1 `.spine
 - **Tôn trọng list "không export"**: file `.spine` đã bị gỡ khỏi export-set của session sẽ **bị bỏ qua** khi scan/clean.
 - **Cache theo session**: kết quả scan (đường dẫn + danh sách) được nhớ riêng cho từng session; đóng/mở lại modal hiện ngay, bấm **Scan** để làm mới.
 
+### An toàn khi chọn nhầm folder lớn
+
+Mỗi `.spine` phải export qua Spine CLI nên scan folder lớn có thể tốn nhiều phút và mở Spine nhiều lần (scan **không** đụng file — chỉ đọc). Ba lớp bảo vệ:
+
+1. **Đếm trước (preview)**: chọn/gõ folder → app đếm nhanh số `.spine` (chỉ `WalkDir`, không gọi CLI) và hiện ngay *"N skeleton sẽ được quét"*. Lệnh `count_clean_units`.
+2. **Cảnh báo theo ngưỡng**: nếu > **50** skeleton, bấm Scan sẽ hỏi xác nhận trước khi chạy.
+3. **Overlay khóa + Stop**: trong lúc scan hiện overlay full-screen (spinner + tiến độ `x/total` + folder đang quét) chặn mọi thao tác khác; nút **Stop** dừng giữa chừng (ngừng spawn task mới, task đang chạy chạy nốt, trả **kết quả một phần**). Không đóng được modal khi đang scan để tránh orphan tiến trình.
+
 ## 4. Xem chi tiết (thumbnail)
 
 Bấm vào một dòng folder trong bảng để mở **modal chi tiết**:
