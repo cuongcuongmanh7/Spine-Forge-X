@@ -140,15 +140,24 @@ release:windows:
         }
       } | ConvertTo-Json -Depth 8
 
+      # PowerShell 5.1's Invoke-RestMethod transmits a string body as Latin-1 when the
+      # ContentType has no charset, which mangles non-ASCII (Vietnamese) release notes and
+      # makes GitLab reject the payload with 400. Send explicit UTF-8 bytes instead.
+      $releaseBody = [System.Text.Encoding]::UTF8.GetBytes($releasePayload)
+      $jsonContentType = "application/json; charset=utf-8"
+
       Write-Host "Creating GitLab Release"
       try {
         Invoke-RestMethod `
           -Method Post `
           -Headers $headers `
-          -ContentType "application/json" `
-          -Body $releasePayload `
+          -ContentType $jsonContentType `
+          -Body $releaseBody `
           -Uri "$env:CI_API_V4_URL/projects/$env:CI_PROJECT_ID/releases"
       } catch {
+        if ($_.ErrorDetails.Message) {
+          Write-Host "Release API error body: $($_.ErrorDetails.Message)"
+        }
         if ($_.Exception.Response.StatusCode.value__ -ne 409) {
           throw
         }
@@ -157,8 +166,8 @@ release:windows:
         Invoke-RestMethod `
           -Method Put `
           -Headers $headers `
-          -ContentType "application/json" `
-          -Body $releasePayload `
+          -ContentType $jsonContentType `
+          -Body $releaseBody `
           -Uri "$env:CI_API_V4_URL/projects/$env:CI_PROJECT_ID/releases/$env:CI_COMMIT_TAG"
       }
   artifacts:
