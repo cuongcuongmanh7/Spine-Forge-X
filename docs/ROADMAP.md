@@ -133,15 +133,18 @@ Shipped ở commit `c133cac`.
 
 ---
 
-## v0.2.10 — In-app changelog + preset discard guard ✅ Done
+## v0.2.11 — In-app changelog + preset discard guard ✅ Done
 
 **Mục tiêu:** cho user đọc được changelog ngay trong app, và chặn mất edit khi đóng nhầm modal preset.
+
+> v0.2.10 bị bỏ qua: CI fail ở bước tạo GitLab Release (PowerShell 5.1 gửi body string non-ASCII bằng Latin-1 → 400), và tag v0.2.10 đã protected nên phải bump tiếp.
 
 - [x] Badge version ở titlebar click ra trang releases (command Rust `open_url`)
 - [x] Updater hiện nút "What's new" lấy `notes` từ manifest (`UpdateUiState.notes`)
 - [x] `CHANGELOG.md` user-facing ở gốc repo; CI trích section theo version cho `latest.json` notes + description release (hết hardcode)
+- [x] CI gửi body release dạng UTF-8 bytes (`charset=utf-8`) để notes tiếng Việt không lỗi 400
 - [x] `PresetEditorModal`: theo dõi dirty (name + nội dung + lỗi JSON) → confirm trước khi đóng (backdrop/X/Cancel); i18n `presetDiscard*`
-- [x] Bump `0.2.9 → 0.2.10`; tag `v0.2.10`
+- [x] Bump `0.2.9 → 0.2.11`; tag `v0.2.11`
 
 ---
 
