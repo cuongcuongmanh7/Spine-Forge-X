@@ -6,6 +6,16 @@ Source-of-truth tiến độ toàn dự án. Chi tiết kỹ thuật từng task
 
 ---
 
+## Unreleased (gộp vào version kế tiếp)
+
+> Chưa bump version / tag — gom các thay đổi nhỏ rồi release một lượt.
+
+- [x] **Clean Source Folder an toàn hơn**: đếm trước số `.spine` (`count_clean_units`) + cảnh báo khi > 50, overlay khóa khi scan (spinner + tiến độ `x/total`) với nút Stop, không đóng được modal giữa chừng. Chi tiết: [clean-source.md](clean-source.md) mục 3.
+- [x] **Drag-drop input**: kéo-thả folder hoặc file `.spine` vào app để đặt input (Tauri v2 `onDragDropEvent`); overlay gợi ý khi hover; bỏ qua khi đang export.
+- [x] **Dashboard per-project**: nút Dashboard ở sidebar mở modal tổng hợp lần export gần nhất của từng session (Xong/Lỗi/Bỏ qua/Tổng) + tổng cộng project. Lưu `lastExport` trong `SessionConfig` (persist qua `pickKnown`).
+
+---
+
 ## v0.2.5 — Output Verification + True Parallel Jobs ✅ Done
 
 Shipped ở commit `c133cac`.
@@ -170,7 +180,7 @@ Shipped ở commit `c133cac`.
 
 ## Backlog / ý tưởng (chưa lên lịch)
 
-- [ ] Drag-drop folder/file vào drop zone
+- [x] Drag-drop folder/file vào drop zone _(xong — xem Unreleased)_
 - [ ] Xử lý nhiều `.export.json` per project
-- [ ] Dashboard kết quả per-project
+- [x] Dashboard kết quả per-project _(xong — xem Unreleased)_
 - [ ] JSON post-processing path rewrite (an toàn, có backup)
