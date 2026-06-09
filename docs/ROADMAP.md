@@ -6,9 +6,9 @@ Source-of-truth tiến độ toàn dự án. Chi tiết kỹ thuật từng task
 
 ---
 
-## Unreleased (gộp vào version kế tiếp)
+## v0.2.12 — Tray + Drag-drop + Dashboard ✅ Done
 
-> Chưa bump version / tag — gom các thay đổi nhỏ rồi release một lượt.
+> Bump `0.2.11 → 0.2.12`; tag `v0.2.12`.
 
 - [x] **Clean Source Folder an toàn hơn**: đếm trước số `.spine` (`count_clean_units`) + cảnh báo khi > 50, overlay khóa khi scan (spinner + tiến độ `x/total`) với nút Stop, không đóng được modal giữa chừng. Chi tiết: [clean-source.md](clean-source.md) mục 3.
 - [x] **Drag-drop input**: kéo-thả folder hoặc file `.spine` vào app để đặt input (Tauri v2 `onDragDropEvent`); overlay gợi ý khi hover; bỏ qua khi đang export.
