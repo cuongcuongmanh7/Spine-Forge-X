@@ -25,6 +25,7 @@ import { computeCanStart, statusFromValidation } from './validation';
 import { commonParentPath } from './paths';
 import { useAppUpdater } from './useAppUpdater';
 import { useDragDrop } from './useDragDrop';
+import { useCleanSource } from './useCleanSource';
 import {
   basename,
   cloneSession,
@@ -131,35 +132,7 @@ export function useAppControllerValue() {
   );
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [linkedModalOpen, setLinkedModalOpen] = useState(false);
-  const [cleanSourceFolderOpen, setCleanSourceFolderOpen] = useState(false);
-  const [isCleaningSourceFolder, setIsCleaningSourceFolder] = useState(false);
   const [dashboardOpen, setDashboardOpen] = useState(false);
-  // Clean-source scan cache, keyed per session so each session keeps its own
-  // scanned root + result. Reopening the modal shows that session's cache instead
-  // of re-running the slow per-folder CLI scan; the user re-scans manually.
-  const [cleanScanBySession, setCleanScanBySession] = useState<
-    Record<string, { root: string; summary: BatchScanSummary | null }>
-  >({});
-  const cleanScanKey = activeSessionId ?? '__global__';
-  const cleanScanEntry = cleanScanBySession[cleanScanKey] ?? { root: '', summary: null };
-  const cleanScanRoot = cleanScanEntry.root;
-  const cleanScanSummary = cleanScanEntry.summary;
-  function setCleanScanRoot(value: string | ((prev: string) => string)) {
-    setCleanScanBySession((map) => {
-      const prev = map[cleanScanKey] ?? { root: '', summary: null };
-      const root = typeof value === 'function' ? value(prev.root) : value;
-      return { ...map, [cleanScanKey]: { ...prev, root } };
-    });
-  }
-  function setCleanScanSummary(
-    value: BatchScanSummary | null | ((prev: BatchScanSummary | null) => BatchScanSummary | null)
-  ) {
-    setCleanScanBySession((map) => {
-      const prev = map[cleanScanKey] ?? { root: '', summary: null };
-      const summary = typeof value === 'function' ? value(prev.summary) : value;
-      return { ...map, [cleanScanKey]: { ...prev, summary } };
-    });
-  }
   // Warning shown at the Output step when input files don't all map to one linked Type.
   const [linkedTypeWarning, setLinkedTypeWarning] = useState('');
   const [projectDialogOpen, setProjectDialogOpen] = useState(false);
@@ -240,6 +213,31 @@ export function useAppControllerValue() {
 
   const sessionConfig: SessionConfig = activeSession?.config ?? defaultSessionConfig;
   const merged = useMemo<MergedConfig>(() => ({ ...appConfig, ...sessionConfig }), [appConfig, sessionConfig]);
+
+  // Clean Source Folder lives in its own hook (modal state, per-session scan cache, scan/move).
+  const {
+    cleanSourceFolderOpen,
+    setCleanSourceFolderOpen,
+    isCleaningSourceFolder,
+    cleanScanRoot,
+    setCleanScanRoot,
+    cleanScanSummary,
+    setCleanScanSummary,
+    scanSourceFolders,
+    countCleanUnits,
+    cleanSourceFolders,
+    moveFolderUnused,
+    readImageDataUrl
+  } = useCleanSource({
+    spinePath: merged.spinePath,
+    targetVersion: merged.targetVersion,
+    excludedFiles: sessionConfig.excludedFiles ?? [],
+    activeSessionId,
+    t,
+    appendLog,
+    pushToast,
+    resetProgress: () => setLiveProgress({ current: 0, total: 0, file: '' })
+  });
 
   const isRunning = runningSessionId !== null && runningSessionId === activeSessionId;
   const anyRunning = runningSessionId !== null;
@@ -1271,105 +1269,6 @@ export function useAppControllerValue() {
       await message(body, { title: t.cleanFailed, kind: 'error' });
     } finally {
       setIsCleaningTimestamp(false);
-    }
-  }
-
-  // ----- Clean source folder (unused image assets) -----
-
-  /** Scan `root` (a source folder or a parent of many) for unused image assets. No files touched. */
-  async function scanSourceFolders(root: string): Promise<BatchScanSummary | null> {
-    const target = root.trim();
-    if (!target) {
-      pushToast(t.inputEmpty, 'warning');
-      return null;
-    }
-    if (!merged.spinePath.trim()) {
-      pushToast(t.cleanSourceNoSpine, 'warning');
-      return null;
-    }
-    // Clear any leftover progress from a prior export so the scan overlay starts fresh.
-    setLiveProgress({ current: 0, total: 0, file: '' });
-    try {
-      return await invoke<BatchScanSummary>('scan_source_folders', {
-        spinePath: merged.spinePath,
-        targetVersion: merged.targetVersion,
-        root: target,
-        excluded: sessionConfig.excludedFiles ?? []
-      });
-    } catch (error) {
-      const body = String(error);
-      appendLog(`${t.cleanSourceFailed}: ${body}`);
-      pushToast(`${t.cleanSourceFailed}: ${body}`, 'error');
-      return null;
-    }
-  }
-
-  /** Count `.spine` units under `root` without exporting. Cheap; used to preview/warn before a scan. */
-  async function countCleanUnits(root: string): Promise<number> {
-    const target = root.trim();
-    if (!target) return 0;
-    try {
-      return await invoke<number>('count_clean_units', {
-        root: target,
-        excluded: sessionConfig.excludedFiles ?? []
-      });
-    } catch {
-      return 0;
-    }
-  }
-
-  /** Scan + move unused images under `root` to a per-folder timestamped backup. */
-  async function cleanSourceFolders(root: string): Promise<BatchCleanResult | null> {
-    const target = root.trim();
-    if (!target || !merged.spinePath.trim() || isCleaningSourceFolder) return null;
-    setIsCleaningSourceFolder(true);
-    try {
-      const result = await invoke<BatchCleanResult>('clean_source_folders', {
-        spinePath: merged.spinePath,
-        targetVersion: merged.targetVersion,
-        root: target,
-        excluded: sessionConfig.excludedFiles ?? []
-      });
-      const body = t.cleanSourceDone.replace('{count}', String(result.totalMoved));
-      appendLog(body);
-      pushToast(body, 'success');
-      return result;
-    } catch (error) {
-      const body = String(error);
-      appendLog(`${t.cleanSourceFailed}: ${body}`);
-      pushToast(`${t.cleanSourceFailed}: ${body}`, 'error');
-      return null;
-    } finally {
-      setIsCleaningSourceFolder(false);
-    }
-  }
-
-  /** Move one folder's already-scanned unused images to its _unused_backup. Returns backup dir or null. */
-  async function moveFolderUnused(imagesDir: string, files: string[]): Promise<string | null> {
-    if (!files.length || isCleaningSourceFolder) return null;
-    setIsCleaningSourceFolder(true);
-    try {
-      const backupDir = await invoke<string>('move_unused_images', { imagesDir, files });
-      const body = t.cleanSourceDone.replace('{count}', String(files.length));
-      appendLog(body);
-      pushToast(body, 'success');
-      return backupDir;
-    } catch (error) {
-      const body = String(error);
-      appendLog(`${t.cleanSourceFailed}: ${body}`);
-      pushToast(`${t.cleanSourceFailed}: ${body}`, 'error');
-      return null;
-    } finally {
-      setIsCleaningSourceFolder(false);
-    }
-  }
-
-  /** Read a local image as a base64 data URL for thumbnail display. Null on failure. */
-  async function readImageDataUrl(path: string): Promise<string | null> {
-    try {
-      return await invoke<string>('read_image_data_url', { path });
-    } catch {
-      return null;
     }
   }
 
