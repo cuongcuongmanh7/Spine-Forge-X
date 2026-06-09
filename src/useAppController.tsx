@@ -3,15 +3,11 @@ import { listen } from '@tauri-apps/api/event';
 import { invoke } from '@tauri-apps/api/core';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { confirm, message, open, save } from '@tauri-apps/plugin-dialog';
-import { relaunch } from '@tauri-apps/plugin-process';
-import { check, type DownloadEvent, type Update } from '@tauri-apps/plugin-updater';
 import {
   defaultAppConfig,
   defaultExportPreset,
   defaultSessionConfig,
   emptyRuntime,
-  initialUpdateUi,
-  releasesUrl,
   targetVersionPresets,
   type AppConfig,
   type LinkedProject,
@@ -27,6 +23,8 @@ import {
 import { formatMessage, formatSummary, getCopy, type Translations } from './i18n';
 import { computeCanStart, statusFromValidation } from './validation';
 import { commonParentPath } from './paths';
+import { useAppUpdater } from './useAppUpdater';
+import { useDragDrop } from './useDragDrop';
 import {
   basename,
   cloneSession,
@@ -55,8 +53,6 @@ import type {
   ThemeMode,
   Toast,
   ToastKind,
-  UpdateStatus,
-  UpdateUiState,
   ValidateResult
 } from './types';
 
@@ -138,8 +134,6 @@ export function useAppControllerValue() {
   const [cleanSourceFolderOpen, setCleanSourceFolderOpen] = useState(false);
   const [isCleaningSourceFolder, setIsCleaningSourceFolder] = useState(false);
   const [dashboardOpen, setDashboardOpen] = useState(false);
-  // True while an OS drag is hovering the window — drives the drop overlay.
-  const [isDragOver, setIsDragOver] = useState(false);
   // Clean-source scan cache, keyed per session so each session keeps its own
   // scanned root + result. Reopening the modal shows that session's cache instead
   // of re-running the slow per-folder CLI scan; the user re-scans manually.
@@ -219,17 +213,12 @@ export function useAppControllerValue() {
   const [editingPreset, setEditingPreset] = useState<{ name: string; content: string; builtIn: boolean } | null>(null);
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [validation, setValidation] = useState<ValidateResult>({ ok: false, warnings: [], errors: [] });
-  const [updateUi, setUpdateUi] = useState<UpdateUiState>(initialUpdateUi);
 
   const toastIdRef = useRef(0);
   const presetTickTimerRef = useRef<number | null>(null);
-  const pendingUpdateRef = useRef<Update | null>(null);
-  const updateStatusTimerRef = useRef<number | null>(null);
   const runtimeByIdRef = useRef<Record<string, SessionRuntime>>({});
   const activeIdRef = useRef<string | null>(activeSessionId);
   const runningIdRef = useRef<string | null>(null);
-  // Latest drop handler, so the once-subscribed listener always sees fresh state.
-  const dropHandlerRef = useRef<(paths: string[]) => void | Promise<void>>(() => {});
   // Last output folder the app opened (auto or manual) — used to avoid re-opening
   // the same folder right after another export.
   const lastOpenedOutputRef = useRef<string | null>(null);
@@ -348,6 +337,11 @@ export function useAppControllerValue() {
     setLogs((items) => [...items, stamp(text)]);
   }
 
+  // App auto-update lifecycle lives in its own hook (checks on mount).
+  const { updateUi, checkForAppUpdate, installPendingUpdate, openReleasesPage } = useAppUpdater(appendLog);
+  // OS drag-drop hover state + listener; forwards dropped paths to handleDroppedPaths.
+  const { isDragOver } = useDragDrop(handleDroppedPaths);
+
   // Route async run output to the originating session even if the user switched away.
   function recordRunLog(line: string) {
     const runId = runningIdRef.current;
@@ -419,29 +413,6 @@ export function useAppControllerValue() {
     };
   }, []);
 
-  // OS file drag-drop (Tauri v2): toggle the overlay on hover, set input on drop.
-  useEffect(() => {
-    let unlisten: Promise<() => void> | null = null;
-    try {
-      unlisten = getCurrentWindow().onDragDropEvent((event) => {
-        const payload = event.payload;
-        if (payload.type === 'over' || payload.type === 'enter') {
-          setIsDragOver(true);
-        } else if (payload.type === 'leave') {
-          setIsDragOver(false);
-        } else if (payload.type === 'drop') {
-          setIsDragOver(false);
-          void dropHandlerRef.current(payload.paths);
-        }
-      });
-    } catch (error) {
-      console.warn('Drag-drop unavailable:', error);
-    }
-    return () => {
-      unlisten?.then((fn) => fn()).catch(() => undefined);
-    };
-  }, []);
-
   useEffect(() => {
     void validateSettings();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -455,7 +426,6 @@ export function useAppControllerValue() {
 
   useEffect(() => {
     void autoDetectSpine(true);
-    void checkForAppUpdate();
     void loadExportPresets();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -499,7 +469,6 @@ export function useAppControllerValue() {
 
   useEffect(() => {
     return () => {
-      if (updateStatusTimerRef.current !== null) window.clearTimeout(updateStatusTimerRef.current);
       if (presetTickTimerRef.current !== null) window.clearTimeout(presetTickTimerRef.current);
     };
   }, []);
@@ -512,85 +481,6 @@ export function useAppControllerValue() {
     const id = (toastIdRef.current += 1);
     setToasts((items) => [...items, { id, message: text, kind }]);
     window.setTimeout(() => dismissToast(id), 3500);
-  }
-
-  function showTemporaryUpdateStatus(status: UpdateStatus, durationMs = 3000, text = '') {
-    if (updateStatusTimerRef.current !== null) window.clearTimeout(updateStatusTimerRef.current);
-    setUpdateUi({ ...initialUpdateUi, status, message: text });
-    updateStatusTimerRef.current = window.setTimeout(() => {
-      setUpdateUi(initialUpdateUi);
-      updateStatusTimerRef.current = null;
-    }, durationMs);
-  }
-
-  async function checkForAppUpdate(manual = false) {
-    try {
-      setUpdateUi((current) => ({ ...current, status: 'checking', message: '' }));
-      if (manual) appendLog('Checking for app update...');
-      const update = await check({ timeout: 30000 });
-      if (!update) {
-        if (manual) {
-          showTemporaryUpdateStatus('upToDate');
-          appendLog('App is up to date.');
-        } else {
-          setUpdateUi(initialUpdateUi);
-        }
-        return;
-      }
-
-      pendingUpdateRef.current = update;
-      let downloaded = 0;
-      let contentLength = 0;
-      const notes = update.body?.trim() ?? '';
-
-      setUpdateUi({ status: 'downloading', version: update.version, progress: 0, progressKnown: false, message: '', notes });
-      appendLog(`Downloading app update v${update.version}...`);
-
-      await update.download((event: DownloadEvent) => {
-        if (event.event === 'Started') {
-          downloaded = 0;
-          contentLength = event.data.contentLength ?? 0;
-          setUpdateUi({ status: 'downloading', version: update.version, progress: 0, progressKnown: contentLength > 0, message: '', notes });
-          return;
-        }
-        if (event.event === 'Progress') {
-          downloaded += event.data.chunkLength;
-          const value = contentLength > 0 ? Math.min(100, Math.round((downloaded / contentLength) * 100)) : 0;
-          setUpdateUi({ status: 'downloading', version: update.version, progress: value, progressKnown: contentLength > 0, message: '', notes });
-          return;
-        }
-        setUpdateUi({ status: 'ready', version: update.version, progress: 100, progressKnown: true, message: '', notes });
-        appendLog(`App update v${update.version} is ready to install.`);
-      });
-    } catch (error) {
-      const body = String(error);
-      pendingUpdateRef.current = null;
-      console.warn('Update check failed:', error);
-      appendLog(`Update check failed: ${body}`);
-      showTemporaryUpdateStatus('error', 6000, body);
-    }
-  }
-
-  async function installPendingUpdate() {
-    const update = pendingUpdateRef.current;
-    if (!update) return;
-    try {
-      await update.install();
-      await relaunch();
-    } catch (error) {
-      const body = String(error);
-      setUpdateUi({ ...initialUpdateUi, status: 'error', message: body });
-      appendLog(`Update install failed: ${body}`);
-      showTemporaryUpdateStatus('error', 6000, body);
-    }
-  }
-
-  async function openReleasesPage() {
-    try {
-      await invoke('open_url', { url: releasesUrl });
-    } catch (error) {
-      appendLog(`Open releases page failed: ${String(error)}`);
-    }
   }
 
   function updateAppConfig<K extends keyof AppConfig>(key: K, value: AppConfig[K]) {
@@ -1342,7 +1232,6 @@ export function useAppControllerValue() {
       appendLog(t.dropUnsupported);
     }
   }
-  dropHandlerRef.current = handleDroppedPaths;
 
   async function chooseOutputFolder() {
     if (isChoosingOutputFolder) return;

@@ -18,7 +18,7 @@ const DEFAULT_MAX = 800;
 const BASELINE = {
   'src-tauri/src/lib.rs': 2735,
   'src/styles.css': 2517,
-  'src/useAppController.tsx': 2106
+  'src/useAppController.tsx': 1995
 };
 
 /** Recursively collect source files under a root directory. */
