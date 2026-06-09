@@ -7,6 +7,7 @@ import {
   MoreHorizontal,
   Pencil,
   Eraser,
+  LayoutDashboard,
   Play,
   Plus,
   Settings,
@@ -317,7 +318,7 @@ function ProjectGroup({ project }: { project: Project }) {
 }
 
 export function Sidebar() {
-  const { t, projects, setProjectDialogOpen, setSettingsOpen, setCleanSourceFolderOpen } = useApp();
+  const { t, projects, setProjectDialogOpen, setSettingsOpen, setCleanSourceFolderOpen, setDashboardOpen } = useApp();
   const [width, setWidth] = useState(readSidebarWidth);
 
   useEffect(() => {
@@ -356,6 +357,10 @@ export function Sidebar() {
         )}
       </div>
       <div className="sidebar-footer">
+        <button className="sidebar-settings" onClick={() => setDashboardOpen(true)}>
+          <LayoutDashboard size={16} />
+          <span>{t.dashboardFolder}</span>
+        </button>
         <button className="sidebar-settings" onClick={() => setCleanSourceFolderOpen(true)}>
           <Eraser size={16} />
           <span>{t.cleanSourceFolder}</span>

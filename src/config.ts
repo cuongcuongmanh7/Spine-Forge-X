@@ -34,6 +34,18 @@ export const defaultAppConfig = {
 
 export type AppConfig = typeof defaultAppConfig;
 
+/** Summary of a single export run, kept per session to power the project dashboard. */
+export type ExportRecord = {
+  /** Epoch ms when the run finished. */
+  at: number;
+  completed: number;
+  failed: number;
+  skipped: number;
+  total: number;
+  /** true if the user stopped the run early. */
+  stopped: boolean;
+};
+
 /**
  * Per-session configuration — every session in the Recents column is fully independent.
  */
@@ -108,7 +120,10 @@ export const defaultSessionConfig = {
   unicodeWorkaround: false,
   // When enabled, open the output folder automatically after an export finishes
   // (skips re-opening if the app just opened that same folder).
-  autoOpenOutputAfterExport: false
+  autoOpenOutputAfterExport: false,
+  // Summary of this session's most recent export — read by the project dashboard. Not a
+  // user setting; persisted alongside config so the dashboard survives restarts.
+  lastExport: null as ExportRecord | null
 };
 
 export type SessionConfig = typeof defaultSessionConfig;

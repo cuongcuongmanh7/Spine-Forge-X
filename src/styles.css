@@ -2335,6 +2335,14 @@ progress {
   color: var(--text-muted);
 }
 
+/* Dashboard totals row: separate from the body and emphasized. */
+.dashboard-table tfoot td {
+  border-top: 2px solid var(--border);
+  border-bottom: none;
+  font-weight: 700;
+  color: var(--text-strong);
+}
+
 .danger-button {
   display: inline-flex;
   align-items: center;

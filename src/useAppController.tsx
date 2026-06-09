@@ -17,6 +17,7 @@ import {
   type LinkedProject,
   type LinkedType,
   type MergedConfig,
+  type ExportRecord,
   type Project,
   type Session,
   type SessionConfig,
@@ -136,6 +137,7 @@ export function useAppControllerValue() {
   const [linkedModalOpen, setLinkedModalOpen] = useState(false);
   const [cleanSourceFolderOpen, setCleanSourceFolderOpen] = useState(false);
   const [isCleaningSourceFolder, setIsCleaningSourceFolder] = useState(false);
+  const [dashboardOpen, setDashboardOpen] = useState(false);
   // True while an OS drag is hovering the window — drives the drop overlay.
   const [isDragOver, setIsDragOver] = useState(false);
   // Clean-source scan cache, keyed per session so each session keeps its own
@@ -378,6 +380,23 @@ export function useAppControllerValue() {
     const rt = runtimeByIdRef.current[runId] ?? emptyRuntime();
     rt.lastOutputFolders = folders;
     runtimeByIdRef.current[runId] = rt;
+  }
+
+  /** Persist a session's latest export summary (counts + time) for the project dashboard. */
+  function recordLastExport(sessionId: string, result: BatchExportResult) {
+    const record: ExportRecord = {
+      at: Date.now(),
+      completed: result.completed,
+      failed: result.failed,
+      skipped: result.skipped,
+      total: result.total,
+      stopped: result.stopped
+    };
+    setSessions((list) =>
+      list.map((s) =>
+        s.id === sessionId ? { ...s, config: { ...s.config, lastExport: record }, updatedAt: Date.now() } : s
+      )
+    );
   }
 
   useEffect(() => {
@@ -1643,6 +1662,7 @@ export function useAppControllerValue() {
     try {
       const result = await invoke<BatchExportResult>('start_batch_export', { request: buildExportRequest() });
       recordRunOutput(result.outputFolders);
+      recordLastExport(sid, result);
       if (result.stopped) {
         const body = formatSummary(t.exportStoppedSummary, result.completed, result.failed, result.skipped);
         recordRunLog(stamp(body));
@@ -1784,6 +1804,7 @@ export function useAppControllerValue() {
           request: buildExportRequestFrom({ ...appConfig, ...s.config }, sessionFiles)
         });
         recordRunOutput(result.outputFolders);
+        recordLastExport(s.id, result);
         allOutputFolders.push(...result.outputFolders);
         recordRunLog(
           stamp(
@@ -1965,6 +1986,8 @@ export function useAppControllerValue() {
     // Clean source folder
     cleanSourceFolderOpen,
     setCleanSourceFolderOpen,
+    dashboardOpen,
+    setDashboardOpen,
     isDragOver,
     isCleaningSourceFolder,
     scanSourceFolders,
