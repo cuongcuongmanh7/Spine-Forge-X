@@ -4,7 +4,7 @@ import { appVersionLabel } from '../config';
 import { useApp } from '../useAppController';
 
 export function Titlebar() {
-  const { updateUi, getAppWindow, checkForAppUpdate, installPendingUpdate } = useApp();
+  const { updateUi, getAppWindow, checkForAppUpdate, installPendingUpdate, openReleasesPage } = useApp();
 
   return (
     <div className="custom-titlebar">
@@ -16,7 +16,15 @@ export function Titlebar() {
         <div className="titlebar-brand">
           <img className="titlebar-mark" src={appIconUrl} alt="" aria-hidden="true" />
           <span>SpineForge X</span>
-          <span className="titlebar-version">{appVersionLabel}</span>
+          <button
+            className="titlebar-version"
+            title="View changelog / releases"
+            aria-label="View changelog"
+            onMouseDown={(event) => event.stopPropagation()}
+            onClick={() => void openReleasesPage()}
+          >
+            {appVersionLabel}
+          </button>
           <button
             className="titlebar-update-check"
             title="Check for update"
@@ -42,13 +50,25 @@ export function Titlebar() {
             </span>
           )}
           {updateUi.status === 'ready' && (
-            <button
-              className="titlebar-update-button"
-              onMouseDown={(event) => event.stopPropagation()}
-              onClick={() => void installPendingUpdate()}
-            >
-              Relaunch for v{updateUi.version}
-            </button>
+            <>
+              {updateUi.notes && (
+                <button
+                  className="titlebar-update-note link"
+                  title={updateUi.notes}
+                  onMouseDown={(event) => event.stopPropagation()}
+                  onClick={() => void openReleasesPage()}
+                >
+                  What's new
+                </button>
+              )}
+              <button
+                className="titlebar-update-button"
+                onMouseDown={(event) => event.stopPropagation()}
+                onClick={() => void installPendingUpdate()}
+              >
+                Relaunch for v{updateUi.version}
+              </button>
+            </>
           )}
         </div>
       </div>

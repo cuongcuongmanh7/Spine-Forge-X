@@ -11,6 +11,7 @@ import {
   defaultSessionConfig,
   emptyRuntime,
   initialUpdateUi,
+  releasesUrl,
   targetVersionPresets,
   type AppConfig,
   type LinkedProject,
@@ -494,24 +495,25 @@ export function useAppControllerValue() {
       pendingUpdateRef.current = update;
       let downloaded = 0;
       let contentLength = 0;
+      const notes = update.body?.trim() ?? '';
 
-      setUpdateUi({ status: 'downloading', version: update.version, progress: 0, progressKnown: false, message: '' });
+      setUpdateUi({ status: 'downloading', version: update.version, progress: 0, progressKnown: false, message: '', notes });
       appendLog(`Downloading app update v${update.version}...`);
 
       await update.download((event: DownloadEvent) => {
         if (event.event === 'Started') {
           downloaded = 0;
           contentLength = event.data.contentLength ?? 0;
-          setUpdateUi({ status: 'downloading', version: update.version, progress: 0, progressKnown: contentLength > 0, message: '' });
+          setUpdateUi({ status: 'downloading', version: update.version, progress: 0, progressKnown: contentLength > 0, message: '', notes });
           return;
         }
         if (event.event === 'Progress') {
           downloaded += event.data.chunkLength;
           const value = contentLength > 0 ? Math.min(100, Math.round((downloaded / contentLength) * 100)) : 0;
-          setUpdateUi({ status: 'downloading', version: update.version, progress: value, progressKnown: contentLength > 0, message: '' });
+          setUpdateUi({ status: 'downloading', version: update.version, progress: value, progressKnown: contentLength > 0, message: '', notes });
           return;
         }
-        setUpdateUi({ status: 'ready', version: update.version, progress: 100, progressKnown: true, message: '' });
+        setUpdateUi({ status: 'ready', version: update.version, progress: 100, progressKnown: true, message: '', notes });
         appendLog(`App update v${update.version} is ready to install.`);
       });
     } catch (error) {
@@ -534,6 +536,14 @@ export function useAppControllerValue() {
       setUpdateUi({ ...initialUpdateUi, status: 'error', message: body });
       appendLog(`Update install failed: ${body}`);
       showTemporaryUpdateStatus('error', 6000, body);
+    }
+  }
+
+  async function openReleasesPage() {
+    try {
+      await invoke('open_url', { url: releasesUrl });
+    } catch (error) {
+      appendLog(`Open releases page failed: ${String(error)}`);
     }
   }
 
@@ -1958,6 +1968,7 @@ export function useAppControllerValue() {
     // actions
     checkForAppUpdate,
     installPendingUpdate,
+    openReleasesPage,
     autoDetectSpine,
     detectVersion,
     scanInput,

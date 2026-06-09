@@ -95,4 +95,6 @@ export type UpdateUiState = {
   progress: number;
   progressKnown: boolean;
   message: string;
+  /** Release notes from the updater manifest, shown when an update is ready. */
+  notes?: string;
 };

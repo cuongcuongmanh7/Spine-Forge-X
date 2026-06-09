@@ -237,3 +237,6 @@ export const initialUpdateUi: UpdateUiState = {
 };
 
 export const appVersionLabel = `v${__APP_VERSION__}`;
+
+// Public releases page — opened when the user clicks the version label to read the changelog.
+export const releasesUrl = 'https://gitlab.com/cuongondi/spineforge-x/-/releases';

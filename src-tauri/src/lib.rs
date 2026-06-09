@@ -1163,6 +1163,41 @@ fn read_image_data_url(path: String) -> Result<String, String> {
 }
 
 #[tauri::command]
+async fn open_url(url: String) -> Result<(), String> {
+    let target = url.trim();
+    if !(target.starts_with("http://") || target.starts_with("https://")) {
+        return Err("Chỉ mở được http(s) URL.".to_string());
+    }
+
+    #[cfg(windows)]
+    {
+        // `explorer <url>` returns a non-zero exit code on success, so use `cmd /c start`.
+        Command::new("cmd")
+            .args(["/c", "start", "", target])
+            .spawn()
+            .map_err(|e| e.to_string())?;
+    }
+
+    #[cfg(target_os = "macos")]
+    {
+        Command::new("open")
+            .arg(target)
+            .spawn()
+            .map_err(|e| e.to_string())?;
+    }
+
+    #[cfg(all(not(windows), not(target_os = "macos")))]
+    {
+        Command::new("xdg-open")
+            .arg(target)
+            .spawn()
+            .map_err(|e| e.to_string())?;
+    }
+
+    Ok(())
+}
+
+#[tauri::command]
 async fn open_path(path: String) -> Result<(), String> {
     let target = PathBuf::from(path.trim_matches('"'));
     if !target.exists() {
@@ -2170,6 +2205,7 @@ pub fn run() {
             write_text_file,
             clean_timestamp_exports,
             open_path,
+            open_url,
             path_exists,
             read_image_data_url,
             scan_source_folders,
