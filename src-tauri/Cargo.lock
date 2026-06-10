@@ -3213,10 +3213,11 @@ dependencies = [
 
 [[package]]
 name = "spineforge-x"
-version = "0.2.13"
+version = "0.2.14"
 dependencies = [
  "base64 0.22.1",
  "chrono",
+ "flate2",
  "proptest",
  "serde",
  "serde_json",
