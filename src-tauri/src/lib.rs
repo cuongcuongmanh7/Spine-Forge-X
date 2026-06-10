@@ -1,6 +1,9 @@
 #![recursion_limit = "256"]
 
 mod cleaner;
+mod presets;
+mod spine_project;
+mod system;
 mod tray;
 
 use serde::{Deserialize, Serialize};
@@ -14,7 +17,7 @@ use std::{
     },
     time::Duration,
 };
-use tauri::{AppHandle, Emitter, Manager, State, Window};
+use tauri::{Emitter, Manager, State, Window};
 use tokio::{
     io::{AsyncBufReadExt, BufReader},
     process::Command,
@@ -68,6 +71,10 @@ enum ExportMode {
     GlobalJson,
     BuiltIn,
     GeneratedSettings,
+    /// Parse each project's last-export settings straight out of the `.spine`
+    /// binary (see `spine_project`) and merge them over the selected global
+    /// preset. Falls back to the unmodified preset when parsing fails.
+    LastExportSettings,
 }
 
 #[derive(Debug, Deserialize)]
@@ -202,14 +209,6 @@ struct BatchExportResult {
     stopped: bool,
 }
 
-#[derive(Debug, Serialize)]
-#[serde(rename_all = "camelCase")]
-struct ExportPreset {
-    name: String,
-    path: String,
-    built_in: bool,
-}
-
 #[derive(Debug, Serialize, Clone)]
 struct ProgressPayload {
     current: usize,
@@ -220,6 +219,30 @@ struct ProgressPayload {
 struct ExportPlan {
     arg: Option<String>,
     temp_file: Option<PathBuf>,
+    /// Optional per-file log line describing how the plan was built (e.g. the
+    /// pack sizes parsed from the project). Emitted as `spine-log` by the caller.
+    note: Option<String>,
+}
+
+/// Why an export plan could not be produced. `Skip` marks the file as skipped
+/// in the batch report; `Fail` marks it as failed.
+#[derive(Debug)]
+enum PlanError {
+    Skip(String),
+    Fail(String),
+}
+
+impl From<String> for PlanError {
+    fn from(message: String) -> Self {
+        PlanError::Fail(message)
+    }
+}
+
+/// Decode the last-export settings stored in a `.spine` project file, for
+/// previewing what the `lastExportSettings` export mode would apply.
+#[tauri::command]
+fn read_spine_export_settings(path: String) -> Result<spine_project::DecodedSettings, String> {
+    spine_project::read_export_settings(Path::new(&path))
 }
 
 #[tauri::command]
@@ -356,7 +379,9 @@ fn validate_settings(
         output_warning = true;
     }
 
-    if (export_mode == "globalJson" || export_mode == "perProjectJson")
+    if (export_mode == "globalJson"
+        || export_mode == "perProjectJson"
+        || export_mode == "lastExportSettings")
         && !global_json_path.trim().is_empty()
     {
         let global = PathBuf::from(global_json_path.trim_matches('"'));
@@ -425,112 +450,6 @@ fn clean_timestamp_exports(input_path: String) -> Result<CleanResult, String> {
     failed.sort();
 
     Ok(CleanResult { deleted, failed })
-}
-
-#[tauri::command]
-fn list_export_presets(app: AppHandle) -> Result<Vec<ExportPreset>, String> {
-    let mut presets = Vec::new();
-
-    for dir in built_in_preset_dirs(&app) {
-        collect_presets_from_dir(&dir, true, &mut presets);
-    }
-
-    let user_dir = user_preset_dir(&app)?;
-    fs::create_dir_all(&user_dir).map_err(|e| e.to_string())?;
-    collect_presets_from_dir(&user_dir, false, &mut presets);
-
-    presets.sort_by(|a, b| {
-        b.built_in
-            .cmp(&a.built_in)
-            .then_with(|| a.name.to_ascii_lowercase().cmp(&b.name.to_ascii_lowercase()))
-    });
-    presets.dedup_by(|a, b| a.built_in == b.built_in && a.name.eq_ignore_ascii_case(&b.name));
-
-    Ok(presets)
-}
-
-#[tauri::command]
-fn import_user_export_preset(app: AppHandle, source_path: String) -> Result<ExportPreset, String> {
-    let source = PathBuf::from(source_path.trim_matches('"'));
-    if !source.is_file() {
-        return Err("Preset source không tồn tại.".to_string());
-    }
-
-    let name = source
-        .file_name()
-        .and_then(|value| value.to_str())
-        .ok_or_else(|| "Không đọc được tên preset.".to_string())?;
-    let safe_name = validate_preset_file_name(name)?;
-    let content = fs::read_to_string(&source).map_err(|e| e.to_string())?;
-    validate_export_json_content(&content)?;
-
-    let user_dir = user_preset_dir(&app)?;
-    fs::create_dir_all(&user_dir).map_err(|e| e.to_string())?;
-    let target = user_dir.join(&safe_name);
-    fs::write(&target, content).map_err(|e| e.to_string())?;
-
-    Ok(ExportPreset {
-        name: safe_name,
-        path: path_to_string(&target),
-        built_in: false,
-    })
-}
-
-#[tauri::command]
-fn read_user_export_preset(app: AppHandle, name: String) -> Result<String, String> {
-    let safe_name = validate_preset_file_name(&name)?;
-    let path = user_preset_dir(&app)?.join(safe_name);
-    fs::read_to_string(path).map_err(|e| e.to_string())
-}
-
-/// Read any .export.json preset by absolute path (built-in resource or user), for the editor.
-#[tauri::command]
-fn read_export_preset(path: String) -> Result<String, String> {
-    let target = PathBuf::from(path.trim_matches('"'));
-    if !target
-        .file_name()
-        .and_then(|name| name.to_str())
-        .map(|name| name.ends_with(".export.json"))
-        .unwrap_or(false)
-    {
-        return Err("Chỉ đọc được file .export.json.".to_string());
-    }
-    fs::read_to_string(&target).map_err(|e| e.to_string())
-}
-
-/// Save (create or overwrite) a user preset from edited content, into the user preset dir.
-#[tauri::command]
-fn save_user_export_preset(app: AppHandle, name: String, content: String) -> Result<ExportPreset, String> {
-    let safe_name = validate_preset_file_name(&name)?;
-    validate_export_json_content(&content)?;
-    let user_dir = user_preset_dir(&app)?;
-    fs::create_dir_all(&user_dir).map_err(|e| e.to_string())?;
-    let target = user_dir.join(&safe_name);
-    fs::write(&target, content).map_err(|e| e.to_string())?;
-    Ok(ExportPreset {
-        name: safe_name,
-        path: path_to_string(&target),
-        built_in: false,
-    })
-}
-
-#[tauri::command]
-fn write_text_file(path: String, content: String) -> Result<(), String> {
-    let target = PathBuf::from(path.trim_matches('"'));
-    if let Some(parent) = target.parent() {
-        fs::create_dir_all(parent).map_err(|e| e.to_string())?;
-    }
-    fs::write(&target, content).map_err(|e| e.to_string())
-}
-
-#[tauri::command]
-fn delete_user_export_preset(app: AppHandle, name: String) -> Result<(), String> {
-    let safe_name = validate_preset_file_name(&name)?;
-    let path = user_preset_dir(&app)?.join(safe_name);
-    if path.exists() {
-        fs::remove_file(path).map_err(|e| e.to_string())?;
-    }
-    Ok(())
 }
 
 #[tauri::command]
@@ -1295,130 +1214,6 @@ async fn clean_source_folders(
     })
 }
 
-/// True when `path` exists on disk. Used by the UI to warn (not block) when a
-/// configured directory — e.g. a Linked Project's Unity root — is missing.
-#[tauri::command]
-fn path_exists(path: String) -> bool {
-    let trimmed = path.trim().trim_matches('"');
-    !trimmed.is_empty() && PathBuf::from(trimmed).exists()
-}
-
-/// Read an image file and return it as a base64 data URL, for thumbnail display
-/// in the webview (used by the Clean Source Folder detail view). Size-capped so
-/// a stray huge file can't blow up the UI.
-#[tauri::command]
-fn read_image_data_url(path: String) -> Result<String, String> {
-    use base64::Engine;
-    let p = PathBuf::from(path.trim_matches('"'));
-    let meta = fs::metadata(&p).map_err(|e| e.to_string())?;
-    if meta.len() > 16 * 1024 * 1024 {
-        return Err("Ảnh quá lớn để xem thumbnail.".to_string());
-    }
-    let bytes = fs::read(&p).map_err(|e| e.to_string())?;
-    let mime = match p
-        .extension()
-        .and_then(|e| e.to_str())
-        .map(|e| e.to_lowercase())
-        .as_deref()
-    {
-        Some("png") => "image/png",
-        Some("jpg") | Some("jpeg") => "image/jpeg",
-        Some("webp") => "image/webp",
-        Some("bmp") => "image/bmp",
-        Some("gif") => "image/gif",
-        _ => "application/octet-stream",
-    };
-    let encoded = base64::engine::general_purpose::STANDARD.encode(&bytes);
-    Ok(format!("data:{mime};base64,{encoded}"))
-}
-
-#[tauri::command]
-async fn open_url(url: String) -> Result<(), String> {
-    let target = url.trim();
-    if !(target.starts_with("http://") || target.starts_with("https://")) {
-        return Err("Chỉ mở được http(s) URL.".to_string());
-    }
-
-    #[cfg(windows)]
-    {
-        // `explorer <url>` returns a non-zero exit code on success, so use `cmd /c start`.
-        Command::new("cmd")
-            .args(["/c", "start", "", target])
-            .spawn()
-            .map_err(|e| e.to_string())?;
-    }
-
-    #[cfg(target_os = "macos")]
-    {
-        Command::new("open")
-            .arg(target)
-            .spawn()
-            .map_err(|e| e.to_string())?;
-    }
-
-    #[cfg(all(not(windows), not(target_os = "macos")))]
-    {
-        Command::new("xdg-open")
-            .arg(target)
-            .spawn()
-            .map_err(|e| e.to_string())?;
-    }
-
-    Ok(())
-}
-
-#[tauri::command]
-async fn open_path(path: String) -> Result<(), String> {
-    let target = PathBuf::from(path.trim_matches('"'));
-    if !target.exists() {
-        return Err("Path không tồn tại.".to_string());
-    }
-
-    #[cfg(windows)]
-    {
-        Command::new("explorer")
-            .arg(target)
-            .spawn()
-            .map_err(|e| e.to_string())?;
-    }
-
-    #[cfg(target_os = "macos")]
-    {
-        Command::new("open")
-            .arg(target)
-            .spawn()
-            .map_err(|e| e.to_string())?;
-    }
-
-    #[cfg(all(not(windows), not(target_os = "macos")))]
-    {
-        Command::new("xdg-open")
-            .arg(target)
-            .spawn()
-            .map_err(|e| e.to_string())?;
-    }
-
-    Ok(())
-}
-
-/// List immediate subdirectory names of `path` (sorted). Used by the Linked Project modal's
-/// "Auto-fill from Unity root" — each subfolder becomes a candidate destination type.
-#[tauri::command]
-fn list_subdirectories(path: String) -> Result<Vec<String>, String> {
-    let root = PathBuf::from(path.trim_matches('"'));
-    if !root.is_dir() {
-        return Err("Path không phải thư mục hợp lệ.".to_string());
-    }
-    let mut names: Vec<String> = fs::read_dir(&root)
-        .map_err(|e| e.to_string())?
-        .filter_map(Result::ok)
-        .filter(|entry| entry.path().is_dir())
-        .filter_map(|entry| entry.file_name().into_string().ok())
-        .collect();
-    names.sort();
-    Ok(names)
-}
-
 /// Scan `output_dir` for at least one file with a recognised Spine output
 /// extension (`.skel`, `.json`, `.atlas`). Returns `true` when at least one
 /// such file is found, `false` otherwise.
@@ -1490,15 +1285,15 @@ async fn export_one_file(
 
     let export_plan = match resolve_export_plan(&request, &effective_input, &effective_output) {
         Ok(plan) => plan,
-        Err(e) => {
-            // FallbackMode::Skip produces an Err — treat it as Skipped, not Failed.
-            if e.starts_with("Không tìm thấy .export.json cạnh") {
-                let _ = window.emit("spine-log", format!("Skipped (no export.json): {file}"));
-                return FileOutcome::Skipped;
-            }
-            return FileOutcome::Failed(e);
+        Err(PlanError::Skip(reason)) => {
+            let _ = window.emit("spine-log", format!("Skipped: {reason}"));
+            return FileOutcome::Skipped;
         }
+        Err(PlanError::Fail(e)) => return FileOutcome::Failed(e),
     };
+    if let Some(note) = &export_plan.note {
+        let _ = window.emit("spine-log", note.clone());
+    }
 
     if !effective_output.trim().is_empty() {
         if let Err(e) = fs::create_dir_all(&effective_output) {
@@ -1769,13 +1564,18 @@ fn resolve_export_plan(
     request: &BatchExportRequest,
     input_file: &Path,
     output_dir: &str,
-) -> Result<ExportPlan, String> {
+) -> Result<ExportPlan, PlanError> {
     if matches!(request.export_mode, ExportMode::GeneratedSettings) {
         let temp_file = create_generated_export_settings(request, input_file, output_dir)?;
         return Ok(ExportPlan {
             arg: Some(path_to_string(&temp_file)),
             temp_file: Some(temp_file),
+            note: None,
         });
+    }
+
+    if matches!(request.export_mode, ExportMode::LastExportSettings) {
+        return create_last_export_settings(request, input_file);
     }
 
     let arg = resolve_export_arg(request, input_file)?;
@@ -1793,7 +1593,75 @@ fn resolve_export_plan(
     Ok(ExportPlan {
         arg,
         temp_file: None,
+        note: None,
     })
+}
+
+/// ExportMode::LastExportSettings — decode the settings stored in the `.spine`
+/// project and merge them over the base preset (`global_json_path`). On any
+/// parse failure the file still exports with the unmodified base preset (the
+/// behavior the user picked for this mode), with the reason logged per file.
+fn create_last_export_settings(
+    request: &BatchExportRequest,
+    input_file: &Path,
+) -> Result<ExportPlan, PlanError> {
+    let base_path = request
+        .global_json_path
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .ok_or_else(|| {
+            PlanError::Fail("Chế độ settings-từ-project cần chọn preset nền (.export.json).".to_string())
+        })?;
+
+    let decoded = match spine_project::read_export_settings(input_file) {
+        Ok(decoded) => decoded,
+        Err(reason) => {
+            let note = format!(
+                "Không parse được settings từ project ({reason}); dùng preset nền — {}",
+                path_to_string(input_file)
+            );
+            // Same path the plain GlobalJson mode takes, including the legacy
+            // packSource normalization.
+            if let Some(mut plan) = normalize_preset_file(base_path)? {
+                plan.note = Some(note);
+                return Ok(plan);
+            }
+            return Ok(ExportPlan {
+                arg: Some(base_path.to_string()),
+                temp_file: None,
+                note: Some(note),
+            });
+        }
+    };
+
+    let base_content = fs::read_to_string(base_path)
+        .map_err(|e| PlanError::Fail(format!("Đọc preset nền thất bại ({base_path}): {e}")))?;
+    let merged =
+        spine_project::merge_decoded_settings(&base_content, &decoded).map_err(PlanError::Fail)?;
+    let temp_file = write_temp_export_settings(&merged)?;
+    Ok(ExportPlan {
+        arg: Some(path_to_string(&temp_file)),
+        temp_file: Some(temp_file),
+        note: Some(format!(
+            "Settings từ project: {} — {}",
+            decoded.summary(),
+            path_to_string(input_file)
+        )),
+    })
+}
+
+/// Write export settings JSON to a unique temp file (UTF-8, no BOM) and return
+/// its path. The caller owns cleanup via `ExportPlan::temp_file`.
+fn write_temp_export_settings(settings: &serde_json::Value) -> Result<PathBuf, String> {
+    let temp_file = std::env::temp_dir().join(format!(
+        "spineforge-x-{}-{}.export.json",
+        chrono::Local::now().format("%Y%m%d%H%M%S%3f"),
+        std::process::id()
+    ));
+    let json = serde_json::to_string_pretty(settings).map_err(|e| e.to_string())?;
+    fs::write(&temp_file, json).map_err(|e| e.to_string())?;
+    Ok(temp_file)
 }
 
 fn create_generated_export_settings(
@@ -1883,28 +1751,26 @@ fn create_generated_export_settings(
         "open": false
     });
 
-    let temp_file = std::env::temp_dir().join(format!(
-        "spineforge-x-{}-{}.export.json",
-        chrono::Local::now().format("%Y%m%d%H%M%S%3f"),
-        std::process::id()
-    ));
-    let json = serde_json::to_string_pretty(&settings).map_err(|e| e.to_string())?;
-    fs::write(&temp_file, json).map_err(|e| e.to_string())?;
-    Ok(temp_file)
+    write_temp_export_settings(&settings)
 }
 
-fn resolve_export_arg(request: &BatchExportRequest, input_file: &Path) -> Result<Option<String>, String> {
+fn resolve_export_arg(
+    request: &BatchExportRequest,
+    input_file: &Path,
+) -> Result<Option<String>, PlanError> {
     match request.export_mode {
-        ExportMode::InternalExperimental => Err(
+        ExportMode::InternalExperimental => Err(PlanError::Fail(
             "Use internal project settings đã bị tắt vì Spine CLI cần --export/-e để export."
                 .to_string(),
-        ),
-        ExportMode::GlobalJson => request
+        )),
+        ExportMode::GlobalJson | ExportMode::LastExportSettings => request
             .global_json_path
             .clone()
             .filter(|value| !value.trim().is_empty())
             .map(Some)
-            .ok_or_else(|| "Force global settings cần global .export.json.".to_string()),
+            .ok_or_else(|| {
+                PlanError::Fail("Force global settings cần global .export.json.".to_string())
+            }),
         ExportMode::BuiltIn => Ok(Some(request.built_in_export.clone())),
         ExportMode::GeneratedSettings => Ok(Some(request.built_in_export.clone())),
         ExportMode::PerProjectJson => {
@@ -1919,11 +1785,15 @@ fn resolve_export_arg(request: &BatchExportRequest, input_file: &Path) -> Result
                     .clone()
                     .filter(|value| !value.trim().is_empty())
                     .map(Some)
-                    .ok_or_else(|| "Fallback global JSON được chọn nhưng path trống.".to_string()),
-                FallbackMode::Skip => Err(format!(
+                    .ok_or_else(|| {
+                        PlanError::Fail(
+                            "Fallback global JSON được chọn nhưng path trống.".to_string(),
+                        )
+                    }),
+                FallbackMode::Skip => Err(PlanError::Skip(format!(
                     "Không tìm thấy .export.json cạnh {}",
                     path_to_string(input_file)
-                )),
+                ))),
             }
         }
     }
@@ -1989,7 +1859,7 @@ fn sanitize_folder_part(value: &str) -> String {
 /// `.export.json`. Spine expects `attachments` or `imagefolders`; the legacy
 /// value `folder` is silently ignored by Spine (it falls back to attachments),
 /// so translate it to the correct enum.
-fn normalize_pack_source(value: &str) -> &str {
+pub(crate) fn normalize_pack_source(value: &str) -> &str {
     match value.trim() {
         "folder" => "imagefolders",
         other => other,
@@ -2028,17 +1898,12 @@ fn normalize_preset_file(arg: &str) -> Result<Option<ExportPlan>, String> {
     }
 
     value["packSource"] = serde_json::Value::String("imagefolders".to_string());
-    let temp_file = std::env::temp_dir().join(format!(
-        "spineforge-x-{}-{}.export.json",
-        chrono::Local::now().format("%Y%m%d%H%M%S%3f"),
-        std::process::id()
-    ));
-    let json = serde_json::to_string_pretty(&value).map_err(|e| e.to_string())?;
-    fs::write(&temp_file, json).map_err(|e| e.to_string())?;
+    let temp_file = write_temp_export_settings(&value)?;
 
     Ok(Some(ExportPlan {
         arg: Some(path_to_string(&temp_file)),
         temp_file: Some(temp_file),
+        note: None,
     }))
 }
 
@@ -2110,7 +1975,7 @@ fn may_start_next(stop_requested: &AtomicBool) -> bool {
     !stop_requested.load(Ordering::SeqCst)
 }
 
-fn path_to_string(path: &Path) -> String {
+pub(crate) fn path_to_string(path: &Path) -> String {
     path.to_string_lossy().to_string()
 }
 
@@ -2194,78 +2059,6 @@ impl Drop for TempDirGuard {
             let _ = fs::remove_dir_all(dir);
         }
     }
-}
-
-fn built_in_preset_dirs(app: &AppHandle) -> Vec<PathBuf> {
-    let mut dirs = Vec::new();
-
-    if let Ok(resource_dir) = app.path().resource_dir() {
-        dirs.push(resource_dir.join("export-presets"));
-    }
-
-    dirs.push(PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("export-presets"));
-    dirs
-}
-
-fn user_preset_dir(app: &AppHandle) -> Result<PathBuf, String> {
-    app.path()
-        .app_data_dir()
-        .map(|path| path.join("export-presets"))
-        .map_err(|e| e.to_string())
-}
-
-fn collect_presets_from_dir(dir: &Path, built_in: bool, presets: &mut Vec<ExportPreset>) {
-    let Ok(entries) = fs::read_dir(dir) else {
-        return;
-    };
-
-    for entry in entries.filter_map(Result::ok) {
-        let path = entry.path();
-        let Some(name) = path.file_name().and_then(|value| value.to_str()) else {
-            continue;
-        };
-
-        if path.is_file() && name.ends_with(".export.json") {
-            presets.push(ExportPreset {
-                name: name.to_string(),
-                path: path_to_string(&path),
-                built_in,
-            });
-        }
-    }
-}
-
-fn validate_preset_file_name(name: &str) -> Result<String, String> {
-    let trimmed = name.trim();
-    if !trimmed.ends_with(".export.json") {
-        return Err("Preset phải có đuôi .export.json.".to_string());
-    }
-
-    if trimmed.is_empty()
-        || trimmed.contains('/')
-        || trimmed.contains('\\')
-        || trimmed.contains(':')
-        || trimmed == ".export.json"
-    {
-        return Err("Tên preset không hợp lệ.".to_string());
-    }
-
-    Ok(trimmed.to_string())
-}
-
-fn validate_export_json_content(content: &str) -> Result<(), String> {
-    let value: serde_json::Value = serde_json::from_str(content)
-        .map_err(|e| format!("Preset không phải JSON hợp lệ: {e}"))?;
-    let class = value
-        .get("class")
-        .and_then(|value| value.as_str())
-        .unwrap_or_default();
-
-    if !class.starts_with("export-") {
-        return Err("Preset không giống Spine export settings JSON: thiếu class export-*.".to_string());
-    }
-
-    Ok(())
 }
 
 /// Parse the Spine *editor* version (`\d+\.\d+\.\d+`) from `Spine.com --version` output.
@@ -2368,24 +2161,25 @@ pub fn run() {
             scan_spine_files,
             validate_settings,
             check_output_collisions,
-            list_export_presets,
-            import_user_export_preset,
-            read_user_export_preset,
-            read_export_preset,
-            save_user_export_preset,
-            delete_user_export_preset,
-            write_text_file,
+            presets::list_export_presets,
+            presets::import_user_export_preset,
+            presets::read_user_export_preset,
+            presets::read_export_preset,
+            read_spine_export_settings,
+            presets::save_user_export_preset,
+            presets::delete_user_export_preset,
+            system::write_text_file,
             clean_timestamp_exports,
-            open_path,
-            open_url,
-            path_exists,
-            read_image_data_url,
+            system::open_path,
+            system::open_url,
+            system::path_exists,
+            system::read_image_data_url,
             count_clean_units,
             list_clean_units,
             scan_source_folders,
             clean_source_folders,
             move_unused_images,
-            list_subdirectories,
+            system::list_subdirectories,
             start_batch_export,
             stop_batch_export,
             set_run_in_background
@@ -2413,6 +2207,53 @@ mod tests {
         ));
         fs::create_dir_all(&dir).unwrap();
         dir
+    }
+
+    /// LastExportSettings requires a base preset path, like GlobalJson.
+    #[test]
+    fn last_export_settings_requires_base_preset() {
+        let input = PathBuf::from("D:/whatever/hero.spine");
+        let request = BatchExportRequest {
+            export_mode: ExportMode::LastExportSettings,
+            global_json_path: Some("   ".to_string()),
+            ..base_request()
+        };
+        assert!(resolve_export_arg(&request, &input).is_err());
+        assert!(create_last_export_settings(&request, &input).is_err());
+
+        let request = BatchExportRequest {
+            export_mode: ExportMode::LastExportSettings,
+            global_json_path: Some("D:/presets/global.export.json".to_string()),
+            ..base_request()
+        };
+        assert_eq!(
+            resolve_export_arg(&request, &input).unwrap().as_deref(),
+            Some("D:/presets/global.export.json")
+        );
+    }
+
+    /// Parse failure (not a real .spine) falls back to the unmodified base
+    /// preset instead of failing the file.
+    #[test]
+    fn last_export_settings_falls_back_to_base_preset() {
+        let dir = test_dir("last-export-fallback");
+        let spine = dir.join("broken.spine");
+        fs::write(&spine, b"definitely not deflate").unwrap();
+        let preset = dir.join("base.export.json");
+        fs::write(&preset, r#"{ "class": "export-binary", "packSource": "attachments" }"#)
+            .unwrap();
+
+        let request = BatchExportRequest {
+            export_mode: ExportMode::LastExportSettings,
+            global_json_path: Some(preset.to_string_lossy().to_string()),
+            ..base_request()
+        };
+        let plan = create_last_export_settings(&request, &spine).unwrap();
+        assert_eq!(plan.arg.as_deref(), Some(preset.to_string_lossy().as_ref()));
+        assert!(plan.temp_file.is_none());
+        assert!(plan.note.unwrap().contains("dùng preset nền"));
+
+        let _ = fs::remove_dir_all(&dir);
     }
 
     #[test]
@@ -2669,31 +2510,6 @@ mod tests {
             if (1..=8).contains(&jobs) {
                 prop_assert_eq!(clamped, jobs);
             }
-        }
-
-        /// Property 10: validate_preset_file_name accepts a clean *.export.json
-        /// name and rejects anything with a path separator, colon, or the bare
-        /// ".export.json".
-        // The leading char is constrained to a non-space so the trimmed stem is
-        // never empty — a whitespace-only stem would collapse to the bare
-        // ".export.json", which the validator legitimately rejects.
-        #[test]
-        fn prop_validate_preset_file_name(stem in "[a-zA-Z0-9_-][a-zA-Z0-9 _-]{0,29}") {
-            let valid = format!("{stem}.export.json");
-            prop_assert_eq!(validate_preset_file_name(&valid).unwrap(), valid.trim().to_string());
-
-            // Path separators / colon must be rejected.
-            for bad in [
-                format!("a/{stem}.export.json"),
-                format!("a\\{stem}.export.json"),
-                format!("C:{stem}.export.json"),
-            ] {
-                prop_assert!(validate_preset_file_name(&bad).is_err());
-            }
-
-            // Wrong / missing extension is rejected.
-            prop_assert!(validate_preset_file_name(&stem).is_err());
-            prop_assert!(validate_preset_file_name(".export.json").is_err());
         }
 
         /// Property 13: normalize_pack_source maps the legacy "folder" value to
