@@ -53,6 +53,23 @@ describe('loadPersistedState — Property 2: persist/restore round-trip', () => 
     expect(state.activeProjectId).toBe('p1');
   });
 
+  it('Case A: keeps lastExportSettings but coerces other modes to globalJson', () => {
+    localStorage.setItem(KEYS.projects, JSON.stringify([{ id: 'p1', name: 'Proj' }]));
+    localStorage.setItem(
+      KEYS.sessions,
+      JSON.stringify([
+        { id: 's1', projectId: 'p1', name: 'A', config: { exportMode: 'lastExportSettings' } },
+        { id: 's2', projectId: 'p1', name: 'B', config: { exportMode: 'generatedSettings' } },
+        { id: 's3', projectId: 'p1', name: 'C', config: { exportMode: 'nonsense' } }
+      ])
+    );
+
+    const state = loadPersistedState();
+    expect(state.sessions[0].config.exportMode).toBe('lastExportSettings');
+    expect(state.sessions[1].config.exportMode).toBe('globalJson');
+    expect(state.sessions[2].config.exportMode).toBe('globalJson');
+  });
+
   it('Case A: reparents a session whose project no longer exists', () => {
     localStorage.setItem(KEYS.projects, JSON.stringify([{ id: 'p1', name: 'Proj' }]));
     localStorage.setItem(

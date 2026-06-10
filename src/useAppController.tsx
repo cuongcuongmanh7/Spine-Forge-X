@@ -294,7 +294,8 @@ export function useAppControllerValue() {
     if (merged.exportMode === 'generatedSettings') {
       return isFolderValue(merged.generatedPackSource);
     }
-    if (merged.exportMode === 'globalJson') {
+    // lastExportSettings bases on the selected preset too → same handling.
+    if (merged.exportMode === 'globalJson' || merged.exportMode === 'lastExportSettings') {
       try {
         return isFolderValue((JSON.parse(presetPreview) as { packSource?: unknown }).packSource);
       } catch {

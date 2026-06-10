@@ -1,4 +1,9 @@
-export type ExportMode = 'perProjectJson' | 'globalJson' | 'builtIn' | 'generatedSettings';
+export type ExportMode =
+  | 'perProjectJson'
+  | 'globalJson'
+  | 'builtIn'
+  | 'generatedSettings'
+  | 'lastExportSettings';
 export type FallbackMode = 'builtIn' | 'globalJson' | 'skip';
 export type OutputPolicy = 'timestamp' | 'sourceFolderName' | 'linkedProject';
 export type Language = 'vi' | 'en';

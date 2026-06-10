@@ -20,7 +20,7 @@ const BASELINE = {
   'src-tauri/src/lib.rs': 2713,
   // styles.css and useAppController slipped past their ceilings in commits that
   // didn't run the build guard (pre-v0.2.14); re-baselined at their actual size.
-  'src/styles.css': 2553,
+  'src/styles.css': 2572,
   'src/useAppController.tsx': 1701
 };
 

@@ -72,8 +72,9 @@ function pickKnown<T extends object>(template: T, source: Record<string, unknown
 function sanitizeConfig(raw: unknown): SessionConfig {
   const source = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>;
   const config = pickKnown(defaultSessionConfig, source);
-  // The app now only supports the global-preset flow, so every session uses globalJson.
-  config.exportMode = 'globalJson';
+  // The app supports the global-preset flow plus the per-project override mode
+  // (lastExportSettings = global preset + pack settings parsed from each .spine).
+  if (config.exportMode !== 'lastExportSettings') config.exportMode = 'globalJson';
   // The 'timestamp' output policy is temporarily hidden; migrate any stored session off it
   // so it doesn't land on an option the UI no longer shows.
   if (config.outputPolicy === 'timestamp') config.outputPolicy = 'sourceFolderName';

@@ -1,6 +1,7 @@
 import { CheckCircle2, Copy, Pencil, Plus, RotateCw, Search, Trash2, Upload } from 'lucide-react';
 import { Section, Hint } from '../common';
 import { useApp } from '../../useAppController';
+import type { ExportMode } from '../../types';
 
 export function ExportStrategySection() {
   const {
@@ -46,7 +47,7 @@ export function ExportStrategySection() {
           </div>
         </label>
         <label>
-          {t.globalExportJson}
+          {t.basePreset}
           <select value={merged.globalJsonPath || ''} onChange={(event) => updateSetting('globalJsonPath', event.target.value)}>
             <option value="">{t.noPreset}</option>
             {exportPresets.map((preset) => (
@@ -56,6 +57,32 @@ export function ExportStrategySection() {
             ))}
           </select>
         </label>
+      </div>
+
+      {/* The base preset above is used by BOTH modes — lastExportSettings only layers
+          each project's parsed pack min/max on top of it (and falls back to it on parse
+          failure), so this is an augmentation choice, not preset-vs-no-preset. */}
+      <div className="strategy-source">
+        <span className="strategy-label">{t.exportSettingsSource}</span>
+        <div className="mode-grid">
+          {(
+            [
+              ['globalJson', t.presetModeLabel, t.presetModeHelp],
+              ['lastExportSettings', t.perProjectModeLabel, t.lastExportSettingsHelp]
+            ] as [ExportMode, string, string][]
+          ).map(([value, label, description]) => (
+            <label className="mode-option detailed" key={value}>
+              <input
+                type="radio"
+                checked={merged.exportMode === value}
+                onChange={() => updateSetting('exportMode', value)}
+              />
+              <span className="mode-option-content">
+                <strong>{label}<Hint text={description} /></strong>
+              </span>
+            </label>
+          ))}
+        </div>
       </div>
 
       <div className="preset-manager">

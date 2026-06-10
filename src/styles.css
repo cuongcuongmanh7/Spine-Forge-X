@@ -1354,6 +1354,25 @@ input.field-invalid:focus {
   margin-bottom: 12px;
 }
 
+/* Export-strategy source: stack the label above full-width radio cards. The
+   shared .form-row squeezes the label into a 130px column, which crowds the
+   two strategy cards; giving them their own block lets both breathe. */
+.strategy-source {
+  margin: 14px 0 12px;
+}
+
+.strategy-source .strategy-label {
+  display: block;
+  margin-bottom: 8px;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.strategy-source .mode-grid {
+  margin-bottom: 0;
+}
+
 .mode-option {
   display: flex;
   align-items: center;
