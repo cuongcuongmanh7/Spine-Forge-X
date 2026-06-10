@@ -1,5 +1,12 @@
 # Changelog
 
+## v0.2.14
+- **Mode export mới — "Preset nền + min/max từ từng .spine"**: Export strategy giờ là 2 lựa chọn ("Dùng preset cho mọi file" / "Preset nền + min/max từ từng .spine"). Chọn cái thứ 2, app tự đọc settings export lưu trong từng project (min/max pack atlas tinh chỉnh riêng, cleanUp, format binary/json, extension, packSource/packTarget...) và ghi đè lên preset nền đang chọn — không cần mở editor save `.export.json` cho từng file nữa. Preset nền vẫn dùng chung cho cả 2 mode (làm gốc + fallback).
+- Field nào không đọc được thì giữ giá trị preset nền; file không parse được vẫn export bằng preset nền và ghi rõ lý do trong log.
+- Đã calibrate trên project thật: atlas + PNG tái tạo giống từng byte bản artist export; 2 field không đáng tin (alphaThreshold, multipleOfFour — giá trị lưu trong project lệch với lần export thật) bị loại khỏi decoder, luôn lấy từ preset.
+- Lưu ý: settings trong project là của lần *save* cuối — nếu artist chỉnh dialog export sau khi save thì có thể lệch (hạn chế của chính Spine, đã ghi trong tooltip).
+- Nội bộ: tách `presets.rs` + `system.rs` khỏi `lib.rs` (file gọn hơn ~250 dòng dù thêm tính năng); parser `.spine` nằm riêng ở `spine_project.rs` với unit test + proptest.
+
 ## v0.2.13
 - Kéo-thả theo vùng: overlay chia 2 ô — thả vào nửa trái để đặt input, thả một folder vào nửa phải để đặt output (ô output ẩn khi đang dùng Linked Project).
 - Kéo-thả an toàn hơn: thả sai (file không phải `.spine`, hay nhiều folder cùng lúc) hiện cảnh báo thay vì nhận nhầm thành đường dẫn.
