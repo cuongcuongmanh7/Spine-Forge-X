@@ -6,6 +6,23 @@ Source-of-truth tiến độ toàn dự án. Chi tiết kỹ thuật từng task
 
 ---
 
+## v0.2.14 — Per-project export settings từ .spine ✅ Done
+
+> Bump `0.2.13 → 0.2.14`; tag `v0.2.14`.
+
+**Mục tiêu:** batch export theo settings riêng (đặc biệt min/max pack atlas) của TỪNG project mà không cần save `.export.json` thủ công cho mỗi file. Spine CLI chỉ có `--last-export-settings` từ editor 4.3+, nên với project 3.8.x phải tự parse file `.spine`. Chi tiết format: design doc §XI.
+
+- [x] **Parser `.spine`** (`src-tauri/src/spine_project.rs`): `.spine` 3.8.x là raw deflate (`flate2`); decode hibit-string + varint, scan pack min/max (field `07 08 09 0A`, heuristic power-of-two ∈ [16,16384], lấy match cuối). Thêm `cleanUp`, class/extension, packSource/packTarget, outputFormat, atlasExtension. Unit test + proptest + fixture test `#[ignore]` qua env `SPINE_FIXTURE`.
+- [x] **Mode `lastExportSettings`** (`resolve_export_plan` → `create_last_export_settings`): merge per-field lên base preset; field không decode được giữ preset; parse fail toàn phần → fallback base preset (log lý do). `PlanError { Skip, Fail }` thay check chuỗi literal cũ. Command preview `read_spine_export_settings`.
+- [x] **Calibration trên project thật**: Chest.spine cho atlas + PNG **byte-identical** bản artist export. Loại `alphaThreshold` + `multipleOfFour` khỏi decoder (giá trị lưu trong project = lần *save* cuối, lệch lần *export* thật) — luôn lấy từ preset.
+- [x] **UI**: Export strategy thành 2 radio card ("Dùng preset cho mọi file" / "Preset nền + min/max từ từng .spine"), dropdown đổi tên "Base preset" dùng chung cả 2 mode; sanitizer giữ mode mới qua restart. CSS riêng `.strategy-source` (label trên, card full-width).
+- [x] **Nội bộ**: tách `presets.rs` + `system.rs` khỏi `lib.rs` (ratchet baseline 2761 → 2713 dù thêm tính năng).
+- [x] Verify: `cargo test` (46) + `npm test` (26) + `npm run build` xanh; `npm run tauri dev` chạy OK.
+
+> Backlog liên quan: "Xử lý nhiều `.export.json` per project" vẫn mở — mode này giải quyết hướng *không cần* `.export.json`, chưa phải multi-export.
+
+---
+
 ## v0.2.13 — Drag-drop zones + Toggle switches ✅ Done
 
 > Bump `0.2.12 → 0.2.13`; tag `v0.2.13`.
