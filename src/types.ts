@@ -61,6 +61,12 @@ export type BatchScanSummary = {
   totalUnusedBytes: number;
 };
 
+/** A discovered `.spine` unit, for the pre-scan folder picker (no export). */
+export type CleanUnitInfo = {
+  folder: string;
+  spineFile: string;
+};
+
 export type FolderCleanResult = {
   folder: string;
   moved: number;

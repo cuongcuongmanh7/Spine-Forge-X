@@ -87,15 +87,49 @@ fn basename_without_extension_key(value: &str) -> String {
 // ---- Reference extraction (port of json-parser.ts) ------------------------
 
 fn add_attachment_reference(refs: &mut HashSet<String>, name: &str, value: &Value) {
-    if let Value::Object(obj) = value {
-        if let Some(Value::String(path)) = obj.get("path") {
-            if !path.trim().is_empty() {
-                refs.insert(normalize_relative_path(path.trim()));
-                return;
-            }
-        }
+    // The base image name is the attachment's `path` when present, else its name.
+    let base = value
+        .as_object()
+        .and_then(|obj| obj.get("path"))
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|p| !p.is_empty())
+        .unwrap_or(name);
+
+    // A `sequence` attachment (animated, Spine 4.2+) references one image per
+    // frame: `<base><index>` zero-padded to `digits`, for indices
+    // `start .. start + count`. Without this, every frame after the base looks
+    // unused. Fall back to the plain base when there is no sequence.
+    if let Some(seq) = value.as_object().and_then(|obj| obj.get("sequence")) {
+        add_sequence_references(refs, base, seq);
+    } else {
+        refs.insert(normalize_relative_path(base));
     }
-    refs.insert(normalize_relative_path(name));
+}
+
+/// Expand a Spine `sequence` object into one reference per frame.
+fn add_sequence_references(refs: &mut HashSet<String>, base: &str, seq: &Value) {
+    let Value::Object(seq) = seq else {
+        refs.insert(normalize_relative_path(base));
+        return;
+    };
+    let as_i64 = |key: &str| seq.get(key).and_then(Value::as_i64);
+    let count = as_i64("count").unwrap_or(0);
+    let start = as_i64("start").unwrap_or(0);
+    // `digits` controls zero-padding of the frame index (e.g. 4 -> "0007").
+    let digits = as_i64("digits").unwrap_or(0).max(0) as usize;
+
+    if count <= 0 {
+        // Malformed/empty sequence: keep the base so we never delete in error.
+        refs.insert(normalize_relative_path(base));
+        return;
+    }
+
+    let normalized_base = normalize_relative_path(base);
+    for index in start..start + count {
+        let frame = format!("{normalized_base}{index:0digits$}");
+        refs.insert(frame);
+    }
 }
 
 /// A slot map is `{ slotName: { attachmentName: attachmentValue } }`.
@@ -139,6 +173,49 @@ pub fn extract_json_references(content: &str) -> Vec<String> {
         _ => {}
     }
 
+    let mut out: Vec<String> = refs.into_iter().filter(|r| !r.is_empty()).collect();
+    out.sort();
+    out
+}
+
+// ---- Atlas reference extraction -------------------------------------------
+
+/// Extract image references from a packed `.atlas` (libGDX format, Spine 3.8 and
+/// 4.x). Each region name is the image's path relative to the images root,
+/// WITHOUT extension (e.g. `skin_order_of_light/head copy`).
+///
+/// This is the authoritative source of *used* images: the editor binds each
+/// skin placeholder to a concrete image file (folder + renamed basename), and
+/// that binding survives in the atlas region name even though it is dropped
+/// from the exported JSON skeleton (which keeps only bare placeholder names).
+///
+/// Parsing: region names are the non-indented lines that are neither a page
+/// image filename (ends with an image extension) nor a `key: value` property
+/// line (those contain a colon). Blank and indented lines are skipped.
+pub fn extract_atlas_references(content: &str) -> Vec<String> {
+    let mut refs: HashSet<String> = HashSet::new();
+    for line in content.lines() {
+        if line.is_empty() || line.starts_with(' ') || line.starts_with('\t') {
+            continue;
+        }
+        // Page-level property lines (`size: W,H`, `format: ...`) contain a colon.
+        if line.contains(':') {
+            continue;
+        }
+        let name = line.trim_end();
+        if name.is_empty() {
+            continue;
+        }
+        // The texture page filename is not a region.
+        let lower = name.to_lowercase();
+        if IMAGE_EXTENSIONS
+            .iter()
+            .any(|ext| lower.ends_with(&format!(".{ext}")))
+        {
+            continue;
+        }
+        refs.insert(normalize_relative_path(name));
+    }
     let mut out: Vec<String> = refs.into_iter().filter(|r| !r.is_empty()).collect();
     out.sort();
     out
@@ -441,6 +518,85 @@ mod tests {
         }"#;
         let refs = extract_json_references(json);
         assert_eq!(refs, vec!["skin/arm".to_string()]);
+    }
+
+    #[test]
+    fn extract_atlas_refs_keeps_renamed_and_subfolder_paths() {
+        // libGDX/Spine 3.8 atlas: page header + region names + indented props.
+        // The renamed file "head copy" (placeholder is just "head" in the JSON)
+        // only survives here, so the atlas is the authoritative used-image list.
+        let atlas = "\n3005_Aldrych.png\nsize: 372,372\nformat: RGBA8888\nfilter: Linear,Linear\nrepeat: none\nskin_order_of_light/head copy\n  rotate: false\n  xy: 1, 1\n  size: 50, 50\n  orig: 50, 50\n  offset: 0, 0\n  index: -1\nskin_default/head\n  rotate: true\n  xy: 60, 1\n  size: 50, 50\n  orig: 50, 50\n  offset: 0, 0\n  index: -1\n";
+        let refs = extract_atlas_references(atlas);
+        assert_eq!(
+            refs,
+            vec![
+                "skin_default/head".to_string(),
+                "skin_order_of_light/head copy".to_string(),
+            ]
+        );
+    }
+
+    #[test]
+    fn scan_atlas_refs_keep_renamed_image_used() {
+        // The on-disk file is "head copy.png"; the atlas references it by its
+        // no-extension relative path. It must NOT be flagged unused.
+        let images = vec![
+            asset("skin_order_of_light/head copy.png"),
+            asset("skin_default/head.png"),
+            asset("skin_order_of_light/unused_orphan.png"),
+        ];
+        let atlas = "\npage.png\nsize: 1,1\nformat: RGBA8888\nfilter: Linear,Linear\nrepeat: none\nskin_order_of_light/head copy\n  xy: 1, 1\nskin_default/head\n  xy: 2, 2\n";
+        let refs = extract_atlas_references(atlas);
+        let result = scan(&refs, &images);
+        assert_eq!(result.used, 2);
+        assert_eq!(result.unused.len(), 1);
+        assert_eq!(result.unused[0].relative_path, "skin_order_of_light/unused_orphan.png");
+    }
+
+    #[test]
+    fn extract_refs_expands_sequence_frames() {
+        // A sequence attachment references one image per frame, zero-padded.
+        let json = r#"{
+            "skins": [
+                { "name": "default", "attachments": { "fx": {
+                    "boom": { "type": "region", "path": "fx/boom",
+                              "sequence": { "count": 3, "start": 0, "digits": 4 } }
+                } } }
+            ]
+        }"#;
+        let refs = extract_json_references(json);
+        assert_eq!(
+            refs,
+            vec![
+                "fx/boom0000".to_string(),
+                "fx/boom0001".to_string(),
+                "fx/boom0002".to_string(),
+            ]
+        );
+    }
+
+    #[test]
+    fn scan_keeps_all_sequence_frames() {
+        // All numbered frames of an animated attachment must be treated as used.
+        let images = vec![
+            asset("fx/boom0000.png"),
+            asset("fx/boom0001.png"),
+            asset("fx/boom0002.png"),
+            asset("fx/leftover.png"),
+        ];
+        let json = r#"{
+            "skins": [
+                { "name": "default", "attachments": { "fx": {
+                    "boom": { "type": "region", "path": "fx/boom",
+                              "sequence": { "count": 3, "start": 0, "digits": 4 } }
+                } } }
+            ]
+        }"#;
+        let refs = extract_json_references(json);
+        let result = scan(&refs, &images);
+        assert_eq!(result.used, 3, "every sequence frame must be kept");
+        assert_eq!(result.unused.len(), 1);
+        assert_eq!(result.unused[0].relative_path, "fx/leftover.png");
     }
 
     #[test]

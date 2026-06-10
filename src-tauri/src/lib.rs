@@ -24,6 +24,17 @@ use tokio::{
 };
 use walkdir::WalkDir;
 
+/// Identifies a unit's scan inputs. A cached scan is reused only when all of
+/// these match, so any edit to the `.spine` or the image set forces a re-export.
+#[derive(Clone, PartialEq)]
+struct ScanSig {
+    target_version: String,
+    spine_mtime: u64,
+    spine_size: u64,
+    img_count: usize,
+    img_bytes: u64,
+}
+
 struct AppState {
     stop_requested: AtomicBool,
     running_children: Mutex<Vec<u32>>,
@@ -31,6 +42,9 @@ struct AppState {
     run_in_background: AtomicBool,
     /// Set just before a real quit (tray "Quit") so the close handler lets the window close.
     quitting: AtomicBool,
+    /// Per-session cache of clean-source scans, keyed by `.spine` path. Lets a
+    /// re-scan skip the expensive Spine CLI export for units that haven't changed.
+    scan_cache: Mutex<std::collections::HashMap<PathBuf, (ScanSig, FolderScan)>>,
 }
 
 impl Default for AppState {
@@ -41,6 +55,7 @@ impl Default for AppState {
             // Default on; the frontend syncs the persisted user preference at startup.
             run_in_background: AtomicBool::new(true),
             quitting: AtomicBool::new(false),
+            scan_cache: Mutex::new(std::collections::HashMap::new()),
         }
     }
 }
@@ -812,11 +827,16 @@ struct BatchCleanResult {
 
 /// Minimal JSON-export settings: export the skeleton as JSON only (no atlas pack).
 fn write_temp_json_export_settings(out_dir: &Path, spine_file: &Path) -> Result<PathBuf, String> {
+    // Pack an atlas (`packAtlas: {}` = default settings). The atlas region names
+    // are the authoritative used-image paths — they preserve each skin's image
+    // folder and renamed-file basename (e.g. `skin_order_of_light/head copy`),
+    // which the JSON skeleton drops (it keeps only bare placeholder names like
+    // `head`). Without this, renamed/foldered images get flagged unused.
     let settings = serde_json::json!({
         "class": "export-json",
         "extension": ".json",
         "format": "JSON",
-        "packAtlas": null,
+        "packAtlas": {},
         "packSource": "attachments",
         "nonessential": false,
         "cleanUp": false,
@@ -901,41 +921,111 @@ async fn references_from_spine(
         return Err(format!("Spine CLI export thất bại (status {status})."));
     }
 
-    // The skeleton .json (not the *.export.json settings) is what we parse.
-    let json_path = fs::read_dir(&out_dir)
+    // Collect output files. A project may hold several skeletons (base + per-skin
+    // variants), so we union across every atlas / skeleton the CLI wrote.
+    let outputs: Vec<PathBuf> = fs::read_dir(&out_dir)
         .map_err(|e| e.to_string())?
         .filter_map(Result::ok)
         .map(|e| e.path())
-        .find(|p| {
-            p.is_file()
-                && p.extension()
-                    .and_then(|e| e.to_str())
-                    .map(|e| e.eq_ignore_ascii_case("json"))
-                    .unwrap_or(false)
-                && !p
-                    .file_name()
-                    .and_then(|n| n.to_str())
-                    .map(|n| n.ends_with(".export.json"))
-                    .unwrap_or(false)
-        })
-        .ok_or_else(|| "Không tìm thấy JSON skeleton sau khi export.".to_string())?;
+        .filter(|p| p.is_file())
+        .collect();
 
-    let content = fs::read_to_string(&json_path).map_err(|e| e.to_string())?;
-    Ok(cleaner::extract_json_references(&content))
+    let has_ext = |p: &Path, ext: &str| {
+        p.extension()
+            .and_then(|e| e.to_str())
+            .map(|e| e.eq_ignore_ascii_case(ext))
+            .unwrap_or(false)
+    };
+
+    let mut refs: std::collections::HashSet<String> = std::collections::HashSet::new();
+
+    // Prefer the atlas: its region names are the authoritative used-image paths,
+    // preserving skin folders and renamed basenames the JSON skeleton drops.
+    let atlas_paths: Vec<&PathBuf> = outputs.iter().filter(|p| has_ext(p, "atlas")).collect();
+    for atlas in &atlas_paths {
+        let content = fs::read_to_string(atlas).map_err(|e| e.to_string())?;
+        refs.extend(cleaner::extract_atlas_references(&content));
+    }
+
+    // Fall back to the JSON skeleton(s) when no atlas was produced (e.g. packing
+    // unavailable) so scanning still works in a degraded, less-precise mode.
+    if refs.is_empty() {
+        let json_paths: Vec<&PathBuf> = outputs
+            .iter()
+            .filter(|p| {
+                has_ext(p, "json")
+                    && !p
+                        .file_name()
+                        .and_then(|n| n.to_str())
+                        .map(|n| n.ends_with(".export.json"))
+                        .unwrap_or(false)
+            })
+            .collect();
+        if json_paths.is_empty() {
+            return Err("Không tìm thấy atlas/JSON sau khi export.".to_string());
+        }
+        for json_path in &json_paths {
+            let content = fs::read_to_string(json_path).map_err(|e| e.to_string())?;
+            refs.extend(cleaner::extract_json_references(&content));
+        }
+    }
+
+    let mut refs: Vec<String> = refs.into_iter().collect();
+    refs.sort();
+    Ok(refs)
 }
 
-/// Export + scan a single unit (no file moves).
+/// Cheap fingerprint of a unit's scan inputs: the `.spine` file's mtime + size,
+/// the image count + total bytes, and the target version. Computed from the
+/// already-collected image list (no extra disk walk) plus one stat of the
+/// `.spine`. Any add/remove/resize of images or edit to the `.spine` changes it.
+fn scan_signature(
+    spine_file: &Path,
+    target_version: &str,
+    images: &[cleaner::ImageAsset],
+) -> ScanSig {
+    let (spine_mtime, spine_size) = fs::metadata(spine_file)
+        .map(|m| {
+            let mtime = m
+                .modified()
+                .ok()
+                .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+                .map(|d| d.as_secs())
+                .unwrap_or(0);
+            (mtime, m.len())
+        })
+        .unwrap_or((0, 0));
+    ScanSig {
+        target_version: target_version.to_string(),
+        spine_mtime,
+        spine_size,
+        img_count: images.len(),
+        img_bytes: images.iter().map(|i| i.size_bytes).sum(),
+    }
+}
+
+/// Export + scan a single unit (no file moves). Reuses a cached result when the
+/// unit's inputs are unchanged, skipping the expensive Spine CLI export.
 async fn scan_unit(
     state: &Arc<AppState>,
     spine_path: &str,
     target_version: &str,
     unit: &CleanUnit,
 ) -> FolderScan {
+    // Collecting images is cheap (a filesystem walk); the export is what costs
+    // seconds. Fingerprint first so an unchanged unit can hit the cache.
+    let images = cleaner::collect_images(&unit.images_dir);
+    let sig = scan_signature(&unit.spine_file, target_version, &images);
+    if let Some((cached_sig, cached_scan)) = state.scan_cache.lock().await.get(&unit.spine_file) {
+        if *cached_sig == sig {
+            return cached_scan.clone();
+        }
+    }
+
     match references_from_spine(state, spine_path, target_version, &unit.spine_file).await {
         Ok(refs) => {
-            let images = cleaner::collect_images(&unit.images_dir);
             let result = cleaner::scan(&refs, &images);
-            FolderScan {
+            let scan = FolderScan {
                 folder: path_to_string(&unit.folder),
                 images_dir: path_to_string(&unit.images_dir),
                 spine_file: path_to_string(&unit.spine_file),
@@ -947,7 +1037,13 @@ async fn scan_unit(
                 missing: result.missing,
                 ambiguous: result.ambiguous,
                 error: None,
-            }
+            };
+            state
+                .scan_cache
+                .lock()
+                .await
+                .insert(unit.spine_file.clone(), (sig, scan.clone()));
+            scan
         }
         Err(e) => FolderScan::empty(unit, Some(e)),
     }
@@ -964,7 +1060,13 @@ async fn run_clean_units(
     do_move: bool,
 ) -> Vec<(FolderScan, Option<(usize, String)>)> {
     let total = units.len();
-    let parallel = 4usize.min(total.max(1));
+    // Most of each unit's cost is Spine CLI/JVM startup (idle wait), so scaling
+    // past the old fixed 4 helps. Cap at 8 to bound concurrent Spine processes
+    // (each uses real RAM/GPU); never spawn more than there are units.
+    let cores = std::thread::available_parallelism()
+        .map(|n| n.get())
+        .unwrap_or(4);
+    let parallel = cores.clamp(4, 8).min(total.max(1));
     let semaphore = Arc::new(Semaphore::new(parallel));
     let completed = Arc::new(AtomicUsize::new(0));
     // One backup timestamp per run (each folder gets its own _unused_backup/<stamp>).
@@ -991,7 +1093,12 @@ async fn run_clean_units(
             let mut moved_info = None;
             if do_move && scan.error.is_none() && !scan.unused.is_empty() {
                 match cleaner::move_unused(&unit.images_dir, &scan.unused, &stamp) {
-                    Ok(backup) => moved_info = Some((scan.unused.len(), backup)),
+                    Ok(backup) => {
+                        // Moving files changes the image set; drop the now-stale
+                        // cache entry so the next scan re-exports this unit.
+                        st.scan_cache.lock().await.remove(&unit.spine_file);
+                        moved_info = Some((scan.unused.len(), backup));
+                    }
                     Err(e) => scan.error = Some(e),
                 }
             }
@@ -1054,6 +1161,34 @@ fn count_clean_units(root: String, excluded: Vec<String>) -> usize {
         return 0;
     }
     filter_excluded_units(discover_clean_units(&root_path), &excluded).len()
+}
+
+/// One discovered clean unit, for letting the user pick which folders to scan.
+#[derive(Debug, Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+struct CleanUnitInfo {
+    /// Source folder containing the `.spine`.
+    folder: String,
+    /// The `.spine` path — used as the stable key and as the `excluded` token.
+    spine_file: String,
+}
+
+/// List every `.spine` unit under `root` without exporting (a single cheap walk).
+/// Lets the UI show a checkbox list so the user can scan only some sub-folders;
+/// the unchecked ones are passed back as `excluded` to scan/clean.
+#[tauri::command]
+fn list_clean_units(root: String) -> Vec<CleanUnitInfo> {
+    let root_path = PathBuf::from(root.trim_matches('"'));
+    if !root_path.exists() {
+        return Vec::new();
+    }
+    discover_clean_units(&root_path)
+        .into_iter()
+        .map(|unit| CleanUnitInfo {
+            folder: path_to_string(&unit.folder),
+            spine_file: path_to_string(&unit.spine_file),
+        })
+        .collect()
 }
 
 /// Scan source folders under `root` for unused image assets (no files touched).
@@ -2246,6 +2381,7 @@ pub fn run() {
             path_exists,
             read_image_data_url,
             count_clean_units,
+            list_clean_units,
             scan_source_folders,
             clean_source_folders,
             move_unused_images,

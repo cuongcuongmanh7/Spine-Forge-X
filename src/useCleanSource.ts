@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import type { Translations } from './i18n';
-import type { BatchCleanResult, BatchScanSummary, ToastKind } from './types';
+import type { BatchCleanResult, BatchScanSummary, CleanUnitInfo, ToastKind } from './types';
 
 type Options = {
   spinePath: string;
@@ -62,7 +62,16 @@ export function useCleanSource({
     });
   }
 
-  async function scanSourceFolders(root: string): Promise<BatchScanSummary | null> {
+  // The user may deselect folders in the modal's picker. Those `.spine` paths are
+  // merged with the global export-set exclusions so scan/clean skip them too.
+  function mergeExcluded(extra: string[]): string[] {
+    return extra.length ? [...excludedFiles, ...extra] : excludedFiles;
+  }
+
+  async function scanSourceFolders(
+    root: string,
+    extraExcluded: string[] = []
+  ): Promise<BatchScanSummary | null> {
     const target = root.trim();
     if (!target) {
       pushToast(t.inputEmpty, 'warning');
@@ -79,7 +88,7 @@ export function useCleanSource({
         spinePath,
         targetVersion,
         root: target,
-        excluded: excludedFiles
+        excluded: mergeExcluded(extraExcluded)
       });
     } catch (error) {
       const body = String(error);
@@ -90,18 +99,35 @@ export function useCleanSource({
   }
 
   /** Count `.spine` units under `root` without exporting. Cheap; used to preview/warn before a scan. */
-  async function countCleanUnits(root: string): Promise<number> {
+  async function countCleanUnits(root: string, extraExcluded: string[] = []): Promise<number> {
     const target = root.trim();
     if (!target) return 0;
     try {
-      return await invoke<number>('count_clean_units', { root: target, excluded: excludedFiles });
+      return await invoke<number>('count_clean_units', {
+        root: target,
+        excluded: mergeExcluded(extraExcluded)
+      });
     } catch {
       return 0;
     }
   }
 
+  /** List `.spine` units under `root` without exporting, for the folder picker. */
+  async function listCleanUnits(root: string): Promise<CleanUnitInfo[]> {
+    const target = root.trim();
+    if (!target) return [];
+    try {
+      return await invoke<CleanUnitInfo[]>('list_clean_units', { root: target });
+    } catch {
+      return [];
+    }
+  }
+
   /** Scan + move unused images under `root` to a per-folder timestamped backup. */
-  async function cleanSourceFolders(root: string): Promise<BatchCleanResult | null> {
+  async function cleanSourceFolders(
+    root: string,
+    extraExcluded: string[] = []
+  ): Promise<BatchCleanResult | null> {
     const target = root.trim();
     if (!target || !spinePath.trim() || isCleaningSourceFolder) return null;
     setIsCleaningSourceFolder(true);
@@ -110,7 +136,7 @@ export function useCleanSource({
         spinePath,
         targetVersion,
         root: target,
-        excluded: excludedFiles
+        excluded: mergeExcluded(extraExcluded)
       });
       const body = t.cleanSourceDone.replace('{count}', String(result.totalMoved));
       appendLog(body);
@@ -165,6 +191,7 @@ export function useCleanSource({
     setCleanScanSummary,
     scanSourceFolders,
     countCleanUnits,
+    listCleanUnits,
     cleanSourceFolders,
     moveFolderUnused,
     readImageDataUrl

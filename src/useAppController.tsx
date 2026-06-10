@@ -217,6 +217,7 @@ export function useAppControllerValue() {
     setCleanScanSummary,
     scanSourceFolders,
     countCleanUnits,
+    listCleanUnits,
     cleanSourceFolders,
     moveFolderUnused,
     readImageDataUrl
@@ -1584,6 +1585,7 @@ export function useAppControllerValue() {
     isCleaningSourceFolder,
     scanSourceFolders,
     countCleanUnits,
+    listCleanUnits,
     cleanSourceFolders,
     moveFolderUnused,
     readImageDataUrl,

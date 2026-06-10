@@ -1,8 +1,9 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { FolderOpen, Trash2, X, Search, RotateCw, CircleStop } from 'lucide-react';
 import { open } from '@tauri-apps/plugin-dialog';
 import { confirm } from '@tauri-apps/plugin-dialog';
 import { useApp } from '../useAppController';
+import type { CleanUnitInfo } from '../types';
 import { CleanFolderDetailModal } from './CleanFolderDetailModal';
 
 function formatBytes(bytes: number): string {
@@ -18,6 +19,20 @@ function shortenPath(path: string): string {
   return segments.slice(-2).join('/');
 }
 
+/**
+ * Folder path relative to the scanned root, so sibling sub-trees with the same
+ * leaf name stay distinct (e.g. "Chibi/9901" vs "Splash/9901"). Falls back to
+ * the leaf when the folder isn't under the root.
+ */
+function relativeToRoot(folder: string, root: string): string {
+  const f = folder.replace(/\\/g, '/').replace(/\/+$/, '');
+  const r = root.trim().replace(/\\/g, '/').replace(/\/+$/, '');
+  if (r && f.toLowerCase().startsWith(r.toLowerCase() + '/')) {
+    return f.slice(r.length + 1);
+  }
+  return f.split('/').filter(Boolean).pop() || folder;
+}
+
 export function CleanSourceFolderModal() {
   const {
     t,
@@ -30,6 +45,7 @@ export function CleanSourceFolderModal() {
     liveProgress,
     cleanSourceFolders,
     moveFolderUnused,
+    listCleanUnits,
     setCleanSourceFolderOpen,
     cleanScanRoot,
     setCleanScanRoot,
@@ -45,9 +61,22 @@ export function CleanSourceFolderModal() {
   const setSummary = setCleanScanSummary;
   const [scanning, setScanning] = useState(false);
   const [detailIndex, setDetailIndex] = useState<number | null>(null);
-  // Cheap pre-scan count of .spine units, so the user knows the scope before
-  // launching a scan that exports each skeleton through Spine. null = not counted yet.
-  const [unitCount, setUnitCount] = useState<number | null>(null);
+  // Cheap pre-scan list of .spine units (no export), so the user can see the
+  // scope and pick which sub-folders to scan. null = not listed yet.
+  const [units, setUnits] = useState<CleanUnitInfo[] | null>(null);
+  // `.spine` paths the user unchecked — passed as `excluded` to scan/clean so
+  // only the ticked folders are processed. Reset whenever the root changes.
+  const [deselected, setDeselected] = useState<Set<string>>(new Set());
+
+  const unitCount = units?.length ?? null;
+  const selectedUnits = useMemo(
+    () => (units ?? []).filter((u) => !deselected.has(u.spineFile)),
+    [units, deselected]
+  );
+  const excludedSpine = useMemo(
+    () => (units ?? []).filter((u) => deselected.has(u.spineFile)).map((u) => u.spineFile),
+    [units, deselected]
+  );
 
   // Above this many skeletons, confirm before scanning — a large folder can take
   // minutes and spawn Spine once per file.
@@ -59,17 +88,19 @@ export function CleanSourceFolderModal() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Re-count whenever the target folder changes (debounced — the user may be typing a path).
+  // Re-list units whenever the target folder changes (debounced — the user may
+  // be typing a path). Changing the root resets the selection to "all checked".
   useEffect(() => {
     const target = root.trim();
+    setDeselected(new Set());
     if (!target) {
-      setUnitCount(null);
+      setUnits(null);
       return;
     }
     let cancelled = false;
     const id = setTimeout(async () => {
-      const count = await countCleanUnits(target);
-      if (!cancelled) setUnitCount(count);
+      const found = await listCleanUnits(target);
+      if (!cancelled) setUnits(found);
     }, 400);
     return () => {
       cancelled = true;
@@ -77,6 +108,23 @@ export function CleanSourceFolderModal() {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [root]);
+
+  function toggleUnit(spineFile: string) {
+    setDeselected((prev) => {
+      const next = new Set(prev);
+      if (next.has(spineFile)) next.delete(spineFile);
+      else next.add(spineFile);
+      return next;
+    });
+  }
+
+  function selectAll() {
+    setDeselected(new Set());
+  }
+
+  function selectNone() {
+    setDeselected(new Set((units ?? []).map((u) => u.spineFile)));
+  }
 
   function close() {
     // Don't let the user dismiss the modal mid-scan — the scan runs in the
@@ -92,8 +140,10 @@ export function CleanSourceFolderModal() {
 
   async function scan() {
     if (scanning || !root.trim()) return;
+    // Only the ticked folders are scanned (unchecked → excluded).
+    const count = units ? selectedUnits.length : await countCleanUnits(root);
+    if (units && count === 0) return; // nothing selected; button is disabled anyway
     // Confirm before launching a scan that would export a large number of skeletons.
-    const count = unitCount ?? (await countCleanUnits(root));
     if (count > LARGE_SCAN_THRESHOLD) {
       const ok = await confirm(t.cleanSourceLargeWarn.replace('{count}', String(count)), {
         title: t.cleanSourceTitle,
@@ -104,7 +154,7 @@ export function CleanSourceFolderModal() {
     setScanning(true);
     setSummary(null);
     try {
-      const result = await scanSourceFolders(root);
+      const result = await scanSourceFolders(root, excludedSpine);
       setSummary(result);
     } finally {
       setScanning(false);
@@ -118,7 +168,7 @@ export function CleanSourceFolderModal() {
       kind: 'warning'
     });
     if (!ok) return;
-    const result = await cleanSourceFolders(root);
+    const result = await cleanSourceFolders(root, excludedSpine);
     if (result) {
       // Re-scan so the table reflects the cleaned state (now 0 unused).
       await scan();
@@ -157,7 +207,7 @@ export function CleanSourceFolderModal() {
 
   // Progress for the scan overlay. Falls back to the pre-scan count until the
   // first progress event arrives so the bar isn't stuck at 0/0.
-  const scanTotal = liveProgress.total || unitCount || 0;
+  const scanTotal = liveProgress.total || selectedUnits.length || unitCount || 0;
   const scanCurrent = liveProgress.current;
   const scanPercent = scanTotal > 0 ? Math.min(100, Math.round((scanCurrent / scanTotal) * 100)) : 0;
 
@@ -186,17 +236,69 @@ export function CleanSourceFolderModal() {
             <button className="icon-button" title={t.browse} aria-label={t.browse} onClick={browse}>
               <FolderOpen size={18} />
             </button>
-            <button className="secondary-button" disabled={busy || !root.trim()} onClick={scan}>
+            <button
+              className="secondary-button"
+              disabled={busy || !root.trim() || (units !== null && selectedUnits.length === 0)}
+              onClick={scan}
+            >
               <Search size={16} /> {scanning ? t.cleanSourceScanning : t.cleanSourceScan}
             </button>
           </div>
 
           {!scanning && root.trim() && unitCount !== null && (
-            <p className={`helper-text ${unitCount > LARGE_SCAN_THRESHOLD ? 'field-status warning' : ''}`}>
-              {unitCount === 0
-                ? t.cleanSourceCountNone
-                : t.cleanSourceCount.replace('{count}', String(unitCount))}
-            </p>
+            unitCount === 0 ? (
+              <p className="helper-text">{t.cleanSourceCountNone}</p>
+            ) : unitCount === 1 ? (
+              <p className="helper-text">{t.cleanSourceCount.replace('{count}', '1')}</p>
+            ) : (
+              <div className="clean-source-picker">
+                <div className="clean-source-picker-head">
+                  <span
+                    className={`helper-text ${
+                      selectedUnits.length > LARGE_SCAN_THRESHOLD ? 'field-status warning' : ''
+                    }`}
+                  >
+                    {t.cleanSourceSelected
+                      .replace('{count}', String(selectedUnits.length))
+                      .replace('{total}', String(unitCount))}
+                  </span>
+                  <span className="clean-source-picker-actions">
+                    <button type="button" className="link-button" onClick={selectAll}>
+                      {t.cleanSourceSelectAll}
+                    </button>
+                    <button type="button" className="link-button" onClick={selectNone}>
+                      {t.cleanSourceSelectNone}
+                    </button>
+                  </span>
+                </div>
+                <ul className="clean-source-picker-list">
+                  {(units ?? []).map((u) => {
+                    const rel = relativeToRoot(u.folder, root);
+                    const slash = rel.lastIndexOf('/');
+                    const prefix = slash >= 0 ? rel.slice(0, slash) : '';
+                    const leaf = slash >= 0 ? rel.slice(slash + 1) : rel;
+                    return (
+                      <li key={u.spineFile}>
+                        <label title={u.folder}>
+                          <input
+                            type="checkbox"
+                            checked={!deselected.has(u.spineFile)}
+                            onChange={() => toggleUnit(u.spineFile)}
+                          />
+                          <span className="clean-source-picker-name">
+                            {prefix && <span className="cs-prefix">{prefix}</span>}
+                            <span className="cs-leaf">
+                              {prefix ? '/' : ''}
+                              {leaf}
+                            </span>
+                          </span>
+                        </label>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
+            )
           )}
 
           {summary && (
