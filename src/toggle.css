@@ -1,0 +1,52 @@
+/* macOS-style toggle switch. Applied app-wide to every checkbox rendered inside a
+   `.checkbox-line` label, so existing markup keeps working — only the visuals change.
+   The native box is replaced via `appearance: none`; the knob is the ::before pseudo. */
+.checkbox-line {
+  gap: 9px;
+}
+
+.checkbox-line input[type='checkbox'] {
+  appearance: none;
+  -webkit-appearance: none;
+  position: relative;
+  flex: 0 0 auto;
+  width: 38px;
+  height: 22px;
+  margin: 0;
+  padding: 0;
+  border-radius: 999px;
+  background: var(--border-strong);
+  cursor: pointer;
+  transition: background 0.18s var(--ease, ease);
+}
+
+.checkbox-line input[type='checkbox']::before {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #ffffff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+  transition: transform 0.18s var(--ease, ease);
+}
+
+.checkbox-line input[type='checkbox']:checked {
+  background: var(--primary);
+}
+
+.checkbox-line input[type='checkbox']:checked::before {
+  transform: translateX(16px);
+}
+
+.checkbox-line input[type='checkbox']:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+.checkbox-line input[type='checkbox']:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}

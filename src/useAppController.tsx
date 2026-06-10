@@ -350,8 +350,17 @@ export function useAppControllerValue() {
 
   // App auto-update lifecycle lives in its own hook (checks on mount).
   const { updateUi, checkForAppUpdate, installPendingUpdate, openReleasesPage } = useAppUpdater(appendLog);
-  // OS drag-drop hover state + listener; forwards dropped paths to handleDroppedPaths.
-  const { isDragOver } = useDragDrop(handleDroppedPaths);
+  // OS drag-drop: zone routing lives in useDragDrop. The output zone only exists while
+  // the output path field is editable; the linkedProject policy hides it.
+  const outputDropEnabled = merged.outputPolicy !== 'linkedProject';
+  const { isDragOver, dragPosition } = useDragDrop({
+    enabled: !anyRunning,
+    outputDropEnabled,
+    onInputFiles: applyInputFiles,
+    onInputFolder: applyInputFolder,
+    onOutputFolder: updateOutputPath,
+    onUnsupported: (zone) => pushToast(zone === 'output' ? t.dropOutputUnsupported : t.dropUnsupported, 'warning')
+  });
 
   // Route async run output to the originating session even if the user switched away.
   function recordRunLog(line: string) {
@@ -1024,22 +1033,6 @@ export function useAppControllerValue() {
     }
   }
 
-  /**
-   * Handle OS file drop (Tauri v2 gives absolute paths). `.spine` files become an
-   * explicit file selection; a single dropped folder is scanned. Ignored mid-export.
-   */
-  async function handleDroppedPaths(paths: string[]) {
-    if (anyRunning || !paths.length) return;
-    const spineFiles = paths.filter((p) => p.toLowerCase().endsWith('.spine'));
-    if (spineFiles.length) {
-      applyInputFiles(spineFiles);
-    } else if (paths.length === 1) {
-      await applyInputFolder(paths[0]);
-    } else {
-      appendLog(t.dropUnsupported);
-    }
-  }
-
   async function chooseOutputFolder() {
     if (isChoosingOutputFolder) return;
     setIsChoosingOutputFolder(true);
@@ -1586,6 +1579,8 @@ export function useAppControllerValue() {
     dashboardOpen,
     setDashboardOpen,
     isDragOver,
+    dragPosition,
+    outputDropEnabled,
     isCleaningSourceFolder,
     scanSourceFolders,
     countCleanUnits,

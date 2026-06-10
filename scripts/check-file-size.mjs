@@ -17,8 +17,8 @@ const DEFAULT_MAX = 800;
 // Grandfathered files: current line count is their ceiling. Lower these as they shrink.
 const BASELINE = {
   'src-tauri/src/lib.rs': 2761,
-  'src/styles.css': 2517,
-  'src/useAppController.tsx': 1703
+  'src/styles.css': 2474,
+  'src/useAppController.tsx': 1698
 };
 
 /** Recursively collect source files under a root directory. */

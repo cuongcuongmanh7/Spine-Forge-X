@@ -1,0 +1,74 @@
+/* Drag-drop hint overlay. Purely visual — the OS drop is handled at the Tauri
+   window level — so it ignores pointer events. Above modals, below toasts. */
+.drop-overlay {
+  position: fixed;
+  left: 0;
+  right: 0;
+  top: 42px; /* keep the custom titlebar reachable */
+  bottom: 0;
+  z-index: 960;
+  pointer-events: none;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: color-mix(in srgb, var(--primary), transparent 86%);
+  -webkit-backdrop-filter: blur(2px);
+  backdrop-filter: blur(2px);
+  animation: fade-in 0.12s var(--ease);
+}
+
+/* Split variant: input (left) / output (right), 50/50. No padding/gap on the
+   container so the visual boundary sits exactly at the midline hit-test. */
+.drop-overlay-split {
+  padding: 0;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  place-items: stretch;
+}
+
+.drop-overlay-zone {
+  display: grid;
+  place-items: center;
+  padding: 24px;
+}
+
+.drop-overlay-zone + .drop-overlay-zone {
+  border-left: 2px dashed color-mix(in srgb, var(--primary), transparent 50%);
+}
+
+.drop-overlay-zone .drop-overlay-card {
+  opacity: 0.55;
+  transition: opacity 0.12s var(--ease), transform 0.12s var(--ease);
+}
+
+.drop-overlay-zone.active .drop-overlay-card {
+  opacity: 1;
+  transform: scale(1.03);
+  border-style: solid;
+}
+
+.drop-overlay-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 32px 44px;
+  border: 2px dashed var(--primary);
+  border-radius: 18px;
+  background: var(--surface);
+  color: var(--primary);
+  box-shadow: 0 28px 80px rgba(0, 0, 0, 0.4);
+  text-align: center;
+}
+
+.drop-overlay-title {
+  margin: 0;
+  font-size: 18px;
+  color: var(--text-strong);
+}
+
+.drop-overlay-hint {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 14px;
+}

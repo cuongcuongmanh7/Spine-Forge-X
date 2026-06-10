@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.2.13
+- Kéo-thả theo vùng: overlay chia 2 ô — thả vào nửa trái để đặt input, thả một folder vào nửa phải để đặt output (ô output ẩn khi đang dùng Linked Project).
+- Kéo-thả an toàn hơn: thả sai (file không phải `.spine`, hay nhiều folder cùng lúc) hiện cảnh báo thay vì nhận nhầm thành đường dẫn.
+- Tất cả ô tick chuyển sang dạng công tắc gạt (toggle) kiểu macOS.
+- Settings → Hoạt động: dòng mô tả thu lại thành icon, rê chuột mới hiện để gọn hơn.
+
 ## v0.2.12
 - Chạy ngầm ở khay hệ thống: đóng (X) hoặc thu nhỏ sẽ thu app xuống tray thay vì thoát; icon tray có menu Show/Quit. Bật/tắt trong Settings → Hoạt động (mặc định bật).
 - Kéo-thả: thả folder hoặc file .spine thẳng vào app để đặt input.

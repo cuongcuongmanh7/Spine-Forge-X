@@ -6,6 +6,17 @@ Source-of-truth tiến độ toàn dự án. Chi tiết kỹ thuật từng task
 
 ---
 
+## v0.2.13 — Drag-drop zones + Toggle switches ✅ Done
+
+> Bump `0.2.12 → 0.2.13`; tag `v0.2.13`.
+
+- [x] **Kéo-thả theo vùng**: overlay tách thành ô input (trái) / output (phải), hit-test theo trục ngang ở mốc giữa màn hình (`dropZoneAt` trong `useDragDrop.ts`); thả 1 folder vào ô output gọi `updateOutputPath`. Ô output ẩn khi `outputPolicy === 'linkedProject'`. CSS tách ra `components/DropOverlay.css`.
+- [x] **Kéo-thả an toàn hơn**: drop sai (file không phải `.spine`, nhiều folder) → toast cảnh báo; path 1 phần tử chỉ nhận là folder sau khi xác minh là thư mục thật trên disk (qua `list_subdirectories`).
+- [x] **Toggle switch toàn app**: mọi `.checkbox-line input[type=checkbox]` render thành công tắc gạt kiểu macOS bằng CSS thuần (`toggle.css`, import global ở `main.tsx`) — không đổi markup TSX.
+- [x] **Settings → Hoạt động gọn hơn**: dòng tip "chạy ngầm" chuyển sang icon `Hint` hover (card thu lại).
+
+---
+
 ## v0.2.12 — Tray + Drag-drop + Dashboard ✅ Done
 
 > Bump `0.2.11 → 0.2.12`; tag `v0.2.12`.

@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { AlertTriangle, RotateCw, Search, X } from 'lucide-react';
-import { Section, FieldStatus } from './common';
+import { Section, FieldStatus, Hint } from './common';
 import { useApp } from '../useAppController';
 
 export function SettingsModal() {
@@ -64,8 +64,8 @@ export function SettingsModal() {
                 onChange={(event) => updateAppConfig('runInBackground', event.target.checked)}
               />
               {t.runInBackground}
+              <Hint text={t.runInBackgroundHelp} />
             </label>
-            <p className="helper-text">{t.runInBackgroundHelp}</p>
           </Section>
 
           <Section title={t.executable}>
