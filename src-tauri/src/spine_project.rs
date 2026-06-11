@@ -241,9 +241,44 @@ fn decode(data: &[u8]) -> Option<DecodedSettings> {
 
     decode_prefix_fields(data, scan.start, &mut d);
     let after_pack = decode_suffix_fields(data, scan.end, &mut d);
+    decode_scale(data, scan.end, &mut d);
     decode_outer_fields(data, scan.start, &mut d);
     decode_trailing_strings(data, after_pack, &mut d);
     Some(d)
+}
+
+/// Tier A (validated end-to-end 2026-06): pack-atlas `scale`. Spine stores scale
+/// at full resolution; dropping it exports at the wrong resolution (e.g. 2x for
+/// scale 0.5 — proven on 3001_Lucius: scale 0.5 reproduced the editor's 320px
+/// pages, ignoring it gave ~640px). Encoding within the pack block, after
+/// maxHeight: `13 <count varint> [02 <f32 BE>]...`.
+///
+/// Only single-scale is decoded — that is what was validated, and overriding a
+/// 1-element `scale` keeps the preset's parallel `scaleSuffix`/`scaleResampling`
+/// (also length 1) consistent. Multi-scale projects keep the preset's scale.
+/// Note: `paddingX/Y` (field 0x16/0x17) is deliberately NOT decoded — its stored
+/// value did not reproduce the export (file had 16, real export used 8), so
+/// padding always comes from the base preset.
+fn decode_scale(data: &[u8], pack_end: usize, d: &mut DecodedSettings) {
+    let to = (pack_end + 96).min(data.len());
+    let mut i = pack_end;
+    while i + 6 < to {
+        if data[i] == 0x13 {
+            if let Some((count, p)) = read_varint(data, i + 1) {
+                if count == 1 && data.get(p) == Some(&0x02) {
+                    if let Some(raw) = data.get(p + 1..p + 5) {
+                        let v = f32::from_be_bytes([raw[0], raw[1], raw[2], raw[3]]);
+                        if v > 0.0 && v <= 8.0 {
+                            d.pack
+                                .insert("scale".into(), Value::Array(vec![Value::from(f64::from(v))]));
+                            return;
+                        }
+                    }
+                }
+            }
+        }
+        i += 1;
+    }
 }
 
 /// Tier B (positional): the field run right before minWidth —
@@ -538,6 +573,9 @@ mod tests {
         payload.extend(hibit("png"));
         payload.push(0x0F);
         payload.extend(0.9f32.to_be_bytes());
+        // scale [0.5]: field 0x13, count 1, element type 0x02, f32 BE
+        payload.extend([0x13, 0x01, 0x02]);
+        payload.extend(0.5f32.to_be_bytes());
         payload.extend([0x1F, 0x01]);
         payload.extend(hibit(".atlas.txt"));
         payload.extend([0x04, 0x01]);
@@ -577,6 +615,11 @@ mod tests {
         assert_eq!(
             d.pack.get("jpegQuality"),
             Some(&Value::from(f64::from(0.9f32)))
+        );
+        // scale decoded as a single-element array (validated: critical for resolution).
+        assert_eq!(
+            d.pack.get("scale"),
+            Some(&Value::Array(vec![Value::from(f64::from(0.5f32))]))
         );
     }
 

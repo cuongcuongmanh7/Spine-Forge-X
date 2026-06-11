@@ -1637,17 +1637,39 @@ fn create_last_export_settings(
 
     let base_content = fs::read_to_string(base_path)
         .map_err(|e| PlanError::Fail(format!("Đọc preset nền thất bại ({base_path}): {e}")))?;
+
+    // Divergence warning: when the project's stored pack max differs from the
+    // base preset, the .spine likely wasn't re-exported from the editor (its
+    // stored settings are stale relative to the artist's intent), so the parsed
+    // value may be wrong. Surface it instead of silently exporting at a bad size.
+    let base_max = serde_json::from_str::<serde_json::Value>(&base_content)
+        .ok()
+        .and_then(|v| {
+            v.get("packAtlas")
+                .and_then(|p| p.get("maxWidth"))
+                .and_then(serde_json::Value::as_u64)
+        });
+    let mut note = format!(
+        "Settings từ project: {} — {}",
+        decoded.summary(),
+        path_to_string(input_file)
+    );
+    if let Some(base_max) = base_max {
+        if u64::from(decoded.pack_sizes.max_width) != base_max {
+            note.push_str(&format!(
+                "  [WARN] pack max từ .spine = {} ≠ preset nền = {}; kiểm tra file đã export lại từ editor chưa (giá trị trong .spine có thể stale)",
+                decoded.pack_sizes.max_width, base_max
+            ));
+        }
+    }
+
     let merged =
         spine_project::merge_decoded_settings(&base_content, &decoded).map_err(PlanError::Fail)?;
     let temp_file = write_temp_export_settings(&merged)?;
     Ok(ExportPlan {
         arg: Some(path_to_string(&temp_file)),
         temp_file: Some(temp_file),
-        note: Some(format!(
-            "Settings từ project: {} — {}",
-            decoded.summary(),
-            path_to_string(input_file)
-        )),
+        note: Some(note),
     })
 }
 
