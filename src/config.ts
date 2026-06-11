@@ -47,6 +47,8 @@ export type ExportRecord = {
   total: number;
   /** true if the user stopped the run early. */
   stopped: boolean;
+  /** Wall-clock run time in ms. Absent on records saved before this field existed. */
+  durationMs?: number;
 };
 
 /**

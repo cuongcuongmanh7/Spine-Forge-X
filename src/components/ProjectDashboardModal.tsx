@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { X } from 'lucide-react';
 import { useApp } from '../useAppController';
+import { formatDuration } from '../time';
 
 /** Per-project export dashboard: last-run summary for each session, plus project totals. */
 export function ProjectDashboardModal() {
@@ -23,10 +24,11 @@ export function ProjectDashboardModal() {
         acc.skipped += r.skipped;
         acc.total += r.total;
         acc.runs += 1;
+        acc.durationMs += r.durationMs ?? 0;
       }
       return acc;
     },
-    { completed: 0, failed: 0, skipped: 0, total: 0, runs: 0 }
+    { completed: 0, failed: 0, skipped: 0, total: 0, runs: 0, durationMs: 0 }
   );
 
   return (
@@ -64,6 +66,7 @@ export function ProjectDashboardModal() {
                     <th>{t.dashboardColFailed}</th>
                     <th>{t.dashboardColSkipped}</th>
                     <th>{t.dashboardColTotal}</th>
+                    <th>{t.dashboardColDuration}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -80,6 +83,7 @@ export function ProjectDashboardModal() {
                         <td>{r ? r.failed : '—'}</td>
                         <td>{r ? r.skipped : '—'}</td>
                         <td>{r ? r.total : '—'}</td>
+                        <td className="muted">{r?.durationMs != null ? formatDuration(r.durationMs) : '—'}</td>
                       </tr>
                     );
                   })}
@@ -94,6 +98,7 @@ export function ProjectDashboardModal() {
                     <td>{totals.failed}</td>
                     <td>{totals.skipped}</td>
                     <td>{totals.total}</td>
+                    <td className="muted">{totals.durationMs > 0 ? formatDuration(totals.durationMs) : '—'}</td>
                   </tr>
                 </tfoot>
               </table>

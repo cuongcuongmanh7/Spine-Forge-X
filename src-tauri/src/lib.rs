@@ -526,6 +526,10 @@ async fn start_batch_export(
                 return (index, FileOutcome::Skipped, None);
             }
 
+            // This job now holds a permit and is actively exporting — let the UI
+            // overlay list it (it is removed again on the spine-progress event).
+            let _ = win.emit("spine-job-start", file.clone());
+
             let output_dir_hint = {
                 let input_path = std::path::PathBuf::from(file.as_str());
                 resolve_output_dir(&req, &input_path, &run_folder).ok()
@@ -1676,10 +1680,16 @@ fn create_last_export_settings(
 /// Write export settings JSON to a unique temp file (UTF-8, no BOM) and return
 /// its path. The caller owns cleanup via `ExportPlan::temp_file`.
 fn write_temp_export_settings(settings: &serde_json::Value) -> Result<PathBuf, String> {
+    // Timestamp+pid alone collides when parallel jobs plan within the same
+    // millisecond in one process (the first job's cleanup then deletes the
+    // file out from under the others), so a per-process counter is required.
+    static COUNTER: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+    let seq = COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     let temp_file = std::env::temp_dir().join(format!(
-        "spineforge-x-{}-{}.export.json",
+        "spineforge-x-{}-{}-{}.export.json",
         chrono::Local::now().format("%Y%m%d%H%M%S%3f"),
-        std::process::id()
+        std::process::id(),
+        seq
     ));
     let json = serde_json::to_string_pretty(settings).map_err(|e| e.to_string())?;
     fs::write(&temp_file, json).map_err(|e| e.to_string())?;

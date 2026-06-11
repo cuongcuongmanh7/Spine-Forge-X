@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { AlertTriangle, FileText, FolderOpen, RotateCw, Trash2 } from 'lucide-react';
+import { AlertTriangle, FileText, FolderOpen, Info, RotateCw, Trash2 } from 'lucide-react';
 import { Section } from '../common';
 import { SpineFileIcon } from '../SpineFileIcon';
 import { basename } from '../../sessions';
@@ -32,8 +32,15 @@ export function InputSection() {
     chooseInputFiles,
     isChoosingInputFolder,
     isChoosingInputFiles,
-    isScanning
+    isScanning,
+    scannedPath
   } = useApp();
+
+  // "Scanned this exact path and found nothing" (error, red border) vs
+  // "path was edited but not rescanned yet" (neutral hint, no alarm).
+  const pathPending = merged.inputPath.trim() !== '' && !isScanning && files.length === 0;
+  const scanCameUpEmpty = pathPending && scannedPath === merged.inputPath;
+  const needsRescan = pathPending && scannedPath !== merged.inputPath;
 
   // Count display names so we only show the disambiguating folder when names collide.
   const nameCounts = useMemo(() => {
@@ -50,6 +57,7 @@ export function InputSection() {
       <div className="form-row">
         <label>{t.inputPath}</label>
         <input
+          className={scanCameUpEmpty ? 'field-invalid' : undefined}
           value={merged.inputPath}
           onChange={(event) => updateInputPath(event.target.value)}
           placeholder="D:\Project\SpineAssets"
@@ -72,10 +80,16 @@ export function InputSection() {
         <span>{files.length.toLocaleString()} {t.spineFiles}</span>
         <span>{skippedFiles.length.toLocaleString()} {t.skipped}</span>
       </div>
-      {merged.inputPath.trim() !== '' && !isScanning && files.length === 0 && (
+      {scanCameUpEmpty && (
         <div className="notice warning" role="status" aria-live="polite">
           <AlertTriangle size={18} />
           <span>{t.noSpineFiles}</span>
+        </div>
+      )}
+      {needsRescan && (
+        <div className="notice info" role="status" aria-live="polite">
+          <Info size={18} />
+          <span>{t.inputNeedsScan}</span>
         </div>
       )}
       {files.length > 0 && (

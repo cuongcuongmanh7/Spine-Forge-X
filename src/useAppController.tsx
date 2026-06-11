@@ -22,6 +22,7 @@ import {
 } from './config';
 import { formatMessage, formatSummary, getCopy, type Translations } from './i18n';
 import { computeCanStart, statusFromValidation } from './validation';
+import { buildExportRequestFrom, resolveLinkedTarget } from './exportRequest';
 import { commonParentPath } from './paths';
 import { useAppUpdater } from './useAppUpdater';
 import { useDragDrop } from './useDragDrop';
@@ -68,20 +69,6 @@ function snapshotRuntime(
   currentIndex: number
 ): SessionRuntime {
   return { files, skippedFiles, logs, lastOutputFolders, currentIndex };
-}
-
-/**
- * Resolve the Unity destination for a session using the `linkedProject` output policy:
- * look up the saved LinkedProject by id, then the chosen type by sourceName. Returns the
- * unityRoot (becomes the backend `outputPath`) and the destName (becomes `linkedDestType`),
- * or null when the project/type selection is incomplete.
- */
-function resolveLinkedTarget(cfg: MergedConfig): { unityRoot: string; destName: string } | null {
-  const project = cfg.linkedProjects.find((p) => p.id === cfg.linkedProjectId);
-  if (!project) return null;
-  const type = project.types.find((t) => t.sourceName === cfg.linkedTypeName);
-  if (!type) return null;
-  return { unityRoot: project.unityRoot, destName: type.destName };
 }
 
 /** Resolve the destination type folder ("unityRoot/destType") for a linked-project config, or ''. */
@@ -166,6 +153,13 @@ export function useAppControllerValue() {
   });
   // Set during "Export all" so the overlay can show "session X / Y".
   const [batchProgress, setBatchProgress] = useState<{ index: number; count: number } | null>(null);
+  // Files currently being exported (file → epoch ms the job started), for the overlay job list.
+  const [activeJobs, setActiveJobs] = useState<Record<string, number>>({});
+  // Epoch ms the current run (or Export-all batch) started, for the overlay elapsed timer.
+  const [runStartedAt, setRunStartedAt] = useState<number | null>(null);
+  // Input path that the current files/skipped lists were scanned from — lets the UI tell
+  // "scanned and found nothing" (error) apart from "edited, not scanned yet" (hint).
+  const [scannedPath, setScannedPath] = useState<string | null>(null);
 
   const [isScanning, setIsScanning] = useState(false);
   const [isChoosingInputFolder, setIsChoosingInputFolder] = useState(false);
@@ -398,14 +392,15 @@ export function useAppControllerValue() {
   }
 
   /** Persist a session's latest export summary (counts + time) for the project dashboard. */
-  function recordLastExport(sessionId: string, result: BatchExportResult) {
+  function recordLastExport(sessionId: string, result: BatchExportResult, durationMs: number) {
     const record: ExportRecord = {
       at: Date.now(),
       completed: result.completed,
       failed: result.failed,
       skipped: result.skipped,
       total: result.total,
-      stopped: result.stopped
+      stopped: result.stopped,
+      durationMs
     };
     setSessions((list) =>
       list.map((s) =>
@@ -420,9 +415,17 @@ export function useAppControllerValue() {
       unlisten = Promise.all([
         listen<string>('spine-log', (event) => recordRunLog(stamp(event.payload))),
         listen<string>('spine-error', (event) => recordRunLog(stamp(`[ERROR] ${event.payload}`))),
+        listen<string>('spine-job-start', (event) => {
+          setActiveJobs((jobs) => ({ ...jobs, [event.payload]: Date.now() }));
+        }),
         listen<{ current: number; total: number; file: string }>('spine-progress', (event) => {
           recordRunProgress(event.payload.current);
           setLiveProgress({ current: event.payload.current, total: event.payload.total, file: event.payload.file });
+          setActiveJobs((jobs) => {
+            if (!(event.payload.file in jobs)) return jobs;
+            const { [event.payload.file]: _done, ...rest } = jobs;
+            return rest;
+          });
           recordRunLog(stamp(`[PROGRESS] ${event.payload.current}/${event.payload.total} ${event.payload.file}`));
         })
       ]);
@@ -515,12 +518,28 @@ export function useAppControllerValue() {
     }
   }
 
+  /** Normalize a Windows-ish path for prefix comparison: backslashes, lowercase, no trailing separator. */
+  function normalizePathKey(p: string): string {
+    return p.trim().replace(/\//g, '\\').replace(/\\+$/, '').toLowerCase();
+  }
+
   function updateInputPath(value: string) {
     updateSessionConfig('inputPath', value);
-    if (!value.trim()) {
+    // Folder-scan mode: the scanned list belongs to the previous path, so any edit
+    // invalidates it — clear instead of letting a stale list be exported. An explicit
+    // Browse-files list (inputFiles) is independent of the path field and is kept.
+    if (sessionConfig.inputFiles.length === 0) {
       setFiles([]);
       setSkippedFiles([]);
       setCurrentIndex(0);
+    }
+    // Exclusions are absolute paths: keep only the ones still under the new path
+    // (so trimming/expanding the same tree keeps them; switching folders drops them).
+    const excluded = sessionConfig.excludedFiles ?? [];
+    if (excluded.length > 0) {
+      const root = normalizePathKey(value);
+      const kept = root ? excluded.filter((p) => normalizePathKey(p).startsWith(`${root}\\`)) : [];
+      if (kept.length !== excluded.length) updateSessionConfig('excludedFiles', kept);
     }
   }
 
@@ -923,13 +942,24 @@ export function useAppControllerValue() {
   // ----- Input scanning -----
 
   async function scanPath(inputPath: string, excluded: string[] = []) {
-    const result = await invoke<ScanResult>('scan_spine_files', { inputPath });
-    const excludedSet = new Set(excluded);
-    const kept = excludedSet.size ? result.files.filter((f) => !excludedSet.has(f)) : result.files;
-    setFiles(kept);
-    setSkippedFiles(result.skipped);
-    setCurrentIndex(0);
-    appendLog(`${t.scanned} ${kept.length} Spine files. ${t.skipped}: ${result.skipped.length}.`);
+    try {
+      const result = await invoke<ScanResult>('scan_spine_files', { inputPath });
+      const excludedSet = new Set(excluded);
+      const kept = excludedSet.size ? result.files.filter((f) => !excludedSet.has(f)) : result.files;
+      setFiles(kept);
+      setSkippedFiles(result.skipped);
+      setCurrentIndex(0);
+      appendLog(`${t.scanned} ${kept.length} Spine files. ${t.skipped}: ${result.skipped.length}.`);
+    } catch (error) {
+      // A failed scan (e.g. path doesn't exist) leaves an empty list so the UI
+      // flags the path instead of silently keeping a stale file list.
+      setFiles([]);
+      setSkippedFiles([]);
+      setCurrentIndex(0);
+      throw error;
+    } finally {
+      setScannedPath(inputPath);
+    }
   }
 
   async function scanInput() {
@@ -1131,75 +1161,6 @@ export function useAppControllerValue() {
     setSessionStatuses(Object.fromEntries(entries));
   }
 
-  function buildExportRequestFrom(cfg: MergedConfig, sessionFiles: string[]) {
-    // For the linkedProject policy the backend output root is the Unity root, and the
-    // destination type folder is passed separately so resolve_output_dir can route into it.
-    const linked = cfg.outputPolicy === 'linkedProject' ? resolveLinkedTarget(cfg) : null;
-    return {
-      spinePath: cfg.spinePath,
-      inputRoot: cfg.inputPath,
-      files: sessionFiles,
-      outputPath: linked ? linked.unityRoot : cfg.outputPath,
-      linkedDestType: linked ? linked.destName : '',
-      outputPolicy: cfg.outputPolicy,
-      targetVersion: cfg.targetVersion,
-      exportMode: cfg.exportMode,
-      fallbackMode: cfg.fallbackMode,
-      globalJsonPath: cfg.globalJsonPath || null,
-      builtInExport: cfg.builtInExport,
-      generatedFormat: cfg.generatedFormat,
-      generatedSkeletonExtension: cfg.generatedSkeletonExtension,
-      generatedPackAtlas: cfg.generatedPackAtlas,
-      generatedMaxWidth: cfg.generatedMaxWidth,
-      generatedMaxHeight: cfg.generatedMaxHeight,
-      generatedPremultiplyAlpha: cfg.generatedPremultiplyAlpha,
-      generatedPot: cfg.generatedPot,
-      generatedPaddingX: cfg.generatedPaddingX,
-      generatedPaddingY: cfg.generatedPaddingY,
-      generatedPrettyPrint: cfg.generatedPrettyPrint,
-      generatedNonessential: cfg.generatedNonessential,
-      generatedStripWhitespaceX: cfg.generatedStripWhitespaceX,
-      generatedStripWhitespaceY: cfg.generatedStripWhitespaceY,
-      generatedRotation: cfg.generatedRotation,
-      generatedAlias: cfg.generatedAlias,
-      generatedIgnoreBlankImages: cfg.generatedIgnoreBlankImages,
-      generatedAlphaThreshold: cfg.generatedAlphaThreshold,
-      generatedMinWidth: cfg.generatedMinWidth,
-      generatedMinHeight: cfg.generatedMinHeight,
-      generatedMultipleOfFour: cfg.generatedMultipleOfFour,
-      generatedSquare: cfg.generatedSquare,
-      generatedOutputFormat: cfg.generatedOutputFormat,
-      generatedJpegQuality: cfg.generatedJpegQuality,
-      generatedBleed: cfg.generatedBleed,
-      generatedBleedIterations: cfg.generatedBleedIterations,
-      generatedEdgePadding: cfg.generatedEdgePadding,
-      generatedDuplicatePadding: cfg.generatedDuplicatePadding,
-      generatedFilterMin: cfg.generatedFilterMin,
-      generatedFilterMag: cfg.generatedFilterMag,
-      generatedWrapX: cfg.generatedWrapX,
-      generatedWrapY: cfg.generatedWrapY,
-      generatedTextureFormat: cfg.generatedTextureFormat,
-      generatedAtlasExtension: cfg.generatedAtlasExtension,
-      generatedCombineSubdirectories: cfg.generatedCombineSubdirectories,
-      generatedFlattenPaths: cfg.generatedFlattenPaths,
-      generatedUseIndexes: cfg.generatedUseIndexes,
-      generatedFast: cfg.generatedFast,
-      generatedLimitMemory: cfg.generatedLimitMemory,
-      generatedPacking: cfg.generatedPacking,
-      generatedPackSource: cfg.generatedPackSource,
-      generatedPackTarget: cfg.generatedPackTarget,
-      generatedWarnings: cfg.generatedWarnings,
-      generatedForceAll: cfg.generatedForceAll,
-      clean: cfg.clean,
-      parallelJobs: cfg.parallelJobs,
-      maxMemory: cfg.maxMemory,
-      timeoutSeconds: cfg.timeoutSeconds,
-      preserveRelativePaths: cfg.preserveRelativePaths,
-      cleanFolderName: cfg.cleanFolderName,
-      unicodeWorkaround: cfg.unicodeWorkaround
-    };
-  }
-
   function buildExportRequest() {
     return buildExportRequestFrom(merged, files);
   }
@@ -1248,12 +1209,15 @@ export function useAppControllerValue() {
     setCurrentIndex(0);
     setBatchProgress(null);
     setLiveProgress({ current: 0, total: files.length, file: '' });
+    setActiveJobs({});
+    const startedAt = Date.now();
+    setRunStartedAt(startedAt);
     recordRunLog(stamp(`${t.starting}: ${files.length} files.`));
 
     try {
       const result = await invoke<BatchExportResult>('start_batch_export', { request: buildExportRequest() });
       recordRunOutput(result.outputFolders);
-      recordLastExport(sid, result);
+      recordLastExport(sid, result, Date.now() - startedAt);
       if (result.stopped) {
         const body = formatSummary(t.exportStoppedSummary, result.completed, result.failed, result.skipped);
         recordRunLog(stamp(body));
@@ -1271,6 +1235,8 @@ export function useAppControllerValue() {
     } finally {
       runningIdRef.current = null;
       setRunningSessionId(null);
+      setActiveJobs({});
+      setRunStartedAt(null);
     }
   }
 
@@ -1376,6 +1342,8 @@ export function useAppControllerValue() {
     // ----- Run phase -----
     setBatchProgress({ index: 0, count: plan.length });
     setLiveProgress({ current: 0, total: 0, file: '' });
+    // The overlay's elapsed timer covers the whole batch, not each session.
+    setRunStartedAt(Date.now());
 
     let exported = 0;
     const allOutputFolders: string[] = [];
@@ -1387,6 +1355,8 @@ export function useAppControllerValue() {
       setRunningSessionId(s.id);
       recordRunProgress(0);
       setLiveProgress({ current: 0, total: sessionFiles.length, file: '' });
+      setActiveJobs({});
+      const sessionStartedAt = Date.now();
       recordRunLog(stamp(`${t.starting}: ${sessionFiles.length} files. (${s.name || t.untitledSession})`));
 
       let stopped = false;
@@ -1395,7 +1365,7 @@ export function useAppControllerValue() {
           request: buildExportRequestFrom({ ...appConfig, ...s.config }, sessionFiles)
         });
         recordRunOutput(result.outputFolders);
-        recordLastExport(s.id, result);
+        recordLastExport(s.id, result, Date.now() - sessionStartedAt);
         allOutputFolders.push(...result.outputFolders);
         recordRunLog(
           stamp(
@@ -1416,6 +1386,8 @@ export function useAppControllerValue() {
     }
 
     setBatchProgress(null);
+    setActiveJobs({});
+    setRunStartedAt(null);
     await maybeAutoOpenOutput(allOutputFolders);
     pushToast(
       t.exportAllDone.replace('{exported}', String(exported)).replace('{skipped}', String(targets.length - exported)),
@@ -1620,6 +1592,9 @@ export function useAppControllerValue() {
     runningSessionId,
     liveProgress,
     batchProgress,
+    activeJobs,
+    runStartedAt,
+    scannedPath,
     canStart,
     activeStatus,
 

@@ -1,5 +1,12 @@
 # Changelog
 
+## v0.2.22
+- **Sửa lỗi nghiêm trọng của parallel jobs làm hỏng export hàng loạt**: khi chạy nhiều job song song, các job được lập kế hoạch trong cùng một mili-giây/cùng tiến trình dùng chung **một file settings tạm** (tên chỉ gồm timestamp + PID), nên job xong đầu tiên xóa file đó khiến các job còn lại chết với `Export settings JSON file does not exist`. Giờ mỗi job có file tạm riêng (thêm bộ đếm tăng dần), export song song chạy đúng. Lỗi chỉ xuất hiện khi parallel > 1; chạy tuần tự không bị.
+- **Popup "Đang xử lý" hiển thị rõ từng job đang chạy + đồng hồ**: thêm danh sách các file đang export song song (mỗi dòng có spinner và thời gian riêng), cùng tổng thời gian đã chạy của cả lần export. Khi Export-all, đồng hồ tổng tính cho cả batch.
+- **Cụm Input path xử lý sửa/xoá path an toàn hơn**: chỉnh đường dẫn sẽ xoá ngay danh sách file đã quét (trước đây list cũ vẫn nằm đó và có thể bị export theo path cũ); danh sách file đã loại trừ tự lọc theo path mới (đổi thư mục thì bỏ, thu/mở rộng cùng cây thì giữ). Border đỏ giờ tách 2 trạng thái: đã quét đúng path mà ra 0 file → đỏ + cảnh báo; vừa sửa chưa quét lại → chỉ gợi ý "bấm Scan", không báo đỏ oan.
+- **Dashboard thống kê thời gian export mỗi session**: thêm cột "Thời gian" cho từng lần chạy và tổng ở chân bảng (định dạng gọn: `45s`, `1m 23s`, `1h 02m`). Bản ghi cũ chưa có dữ liệu thời gian hiển thị "—".
+- Nội bộ: tách `buildExportRequestFrom`/`resolveLinkedTarget` ra `src/exportRequest.ts` và chuyển CSS overlay sang `components/RunOverlay.css` để các file chính nằm dưới trần kích thước; thêm `builds/` vào `.gitignore`.
+
 ## v0.2.21
 - **Modal "Clean unused source images" giờ bỏ tick sẵn đúng các file đã loại khỏi danh sách export của session**: trước đây mọi `.spine` con đều hiện tick xanh kể cả file đã bị ẩn/loại khỏi export, nhưng backend vẫn âm thầm bỏ qua chúng — UI và kết quả quét lệch nhau, số "đã chọn X/Y" và cảnh báo quét-lớn cũng tính sai. Giờ file đã loại khỏi export được bỏ tick ngay khi mở modal, khớp đúng những gì một lần export của session sẽ xử lý.
 - **Picker trong modal trở thành nguồn quyết định duy nhất**: muốn quét một file đã-loại vẫn được — chỉ cần tick lại; trước đây tick lại không có tác dụng vì backend luôn ép loại trừ theo danh sách của session.

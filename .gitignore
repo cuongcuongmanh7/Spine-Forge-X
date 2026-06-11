@@ -9,6 +9,9 @@ build/
 src-tauri/target/
 target/
 
+# Local packaged-build output
+builds/
+
 # Environment and local config
 .env
 .env.*
