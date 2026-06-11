@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v0.2.18
 - **Tìm ra nguyên nhân gốc các giá trị "lệch ×2" khi đọc `.spine` — và sửa decoder**: số nguyên trong project file được Spine lưu dạng varint **zigzag** (n ≥ 0 lưu thành 2n); decoder cũ đọc unsigned thuần nên mọi field int ra gấp đôi. Đã chứng minh bằng thí nghiệm có kiểm soát (padding 3 → file ghi 6, max 700 → 1400, min 128 → 256) — xem `docs/research-padding-not-decoded.md`.
 - **Sửa bug min/max đọc gấp đôi** ở mode "Preset nền + min/max từng .spine": ví dụ project đặt max 2048 trước đây bị đọc thành 4096 (min cũng vậy → có thể ép page phình to hơn ý artist).
 - **Decoder giờ nhận page size tùy ý** (vd max 700) thay vì chỉ power-of-two — trước đây project dùng size lẻ bị báo "không tìm thấy pack settings" và rơi hết về preset.

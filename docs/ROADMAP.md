@@ -6,6 +6,21 @@ Source-of-truth tiến độ toàn dự án. Chi tiết kỹ thuật từng task
 
 ---
 
+## v0.2.18 — Decode .spine bằng zigzag: sửa min/max, thêm padding/packing/multipleOfFour ✅ Done
+
+> Bump `0.2.17 → 0.2.18`; tag `v0.2.18`.
+
+**Bối cảnh:** số nguyên trong block settings của `.spine` được Spine (libGDX `writeInt` với `optimizePositive=false`) lưu dạng **varint zigzag** (n ≥ 0 → 2n); decoder cũ đọc unsigned thuần nên mọi field int ra **gấp đôi**. Thí nghiệm có kiểm soát (export Lucius với padding 3, min 128, max 700) chốt: file ghi padding 6, min 256, max 1400. Chi tiết: `docs/research-padding-not-decoded.md`.
+
+- [x] **`read_zigzag`** (zigzag-decode + reject raw lẻ = số âm) dùng cho min/max, alphaThreshold, paddingX/Y. **Sửa bug min/max đọc gấp đôi** — đây là field tier A đang dùng thật (vd Chest bị báo 256/4096 thay vì 128/2048).
+- [x] **Bỏ ràng buộc power-of-two** cho page size (project thật dùng size tùy ý như 700); neo scan vào field `0B <bool>` (pot) ngay sau maxHeight.
+- [x] **Re-promote:** `alphaThreshold`, `multipleOfFour`, `paddingX/Y`, `edgePadding`, `duplicatePadding`, `premultiplyAlpha`, `bleed`. Demote cũ của alphaThreshold/multipleOfFour là do zigzag + min/max gấp đôi làm lệch layout, không phải dữ liệu stale.
+- [x] **Decode `packing`** (field 0x28: `28 01 02` rectangles / `28 01 03` polygons). Giải luôn bí ẩn cũ: 0003_Althea không reproduce được dưới rectangles vì nó vốn là **Polygons**.
+- [x] **Validate end-to-end cả 2 packing mode**: decode → merge preset → Spine CLI export tái tạo **atlas + toàn bộ PNG byte-identical** với export từ editor.
+- [x] Tách test sang `spine_project_tests.rs` (giữ `spine_project.rs` < 800 dòng), thêm regression fixture ghim bytes thí nghiệm; `cargo test` (53) xanh, clippy + file-size guard pass.
+
+---
+
 ## v0.2.17 — Single instance (tái dùng bản đang ẩn ở tray) ✅ Done
 
 > Bump `0.2.15 → 0.2.17`; tag `v0.2.17` (v0.2.16 đã bị tag protected, build CI fail vì file-size guard nên phải bump tiếp).
