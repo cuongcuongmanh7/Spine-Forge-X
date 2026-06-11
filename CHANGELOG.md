@@ -1,5 +1,10 @@
 # Changelog
 
+## v0.2.20
+- **Đổi tên lựa chọn export strategy thứ hai thành "Dùng settings từ từng .spine"** (trước là "Preset nền + min/max từ từng .spine"): tên cũ làm tưởng chỉ đọc kích thước pack, trong khi giờ decoder đọc gần trọn settings (min/max, scale, padding, packing, cleanUp, format...). Mô tả hover cũng cập nhật theo.
+- **Cảnh báo rõ khi gặp file `.spine` được save bởi Spine 4.x**: định dạng project 4.x khác 3.8 nên chưa đọc settings được — trước đây file như vậy chỉ hiện lỗi chung chung rồi âm thầm export bằng preset nền, dễ bỏ sót. Giờ log ghi `[WARN]` kèm đúng version (vd "save bởi Spine 4.3.17 — decoder chỉ hỗ trợ format 3.8.x") để biết ngay file nào đang dùng preset nền thay vì settings riêng.
+- Lưu ý phân biệt: **export ra target 4.3** (nâng cấp 3.8 → 4.3) vẫn hoạt động bình thường với mode này — cảnh báo trên chỉ dành cho file nguồn vốn đã save bằng editor 4.x.
+
 ## v0.2.19
 - **Số job song song giờ là thanh trượt (slider) thay vì ô số**: kéo chọn 1–8, thấy ngay giá trị đang chọn và giới hạn, không gõ nhầm được giá trị ngoài khoảng. Thêm gợi ý (hover) nhắc rằng nhiều job chạy nhanh hơn nhưng tốn RAM ≈ số job × Max memory.
 - **Mặc định số job song song = 4** (trước là 1): hợp với CPU phổ thông hiện nay (4–6 nhân) để export nhanh hơn nhiều ngay từ lần đầu; máy yếu vẫn kéo xuống được, máy mạnh kéo lên tới 8. (Chỉ áp dụng cho cài đặt mới; máy đã chạy app giữ giá trị cũ — chỉnh tay nếu muốn.)

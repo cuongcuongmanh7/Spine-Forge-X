@@ -6,6 +6,20 @@ Source-of-truth tiến độ toàn dự án. Chi tiết kỹ thuật từng task
 
 ---
 
+## v0.2.20 — Đổi tên mode đọc .spine + cảnh báo file 4.x ✅ Done
+
+> Bump `0.2.19 → 0.2.20`; tag `v0.2.20`.
+
+**Bối cảnh:** user test file `.spine` save bởi editor 4.3 với mode đọc settings — file fail parse và âm thầm fallback preset nền, output "trông khớp" gây hiểu nhầm là đã support 4.3. Cần label chuẩn hơn + cảnh báo lộ rõ fallback.
+
+- [x] **Đổi tên mode**: "Preset nền + min/max từ từng .spine" → **"Dùng settings từ từng .spine"** (EN "Use settings from each .spine") — decoder giờ đọc gần trọn settings, không chỉ min/max. Help text liệt kê đủ (min/max, scale, padding, packing, cleanUp, format...).
+- [x] **Detect version editor trong payload** (`detect_editor_version`): cả file 3.8 lẫn 4.3 đều đóng dấu version dạng hibit-string đầu payload (`3.8.99`/`4.3.17`). Scan fail trên file 4.x → lỗi ghi rõ "save bởi Spine {v} — decoder chỉ hỗ trợ 3.8.x" thay vì "không tìm thấy pack settings". Validate trên file thật `3001_Lucius_4_3.spine`.
+- [x] **Note fallback thành `[WARN]`**: file không parse được giờ hiện `[WARN] ... file này export bằng preset nền` trong log — không còn lọt âm thầm.
+- [x] **Xác nhận bằng file thật**: parser fail trên `.spine` 4.3 (format đổi, không còn block `07 08 09 0A` + neo `0B`); export "4.3" user thấy khớp là **target version** 4.3 đọc settings từ file 3.8 (đúng thiết kế), không phải đọc file 4.3. Test files ghi trong memory.
+- [x] Verify: `cargo test` (56) + `npm test` (26) + build xanh.
+
+---
+
 ## v0.2.19 — Quality release: slider Parallel jobs + default 4 + củng cố test ✅ Done
 
 > Bump `0.2.18 → 0.2.19`; tag `v0.2.19`.
