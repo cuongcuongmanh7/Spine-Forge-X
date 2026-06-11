@@ -1,5 +1,8 @@
 # Changelog
 
+## v0.2.16
+- **Chạy một bản duy nhất (single instance)**: trước đây khi app đang ẩn ở khay hệ thống, mở lại app sẽ chạy một tiến trình mới hoàn toàn (hai icon tray, hai bản dùng chung file cấu hình → có thể ghi đè lẫn nhau). Giờ mở lại app sẽ khôi phục đúng cửa sổ đang ẩn ở tray thay vì tạo tiến trình mới.
+
 ## v0.2.15
 - **Mode "Preset nền + min/max từ từng .spine" giờ đọc thêm `scale` (texture scale)**: trước đây bỏ qua scale → atlas của project dùng scale ≠ 1 bị export sai độ phân giải (vd scale 0.5 ra gấp đôi). Đã validate end-to-end: file scale 0.5 tái tạo đúng kích thước page như export từ editor.
 - **Cảnh báo khi giá trị trong .spine lệch preset nền**: nếu pack max đọc từ `.spine` khác preset đang chọn, log `[WARN]` ngay (gợi ý file chưa được export lại từ editor nên settings trong file có thể cũ) — tránh âm thầm xuất sai kích thước.

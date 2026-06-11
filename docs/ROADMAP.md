@@ -6,6 +6,17 @@ Source-of-truth tiến độ toàn dự án. Chi tiết kỹ thuật từng task
 
 ---
 
+## v0.2.16 — Single instance (tái dùng bản đang ẩn ở tray) ✅ Done
+
+> Bump `0.2.15 → 0.2.16`; tag `v0.2.16`.
+
+**Bối cảnh:** app chạy ngầm ở tray (v0.2.12) thiếu khóa single-instance — mở lại app khi đang ẩn sẽ spawn tiến trình thứ hai (hai tray icon, hai bản dùng chung file cấu hình → ghi đè lẫn nhau).
+
+- [x] **`tauri-plugin-single-instance`** đăng ký làm plugin đầu tiên; callback gọi `tray::show_main_window` để un-minimize + show + focus cửa sổ đang ẩn thay vì tạo tiến trình mới.
+- [x] Không cần sửa capabilities (plugin không expose command frontend).
+
+---
+
 ## v0.2.15 — lastExportSettings: scale + cảnh báo divergence ✅ Done
 
 > Bump `0.2.14 → 0.2.15`; tag `v0.2.15`.

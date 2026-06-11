@@ -2165,6 +2165,13 @@ pub fn run() {
     let state = Arc::new(AppState::default());
 
     tauri::Builder::default()
+        // Must be the first plugin: when a second copy of the app is launched
+        // (e.g. while the first is hidden in the tray), this intercepts it and
+        // hands control back to the running instance instead of spawning a new
+        // process. The callback restores the existing window from the tray.
+        .plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
+            tray::show_main_window(app);
+        }))
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
