@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.2.15
+- **Mode "Preset nền + min/max từ từng .spine" giờ đọc thêm `scale` (texture scale)**: trước đây bỏ qua scale → atlas của project dùng scale ≠ 1 bị export sai độ phân giải (vd scale 0.5 ra gấp đôi). Đã validate end-to-end: file scale 0.5 tái tạo đúng kích thước page như export từ editor.
+- **Cảnh báo khi giá trị trong .spine lệch preset nền**: nếu pack max đọc từ `.spine` khác preset đang chọn, log `[WARN]` ngay (gợi ý file chưa được export lại từ editor nên settings trong file có thể cũ) — tránh âm thầm xuất sai kích thước.
+- `padding` **cố tình không đọc từ .spine**: giá trị lưu trong file không tái tạo đúng kết quả export (file ghi 16 nhưng export thật dùng 8), nên padding luôn lấy từ preset nền.
+- Lưu ý quan trọng về độ tin cậy: settings trong `.spine` chỉ chính xác **ngay sau khi export từ Export window trong Spine editor**. Export qua script/preset/CLI **không** ghi ngược vào file → giá trị có thể cũ. Mode này hợp nhất với người export trực tiếp từ editor; studio dùng preset chung nên dùng "Dùng preset cho mọi file".
+
 ## v0.2.14
 - **Mode export mới — "Preset nền + min/max từ từng .spine"**: Export strategy giờ là 2 lựa chọn ("Dùng preset cho mọi file" / "Preset nền + min/max từ từng .spine"). Chọn cái thứ 2, app tự đọc settings export lưu trong từng project (min/max pack atlas tinh chỉnh riêng, cleanUp, format binary/json, extension, packSource/packTarget...) và ghi đè lên preset nền đang chọn — không cần mở editor save `.export.json` cho từng file nữa. Preset nền vẫn dùng chung cho cả 2 mode (làm gốc + fallback).
 - Field nào không đọc được thì giữ giá trị preset nền; file không parse được vẫn export bằng preset nền và ghi rõ lý do trong log.

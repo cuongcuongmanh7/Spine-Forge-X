@@ -6,6 +6,20 @@ Source-of-truth tiến độ toàn dự án. Chi tiết kỹ thuật từng task
 
 ---
 
+## v0.2.15 — lastExportSettings: scale + cảnh báo divergence ✅ Done
+
+> Bump `0.2.14 → 0.2.15`; tag `v0.2.15`.
+
+**Bối cảnh:** test thực tế trên 3001_Lucius lộ 2 vấn đề của mode `lastExportSettings`: (a) parser bỏ qua `scale` → project scale 0.5 export sai gấp đôi res; (b) giá trị min/max trong `.spine` có thể stale so với ý định artist mà không ai biết.
+
+- [x] **Decode `scale`** (field 0x13, float, tier A): validate end-to-end — file scale 0.5 + max 1024 tái tạo đúng page ~310 như export từ editor (80/80 region khớp). Bỏ scale thì ra ~640 (gấp đôi).
+- [x] **KHÔNG decode `padding`**: giá trị trong file (16) không reproduce export thật (dùng 8) → padding luôn lấy base preset. Loại như alphaThreshold/multipleOfFour.
+- [x] **Cảnh báo divergence**: `create_last_export_settings` so pack max parse được vs base preset; lệch → `spine-log [WARN]` (gợi ý .spine chưa export lại từ editor).
+- [x] **Phát hiện trigger persistence** (ghi vào design doc §XI): `.spine` chỉ lưu đúng settings **ngay sau khi export từ Export window trong editor**; export qua script/preset/CLI không ghi ngược → stale. Studio dùng preset chung nên dùng "Dùng preset cho mọi file".
+- [x] Verify: `cargo test` (46) + `npm test` (26) + build xanh; real-merge dump + CLI export khớp editor.
+
+---
+
 ## v0.2.14 — Per-project export settings từ .spine ✅ Done
 
 > Bump `0.2.13 → 0.2.14`; tag `v0.2.14`.
