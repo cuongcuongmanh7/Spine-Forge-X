@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.2.21
+- **Modal "Clean unused source images" giờ bỏ tick sẵn đúng các file đã loại khỏi danh sách export của session**: trước đây mọi `.spine` con đều hiện tick xanh kể cả file đã bị ẩn/loại khỏi export, nhưng backend vẫn âm thầm bỏ qua chúng — UI và kết quả quét lệch nhau, số "đã chọn X/Y" và cảnh báo quét-lớn cũng tính sai. Giờ file đã loại khỏi export được bỏ tick ngay khi mở modal, khớp đúng những gì một lần export của session sẽ xử lý.
+- **Picker trong modal trở thành nguồn quyết định duy nhất**: muốn quét một file đã-loại vẫn được — chỉ cần tick lại; trước đây tick lại không có tác dụng vì backend luôn ép loại trừ theo danh sách của session.
+
 ## v0.2.20
 - **Đổi tên lựa chọn export strategy thứ hai thành "Dùng settings từ từng .spine"** (trước là "Preset nền + min/max từ từng .spine"): tên cũ làm tưởng chỉ đọc kích thước pack, trong khi giờ decoder đọc gần trọn settings (min/max, scale, padding, packing, cleanUp, format...). Mô tả hover cũng cập nhật theo.
 - **Cảnh báo rõ khi gặp file `.spine` được save bởi Spine 4.x**: định dạng project 4.x khác 3.8 nên chưa đọc settings được — trước đây file như vậy chỉ hiện lỗi chung chung rồi âm thầm export bằng preset nền, dễ bỏ sót. Giờ log ghi `[WARN]` kèm đúng version (vd "save bởi Spine 4.3.17 — decoder chỉ hỗ trợ format 3.8.x") để biết ngay file nào đang dùng preset nền thay vì settings riêng.

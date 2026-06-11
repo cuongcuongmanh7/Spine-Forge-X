@@ -6,6 +6,18 @@ Source-of-truth tiến độ toàn dự án. Chi tiết kỹ thuật từng task
 
 ---
 
+## v0.2.21 — Clean-unused modal khớp danh sách loại trừ của session ✅ Done
+
+> Bump `0.2.20 → 0.2.21`; tag `v0.2.21`.
+
+**Bối cảnh:** modal "Clean unused source images" tick sẵn mọi `.spine` con, nhưng `mergeExcluded` luôn ép loại trừ theo `excludedFiles` của session → UI (tick xanh, số "đã chọn X/Y", cảnh báo quét-lớn) lệch với những gì backend thực sự quét; tick lại file đã-loại cũng vô tác dụng.
+
+- [x] **Default-untick theo session exclusions**: khi list units, file có `spineFile` nằm trong `merged.excludedFiles` được bỏ tick sẵn (so khớp path đã normalize `\`→`/` + lowercase).
+- [x] **Picker là nguồn quyết định duy nhất**: bỏ phần ép `excludedFiles` trong `mergeExcluded` (xoá luôn param `excludedFiles` khỏi `useCleanSource`) — scan/clean chỉ loại trừ theo đúng các unit user bỏ tick, nên tick lại file đã-loại giờ thực sự đưa nó vào quét.
+- [x] Verify: `tsc --noEmit` + `npm test` (26) xanh.
+
+---
+
 ## v0.2.20 — Đổi tên mode đọc .spine + cảnh báo file 4.x ✅ Done
 
 > Bump `0.2.19 → 0.2.20`; tag `v0.2.20`.

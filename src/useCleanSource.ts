@@ -6,7 +6,6 @@ import type { BatchCleanResult, BatchScanSummary, CleanUnitInfo, ToastKind } fro
 type Options = {
   spinePath: string;
   targetVersion: string;
-  excludedFiles: string[];
   /** Used to key the scan cache per session. */
   activeSessionId: string | null;
   t: Translations;
@@ -25,7 +24,6 @@ type Options = {
 export function useCleanSource({
   spinePath,
   targetVersion,
-  excludedFiles,
   activeSessionId,
   t,
   appendLog,
@@ -62,12 +60,9 @@ export function useCleanSource({
     });
   }
 
-  // The user may deselect folders in the modal's picker. Those `.spine` paths are
-  // merged with the global export-set exclusions so scan/clean skip them too.
-  function mergeExcluded(extra: string[]): string[] {
-    return extra.length ? [...excludedFiles, ...extra] : excludedFiles;
-  }
-
+  // `extraExcluded` is the modal picker's full list of unchecked `.spine` paths.
+  // The picker is the single source of truth: it defaults session export-set
+  // exclusions to unchecked, but the user may re-check them to scan anyway.
   async function scanSourceFolders(
     root: string,
     extraExcluded: string[] = []
@@ -88,7 +83,7 @@ export function useCleanSource({
         spinePath,
         targetVersion,
         root: target,
-        excluded: mergeExcluded(extraExcluded)
+        excluded: extraExcluded
       });
     } catch (error) {
       const body = String(error);
@@ -105,7 +100,7 @@ export function useCleanSource({
     try {
       return await invoke<number>('count_clean_units', {
         root: target,
-        excluded: mergeExcluded(extraExcluded)
+        excluded: extraExcluded
       });
     } catch {
       return 0;
@@ -136,7 +131,7 @@ export function useCleanSource({
         spinePath,
         targetVersion,
         root: target,
-        excluded: mergeExcluded(extraExcluded)
+        excluded: extraExcluded
       });
       const body = t.cleanSourceDone.replace('{count}', String(result.totalMoved));
       appendLog(body);

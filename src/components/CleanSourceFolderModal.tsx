@@ -65,7 +65,8 @@ export function CleanSourceFolderModal() {
   // scope and pick which sub-folders to scan. null = not listed yet.
   const [units, setUnits] = useState<CleanUnitInfo[] | null>(null);
   // `.spine` paths the user unchecked — passed as `excluded` to scan/clean so
-  // only the ticked folders are processed. Reset whenever the root changes.
+  // only the ticked folders are processed. Reset whenever the root changes, then
+  // pre-unchecked for any unit already in this session's export-set exclusions.
   const [deselected, setDeselected] = useState<Set<string>>(new Set());
 
   const unitCount = units?.length ?? null;
@@ -89,7 +90,9 @@ export function CleanSourceFolderModal() {
   }, []);
 
   // Re-list units whenever the target folder changes (debounced — the user may
-  // be typing a path). Changing the root resets the selection to "all checked".
+  // be typing a path). Changing the root resets the selection, then defaults any
+  // unit already excluded from this session's export set to unchecked, so the
+  // picker matches what an export of this session would actually process.
   useEffect(() => {
     const target = root.trim();
     setDeselected(new Set());
@@ -100,7 +103,13 @@ export function CleanSourceFolderModal() {
     let cancelled = false;
     const id = setTimeout(async () => {
       const found = await listCleanUnits(target);
-      if (!cancelled) setUnits(found);
+      if (cancelled) return;
+      setUnits(found);
+      const norm = (p: string) => p.replace(/\\/g, '/').toLowerCase();
+      const excluded = new Set((merged.excludedFiles ?? []).map(norm));
+      setDeselected(
+        new Set(found.filter((u) => excluded.has(norm(u.spineFile))).map((u) => u.spineFile))
+      );
     }, 400);
     return () => {
       cancelled = true;

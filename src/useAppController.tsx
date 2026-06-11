@@ -224,7 +224,6 @@ export function useAppControllerValue() {
   } = useCleanSource({
     spinePath: merged.spinePath,
     targetVersion: merged.targetVersion,
-    excludedFiles: sessionConfig.excludedFiles ?? [],
     activeSessionId,
     t,
     appendLog,
