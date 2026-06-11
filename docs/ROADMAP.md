@@ -6,6 +6,23 @@ Source-of-truth tiến độ toàn dự án. Chi tiết kỹ thuật từng task
 
 ---
 
+## v0.2.19 — Quality release: slider Parallel jobs + default 4 + củng cố test ✅ Done
+
+> Bump `0.2.18 → 0.2.19`; tag `v0.2.19`.
+
+**Bối cảnh:** gom các món polish nhỏ thành một release nhanh, không thêm tính năng lớn.
+
+- [x] **Parallel jobs → slider** (`SettingsModal`): range 1–8 + badge giá trị + thang min/max + `Hint` nhắc trade-off RAM. Thay ô number (range ẩn, gõ ngoài [1,8] bị clamp ngầm khó hiểu). CSS tách `src/slider.css` (import global ở `main.tsx`) thay vì nhồi `styles.css` (đụng file-size guard) — đúng convention `toggle.css`/`DropOverlay.css`.
+- [x] **Default `parallelJobs` 1 → 4** (`config.ts`): hợp CPU phổ thông 4–6 nhân (vd i5-12400F 6 nhân/12 luồng). Chỉ áp dụng cài đặt mới (config cũ đã persist).
+- [x] **Nâng P8/P16 lên property test**: `prop_clean_source_folder_name` (hàm thuần) + `prop_find_existing_id_folder_invariants` (FS-backed, 32 cases). `cargo test` 55 xanh (was 53).
+- [x] **Audit cache invalidation Clean Source**: xác minh **đúng hoàn toàn** (sig = version + spine mtime/size + img count/bytes; `_unused_backup` trong `IGNORED_DIRS` + là thư mục anh em → không đếm lại sau move). Không có bug, không sửa code.
+- [x] **Đính chính cờ `--last-export-settings`**: xác minh 3 nguồn chính chủ (CLI docs, forum, spine-scripts) — cờ này **không tồn tại** ở mọi version. Sửa claim sai ở ROADMAP v0.2.14 + design doc §XI + memory. Thêm backlog "per-project settings cho 4.3.x" (cần mở rộng parser binary, không có đường tắt native).
+- [x] Verify: `cargo test` (55) + `npm test` (26) + `npm run build` xanh; clippy không lỗi mới.
+
+> Không làm trong release này (chờ điều kiện): TGA thumbnail (cần thêm crate `image`), nút +Add LinkedProject, mở rộng decoder tier B (cần thí nghiệm editor để validate byte-identical).
+
+---
+
 ## v0.2.18 — Decode .spine bằng zigzag: sửa min/max, thêm padding/packing/multipleOfFour ✅ Done
 
 > Bump `0.2.17 → 0.2.18`; tag `v0.2.18`.
@@ -51,7 +68,7 @@ Source-of-truth tiến độ toàn dự án. Chi tiết kỹ thuật từng task
 
 > Bump `0.2.13 → 0.2.14`; tag `v0.2.14`.
 
-**Mục tiêu:** batch export theo settings riêng (đặc biệt min/max pack atlas) của TỪNG project mà không cần save `.export.json` thủ công cho mỗi file. Spine CLI chỉ có `--last-export-settings` từ editor 4.3+, nên với project 3.8.x phải tự parse file `.spine`. Chi tiết format: design doc §XI.
+**Mục tiêu:** batch export theo settings riêng (đặc biệt min/max pack atlas) của TỪNG project mà không cần save `.export.json` thủ công cho mỗi file. Spine CLI **không** có cờ nào dùng settings lưu trong `.spine` (xác minh 2026-06: cờ `-e/--export` chỉ nhận path `.export.json` hoặc tên built-in `binary`/`json`; không có `--last-export-settings`), nên cách duy nhất là **tự parse binary `.spine`** rồi sinh temp `.export.json` truyền qua `-e`. Chi tiết format: design doc §XI.
 
 - [x] **Parser `.spine`** (`src-tauri/src/spine_project.rs`): `.spine` 3.8.x là raw deflate (`flate2`); decode hibit-string + varint, scan pack min/max (field `07 08 09 0A`, heuristic power-of-two ∈ [16,16384], lấy match cuối). Thêm `cleanUp`, class/extension, packSource/packTarget, outputFormat, atlasExtension. Unit test + proptest + fixture test `#[ignore]` qua env `SPINE_FIXTURE`.
 - [x] **Mode `lastExportSettings`** (`resolve_export_plan` → `create_last_export_settings`): merge per-field lên base preset; field không decode được giữ preset; parse fail toàn phần → fallback base preset (log lý do). `PlanError { Skip, Fail }` thay check chuỗi literal cũ. Command preview `read_spine_export_settings`.
@@ -255,3 +272,4 @@ Shipped ở commit `c133cac`.
 - [ ] Xử lý nhiều `.export.json` per project
 - [x] Dashboard kết quả per-project _(xong — xem Unreleased)_
 - [ ] JSON post-processing path rewrite (an toàn, có backup)
+- [ ] **Per-project settings cho `.spine` 4.3.x** — parser hiện chỉ đọc format 3.8.x. Spine CLI **không** có cờ dùng settings nội bộ (đã xác minh 2026-06), nên buộc phải mở rộng parser binary cho layout 4.x. Cần file `.spine` 4.3 thật + bản export editor 4.3 để reverse-engineer và validate byte-identical (như đã làm với 3.8). Hiện file 4.3 đưa vào mode này sẽ tự fallback về preset nền.

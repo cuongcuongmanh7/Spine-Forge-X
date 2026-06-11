@@ -101,15 +101,26 @@ export function SettingsModal() {
 
           <Section title={t.advancedRuntime} defaultOpen={false}>
             <div className="form-grid">
-              <label>
-                {t.parallelJobs}
+              <label className="slider-field">
+                <span className="slider-field-head">
+                  <span className="slider-field-label">
+                    {t.parallelJobs}
+                    <Hint text={t.parallelJobsHelp} />
+                  </span>
+                  <span className="slider-value">{merged.parallelJobs}</span>
+                </span>
                 <input
-                  type="number"
+                  type="range"
                   min={1}
                   max={8}
+                  step={1}
                   value={merged.parallelJobs}
                   onChange={(event) => updateAppConfig('parallelJobs', Number(event.target.value))}
                 />
+                <span className="slider-scale" aria-hidden="true">
+                  <span>1</span>
+                  <span>8</span>
+                </span>
               </label>
               <label>
                 {t.maxMemory}

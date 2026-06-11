@@ -25,7 +25,7 @@ export type LinkedProject = {
  */
 export const defaultAppConfig = {
   spinePath: '',
-  parallelJobs: 1,
+  parallelJobs: 4,
   maxMemory: '512m',
   timeoutSeconds: 300,
   // When true, closing or minimizing the window hides the app to the system tray

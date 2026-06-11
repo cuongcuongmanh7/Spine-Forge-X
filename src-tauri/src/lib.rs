@@ -2561,6 +2561,26 @@ mod tests {
             prop_assert_eq!(parsed.as_deref(), Some(editor.as_str()));
         }
 
+        /// Property 8: clean_source_folder_name returns the id token before the
+        /// first '_' (when that token is non-empty), else the whole name. The
+        /// result is always a prefix of the input, and an extracted id never
+        /// itself contains a '_'. (tasks.md — promoted from example test)
+        #[test]
+        fn prop_clean_source_folder_name(name in "[A-Za-z0-9_]{0,20}") {
+            let id = clean_source_folder_name(&name);
+            // The result is always a leading slice of the original name.
+            prop_assert!(name.starts_with(id));
+            match name.split_once('_') {
+                Some((head, _)) if !head.is_empty() => {
+                    prop_assert_eq!(id, head);
+                    // An extracted id stops at the first separator.
+                    prop_assert!(!id.contains('_'));
+                }
+                // No '_' or a leading '_' (empty head) → keep the whole name.
+                _ => prop_assert_eq!(id, name.as_str()),
+            }
+        }
+
         /// Property 7: the timestamp export folder name always has the shape
         /// `export_{sanitized-version}_{ddmmyyyy_hhmmss}` — a sanitized version
         /// token (no underscores, since `_` is not allowed) followed by an
@@ -2732,6 +2752,49 @@ mod tests {
             prop_assert_eq!(result.skipped, expected_skipped);
 
             let _ = fs::remove_dir_all(&dir);
+        }
+
+        /// Property 16: find_existing_id_folder only ever returns a folder that
+        /// is an exact `id` match or a `{id}_…` prefix match, an exact match
+        /// always wins over a prefix match, and an empty id always yields None —
+        /// regardless of unrelated decoy folders. (tasks.md — promoted from example)
+        #[test]
+        fn prop_find_existing_id_folder_invariants(
+            id in "[0-9]{0,4}",
+            make_exact in any::<bool>(),
+            make_prefix in any::<bool>(),
+            decoys in prop::collection::vec("[A-Za-z0-9_]{1,8}", 0..6),
+        ) {
+            let base = test_dir("find-id-prop");
+            fs::create_dir_all(&base).unwrap();
+            for d in &decoys {
+                let _ = fs::create_dir_all(base.join(d));
+            }
+            if !id.is_empty() && make_exact {
+                fs::create_dir_all(base.join(&id)).unwrap();
+            }
+            if !id.is_empty() && make_prefix {
+                fs::create_dir_all(base.join(format!("{id}_extra"))).unwrap();
+            }
+
+            let result = find_existing_id_folder(&base, &id);
+
+            if id.is_empty() {
+                // Empty id never matches anything.
+                prop_assert_eq!(result, None);
+            } else {
+                let prefix = format!("{id}_");
+                if let Some(ref name) = result {
+                    // Never returns an unrelated folder.
+                    prop_assert!(name == &id || name.starts_with(&prefix));
+                }
+                // An exact folder, when present, takes priority over any prefix.
+                if make_exact {
+                    prop_assert_eq!(result.as_deref(), Some(id.as_str()));
+                }
+            }
+
+            let _ = fs::remove_dir_all(&base);
         }
     }
 }
