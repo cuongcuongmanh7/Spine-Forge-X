@@ -1,4 +1,4 @@
-//! Best-effort decoder for the export settings embedded in `.spine` project files
+﻿//! Best-effort decoder for the export settings embedded in `.spine` project files
 //! (Spine editor 3.8.x). Reverse-engineered 2026-06 and validated against real
 //! projects: parsed min/max + base preset reproduced an artist's manual export
 //! byte-for-byte (see docs in the v0.2.14 plan / memory `spine-project-file-format`).
@@ -7,10 +7,16 @@
 //! - A `.spine` project is a single raw-deflate stream (no zlib header).
 //! - The inflated payload is a custom binary serialization. Strings are ASCII
 //!   with the final byte OR'd with 0x80 (`"binar"` + 0xF9 == "binary").
-//! - Integers are protobuf-style little-endian base-128 varints.
+//! - Integers are little-endian base-128 varints, **zigzag-encoded** (libGDX
+//!   `writeInt(value, optimizePositive=false)`): n >= 0 is stored as 2n.
+//!   Proven 2026-06-11 by a controlled editor export — padding 3 stored as 6,
+//!   max 700 as 1400, min 128 as 256 (docs/research-padding-not-decoded.md §9).
+//!   Floats (f32 BE) and bools (single 0/1 byte) are not affected.
+//! - Pack-settings field ids are the 1-based index of the key in the
+//!   `.export.json` `packAtlas` schema (paddingX = 22nd key = 0x16, ...).
 //! - The last-export settings live near the end of the payload. Pack-atlas
 //!   min/max sizes are the field-id/varint pairs `07 08 09 0A`
-//!   (minWidth, minHeight, maxWidth, maxHeight).
+//!   (minWidth, minHeight, maxWidth, maxHeight), always followed by `0B <bool>`.
 //!
 //! Caveat (validated): the stored settings reflect the last project *save*, not
 //! necessarily the last export — the editor dialog can be changed after saving.
@@ -133,8 +139,21 @@ fn read_varint(data: &[u8], mut pos: usize) -> Option<(u64, usize)> {
     }
 }
 
+/// Read a zigzag varint and reject negative values. All int settings are
+/// non-negative, so an odd raw varint (= negative after zigzag) means the
+/// bytes are not the field we think they are.
+fn read_zigzag(data: &[u8], pos: usize) -> Option<(u64, usize)> {
+    let (raw, next) = read_varint(data, pos)?;
+    if raw & 1 != 0 {
+        return None;
+    }
+    Some((raw >> 1, next))
+}
+
+/// Page sizes are arbitrary in the editor (e.g. 700), not just powers of two;
+/// the scan instead anchors on the `0B <bool>` field that follows the block.
 fn is_valid_dimension(v: u64) -> bool {
-    (16..=16384).contains(&v) && v.is_power_of_two()
+    (16..=16384).contains(&v)
 }
 
 struct PackScan {
@@ -145,10 +164,10 @@ struct PackScan {
     end: usize,
 }
 
-/// Scan for `07 <varint> 08 <varint> 09 <varint> 0A <varint>` where all four
-/// values are powers of two in [16, 16384] and min <= max per axis. The
-/// settings block sits near EOF, so the LAST match wins (earlier matches in
-/// skeleton data would be coincidences).
+/// Scan for `07 <varint> 08 <varint> 09 <varint> 0A <varint> 0B <bool>` where
+/// all four zigzag-decoded values are in [16, 16384] and min <= max per axis.
+/// The settings block sits near EOF, so the LAST match wins (earlier matches
+/// in skeleton data would be coincidences).
 fn scan_pack_sizes(data: &[u8]) -> Option<PackScan> {
     let mut found = None;
     for i in 0..data.len().saturating_sub(8) {
@@ -168,7 +187,7 @@ fn try_pack_at(data: &[u8], start: usize) -> Option<PackScan> {
         if *data.get(pos)? != 0x07 + idx as u8 {
             return None;
         }
-        let (v, next) = read_varint(data, pos + 1)?;
+        let (v, next) = read_zigzag(data, pos + 1)?;
         if !is_valid_dimension(v) {
             return None;
         }
@@ -176,6 +195,11 @@ fn try_pack_at(data: &[u8], start: usize) -> Option<PackScan> {
         pos = next;
     }
     if vals[0] > vals[2] || vals[1] > vals[3] {
+        return None;
+    }
+    // Anchor: `0B <bool>` (pot) always follows maxHeight. Required now that
+    // dimensions are no longer constrained to powers of two.
+    if *data.get(pos)? != 0x0B || bool_value(*data.get(pos + 1)?).is_none() {
         return None;
     }
     Some(PackScan {
@@ -242,9 +266,34 @@ fn decode(data: &[u8]) -> Option<DecodedSettings> {
     decode_prefix_fields(data, scan.start, &mut d);
     let after_pack = decode_suffix_fields(data, scan.end, &mut d);
     decode_scale(data, scan.end, &mut d);
+    decode_padding(data, scan.end, &mut d);
+    decode_packing(data, scan.end, &mut d);
     decode_outer_fields(data, scan.start, &mut d);
     decode_trailing_strings(data, after_pack, &mut d);
     Some(d)
+}
+
+/// Tier A (validated 2026-06-11): `packing` is field `0x28`, stored near EOF in
+/// the trailing region as `28 01 <enum>` where the enum byte is 2 = rectangles,
+/// 3 = polygons. Proven by a controlled editor export — flipping only the
+/// Packing dropdown to Polygons changed exactly this one byte (02 → 03); Chest
+/// (02/rectangles) and Althea (03/polygons) independently agree. Unlike most
+/// fields the editor always writes it, so absence means "not this block".
+fn decode_packing(data: &[u8], pack_end: usize, d: &mut DecodedSettings) {
+    let to = (pack_end + NEAR_WINDOW).min(data.len());
+    let mut i = pack_end;
+    while i + 2 < to {
+        if data[i] == 0x28 && data[i + 1] == 0x01 {
+            let packing = match data[i + 2] {
+                2 => "rectangles",
+                3 => "polygons",
+                _ => return,
+            };
+            d.pack.insert("packing".into(), packing.into());
+            return;
+        }
+        i += 1;
+    }
 }
 
 /// Tier A (validated end-to-end 2026-06): pack-atlas `scale`. Spine stores scale
@@ -256,9 +305,6 @@ fn decode(data: &[u8]) -> Option<DecodedSettings> {
 /// Only single-scale is decoded — that is what was validated, and overriding a
 /// 1-element `scale` keeps the preset's parallel `scaleSuffix`/`scaleResampling`
 /// (also length 1) consistent. Multi-scale projects keep the preset's scale.
-/// Note: `paddingX/Y` (field 0x16/0x17) is deliberately NOT decoded — its stored
-/// value did not reproduce the export (file had 16, real export used 8), so
-/// padding always comes from the base preset.
 fn decode_scale(data: &[u8], pack_end: usize, d: &mut DecodedSettings) {
     let to = (pack_end + 96).min(data.len());
     let mut i = pack_end;
@@ -307,7 +353,7 @@ fn decode_prefix_fields(data: &[u8], pack_start: usize, d: &mut DecodedSettings)
             .map(|&b| bool_value(b))
             .collect();
         let Some(bools) = bools else { continue };
-        let Some((threshold, end)) = read_varint(data, start + 11) else {
+        let Some((threshold, end)) = read_zigzag(data, start + 11) else {
             continue;
         };
         if end != pack_start || threshold > 255 {
@@ -325,10 +371,9 @@ fn decode_prefix_fields(data: &[u8], pack_start: usize, d: &mut DecodedSettings)
         {
             d.pack.insert((*key).into(), (*val).into());
         }
-        // Calibration 2026-06-10 (Althea): the stored alphaThreshold (6) did not
-        // match the artist's actual export (3) — region sizes diverged. Parsed
-        // only to validate the block layout; the preset value wins.
-        let _ = threshold;
+        // The 2026-06-10 "mismatch" (stored 6 vs artist's 3) that demoted this
+        // field was the zigzag encoding, not stale data: 6 = zigzag(3).
+        d.pack.insert("alphaThreshold".into(), threshold.into());
         return;
     }
 }
@@ -338,12 +383,13 @@ fn decode_prefix_fields(data: &[u8], pack_start: usize, d: &mut DecodedSettings)
 /// `0F <f32 BE>` jpegQuality. Returns the offset where parsing stopped.
 fn decode_suffix_fields(data: &[u8], pack_end: usize, d: &mut DecodedSettings) -> usize {
     let mut pos = pack_end;
-    // Calibration 2026-06-10 (Chest + Althea): applying the stored 0x0C value as
-    // multipleOfFour reproduced neither artist export (it alone caused the whole
-    // page-layout drift), so it is parsed for position but never emitted.
+    // multipleOfFour (0x0C): re-validated 2026-06-11 once min/max were no longer
+    // doubled. With it on, a CLI re-export of 3001_Lucius reproduced the editor's
+    // pages byte-for-byte (308/300/288/272, all ÷4); the 2026-06-10 demotion was
+    // confounded by the zigzag-doubled sizes, not this field.
     let keys = [
         (0x0Bu8, Some("pot")),
-        (0x0C, None),
+        (0x0C, Some("multipleOfFour")),
         (0x0D, Some("square")),
     ];
     for (id, key) in keys {
@@ -379,7 +425,53 @@ fn decode_suffix_fields(data: &[u8], pack_end: usize, d: &mut DecodedSettings) -
             }
         }
     }
+    // `11 <bool> 12 <bool>` — premultiplyAlpha, bleed.
+    // Both bits matched the dialog checkboxes in the 2026-06-11 experiment.
+    if data.get(pos) == Some(&0x11) && data.get(pos + 2) == Some(&0x12) {
+        if let (Some(pma), Some(bleed)) = (
+            data.get(pos + 1).copied().and_then(bool_value),
+            data.get(pos + 3).copied().and_then(bool_value),
+        ) {
+            d.pack.insert("premultiplyAlpha".into(), pma.into());
+            d.pack.insert("bleed".into(), bleed.into());
+            pos += 4;
+        }
+    }
     pos
+}
+
+/// Tier A (validated 2026-06-11): `16 <zigzag> 17 <zigzag> 18 <bool> 19 <bool>`
+/// = paddingX, paddingY, edgePadding, duplicatePadding, scanned in the same
+/// window after the pack block as `scale`. An editor export with padding 3
+/// stored raw 6 — earlier reads of "16" for a real padding of 8 were the
+/// zigzag doubling, not a different semantic (research doc §8–9).
+fn decode_padding(data: &[u8], pack_end: usize, d: &mut DecodedSettings) {
+    let to = (pack_end + 96).min(data.len());
+    let mut i = pack_end;
+    while i + 6 < to {
+        if data[i] == 0x16 {
+            if let Some((px, p)) = read_zigzag(data, i + 1) {
+                if px <= 128 && data.get(p) == Some(&0x17) {
+                    if let Some((py, q)) = read_zigzag(data, p + 1) {
+                        let edge = data.get(q).filter(|&&b| b == 0x18).and_then(|_| {
+                            data.get(q + 1).copied().and_then(bool_value)
+                        });
+                        let dup = data.get(q + 2).filter(|&&b| b == 0x19).and_then(|_| {
+                            data.get(q + 3).copied().and_then(bool_value)
+                        });
+                        if let (true, Some(edge), Some(dup)) = (py <= 128, edge, dup) {
+                            d.pack.insert("paddingX".into(), px.into());
+                            d.pack.insert("paddingY".into(), py.into());
+                            d.pack.insert("edgePadding".into(), edge.into());
+                            d.pack.insert("duplicatePadding".into(), dup.into());
+                            return;
+                        }
+                    }
+                }
+            }
+        }
+        i += 1;
+    }
 }
 
 /// Tier A: outer export-settings fields anchored on the skeleton extension
@@ -455,262 +547,5 @@ fn decode_trailing_strings(data: &[u8], after_pack: usize, d: &mut DecodedSettin
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use proptest::prelude::*;
-    use std::io::Write;
-
-    fn varint_bytes(mut v: u64) -> Vec<u8> {
-        let mut out = Vec::new();
-        loop {
-            let b = (v & 0x7f) as u8;
-            v >>= 7;
-            if v == 0 {
-                out.push(b);
-                return out;
-            }
-            out.push(b | 0x80);
-        }
-    }
-
-    fn hibit(s: &str) -> Vec<u8> {
-        let mut b = s.as_bytes().to_vec();
-        *b.last_mut().unwrap() |= 0x80;
-        b
-    }
-
-    fn pack_block(min: u64, max: u64) -> Vec<u8> {
-        let mut b = Vec::new();
-        for (id, v) in [(0x07u8, min), (0x08, min), (0x09, max), (0x0A, max)] {
-            b.push(id);
-            b.extend(varint_bytes(v));
-        }
-        b
-    }
-
-    #[test]
-    fn varint_known_values() {
-        assert_eq!(read_varint(&[0x05], 0), Some((5, 1)));
-        assert_eq!(read_varint(&[0x80, 0x02], 0), Some((256, 2)));
-        assert_eq!(read_varint(&[0x80, 0x20], 0), Some((4096, 2)));
-        assert_eq!(read_varint(&[0x80], 0), None); // truncated
-        assert_eq!(read_varint(&[], 0), None);
-    }
-
-    proptest! {
-        #[test]
-        fn varint_roundtrip(v in 0u64..=u64::MAX / 2) {
-            let bytes = varint_bytes(v);
-            prop_assert_eq!(read_varint(&bytes, 0), Some((v, bytes.len())));
-        }
-    }
-
-    #[test]
-    fn hibit_string_decode() {
-        let data = hibit("binary");
-        let found = hibit_strings(&data, 0, data.len());
-        assert_eq!(found, vec![(0, "binary".to_string())]);
-    }
-
-    #[test]
-    fn scan_finds_valid_pattern_in_noise() {
-        let mut data = vec![0u8; 64];
-        data.extend(pack_block(256, 4096));
-        data.extend(vec![0xFFu8; 16]);
-        let scan = scan_pack_sizes(&data).expect("should find");
-        assert_eq!(
-            scan.sizes,
-            PackSizes {
-                min_width: 256,
-                min_height: 256,
-                max_width: 4096,
-                max_height: 4096
-            }
-        );
-    }
-
-    #[test]
-    fn scan_rejects_invalid_dimensions() {
-        for (min, max) in [(100, 4096), (8, 4096), (16, 32768), (4096, 256)] {
-            let data = pack_block(min, max);
-            assert!(
-                scan_pack_sizes(&data).is_none(),
-                "should reject min={min} max={max}"
-            );
-        }
-    }
-
-    #[test]
-    fn scan_takes_last_match() {
-        let mut data = pack_block(16, 1024);
-        data.extend(vec![0u8; 8]);
-        data.extend(pack_block(512, 2048));
-        let scan = scan_pack_sizes(&data).unwrap();
-        assert_eq!(scan.sizes.min_width, 512);
-        assert_eq!(scan.sizes.max_width, 2048);
-    }
-
-    #[test]
-    fn scan_empty_returns_none() {
-        assert!(scan_pack_sizes(&[]).is_none());
-        assert!(scan_pack_sizes(&[0u8; 256]).is_none());
-    }
-
-    /// Synthetic settings block mirroring the layout observed in real
-    /// 3.8.99 projects (see module docs), run through the full pipeline.
-    #[test]
-    fn full_pipeline_synthetic_project() {
-        let mut payload = vec![0u8; 128]; // fake skeleton data
-        payload.extend(hibit("binary"));
-        payload.extend([0x5A, 0x01, 0x08, 0x00, 0x01]);
-        payload.extend(hibit(".skel.bytes"));
-        payload.extend([0x01, 0x01, 0x02, 0x01]); // nonessential=true, cleanUp=true
-        payload.extend([0x03, 0x64, 0x01, 0x26, 0x01]); // observed filler before pack block
-        payload.extend([0x01, 0x01, 0x02, 0x01, 0x03, 0x01, 0x04, 0x01, 0x05, 0x00, 0x06, 0x03]);
-        payload.extend(pack_block(1024, 4096));
-        payload.extend([0x0B, 0x00, 0x0C, 0x01, 0x0D, 0x00]); // pot, mof, square
-        payload.extend([0x0E, 0x01]);
-        payload.extend(hibit("png"));
-        payload.push(0x0F);
-        payload.extend(0.9f32.to_be_bytes());
-        // scale [0.5]: field 0x13, count 1, element type 0x02, f32 BE
-        payload.extend([0x13, 0x01, 0x02]);
-        payload.extend(0.5f32.to_be_bytes());
-        payload.extend([0x1F, 0x01]);
-        payload.extend(hibit(".atlas.txt"));
-        payload.extend([0x04, 0x01]);
-        payload.extend(hibit("attachments"));
-        payload.extend([0x05, 0x01]);
-        payload.extend(hibit("perskeleton"));
-
-        let mut enc =
-            flate2::write::DeflateEncoder::new(Vec::new(), flate2::Compression::default());
-        enc.write_all(&payload).unwrap();
-        let compressed = enc.finish().unwrap();
-
-        let dir = std::env::temp_dir().join(format!("sfx-test-{}", std::process::id()));
-        std::fs::create_dir_all(&dir).unwrap();
-        let path = dir.join("synthetic.spine");
-        std::fs::write(&path, &compressed).unwrap();
-
-        let d = read_export_settings(&path).expect("decode should succeed");
-        std::fs::remove_dir_all(&dir).ok();
-
-        assert_eq!(d.pack_sizes.min_width, 1024);
-        assert_eq!(d.pack_sizes.max_width, 4096);
-        assert_eq!(d.outer.get("extension"), Some(&".skel.bytes".into()));
-        assert_eq!(d.outer.get("class"), Some(&"export-binary".into()));
-        assert_eq!(d.outer.get("cleanUp"), Some(&true.into()));
-        assert_eq!(d.outer.get("nonessential"), Some(&true.into()));
-        assert_eq!(d.outer.get("packSource"), Some(&"attachments".into()));
-        assert_eq!(d.outer.get("packTarget"), Some(&"perskeleton".into()));
-        assert_eq!(d.pack.get("stripWhitespaceX"), Some(&true.into()));
-        assert_eq!(d.pack.get("ignoreBlankImages"), Some(&false.into()));
-        assert_eq!(d.pack.get("pot"), Some(&false.into()));
-        // Demoted by calibration — parsed for position but never emitted:
-        assert_eq!(d.pack.get("alphaThreshold"), None);
-        assert_eq!(d.pack.get("multipleOfFour"), None);
-        assert_eq!(d.pack.get("outputFormat"), Some(&"png".into()));
-        assert_eq!(d.pack.get("atlasExtension"), Some(&".atlas.txt".into()));
-        assert_eq!(
-            d.pack.get("jpegQuality"),
-            Some(&Value::from(f64::from(0.9f32)))
-        );
-        // scale decoded as a single-element array (validated: critical for resolution).
-        assert_eq!(
-            d.pack.get("scale"),
-            Some(&Value::Array(vec![Value::from(f64::from(0.5f32))]))
-        );
-    }
-
-    #[test]
-    fn inflate_rejects_garbage() {
-        assert!(inflate_project(&[0xDE, 0xAD, 0xBE, 0xEF]).is_err());
-    }
-
-    /// merge_decoded_settings overrides exactly the decoded keys; everything
-    /// else in the base preset stays untouched, and packAtlas overrides are
-    /// dropped when the preset has packing disabled.
-    #[test]
-    fn merge_decoded_settings_overrides_only_decoded_keys() {
-        let base = r#"{
-            "class": "export-binary",
-            "extension": ".skel",
-            "cleanUp": false,
-            "nonessential": true,
-            "packAtlas": { "minWidth": 16, "minHeight": 16, "maxWidth": 2048,
-                           "maxHeight": 2048, "paddingX": 2, "bleed": false },
-            "packSource": "attachments",
-            "warnings": true
-        }"#;
-        let mut decoded = DecodedSettings {
-            pack_sizes: PackSizes {
-                min_width: 256,
-                min_height: 256,
-                max_width: 4096,
-                max_height: 4096,
-            },
-            ..Default::default()
-        };
-        decoded.outer.insert("cleanUp".into(), true.into());
-        decoded.outer.insert("packSource".into(), "folder".into());
-        decoded.pack.insert("minWidth".into(), 256.into());
-        decoded.pack.insert("maxWidth".into(), 4096.into());
-
-        let merged = merge_decoded_settings(base, &decoded).unwrap();
-        // Overridden by the decoder:
-        assert_eq!(merged["cleanUp"], true);
-        assert_eq!(merged["packAtlas"]["minWidth"], 256);
-        assert_eq!(merged["packAtlas"]["maxWidth"], 4096);
-        // Legacy packSource value gets normalized on the way in.
-        assert_eq!(merged["packSource"], "imagefolders");
-        // Untouched preset values:
-        assert_eq!(merged["extension"], ".skel");
-        assert_eq!(merged["nonessential"], true);
-        assert_eq!(merged["packAtlas"]["paddingX"], 2);
-        assert_eq!(merged["packAtlas"]["bleed"], false);
-        assert_eq!(merged["warnings"], true);
-
-        // packAtlas null → pack overrides are dropped, outer ones still apply.
-        let no_pack = r#"{ "class": "export-binary", "packAtlas": null }"#;
-        let merged = merge_decoded_settings(no_pack, &decoded).unwrap();
-        assert_eq!(merged["packAtlas"], Value::Null);
-        assert_eq!(merged["cleanUp"], true);
-
-        // Invalid base JSON → error.
-        assert!(merge_decoded_settings("not json", &decoded).is_err());
-    }
-
-    /// Dev tool for calibrating the decoder against real projects. Decodes
-    /// SPINE_FIXTURE, merges over BASE_PRESET and writes OUT_JSON, which can
-    /// then be fed to the Spine CLI and diffed against an artist's export:
-    /// `SPINE_FIXTURE=... BASE_PRESET=... OUT_JSON=... cargo test --ignored calibration_merge_dump`
-    #[test]
-    #[ignore]
-    fn calibration_merge_dump() {
-        let fixture = std::env::var("SPINE_FIXTURE").expect("set SPINE_FIXTURE");
-        let base = std::env::var("BASE_PRESET").expect("set BASE_PRESET");
-        let out = std::env::var("OUT_JSON").expect("set OUT_JSON");
-        let decoded = read_export_settings(Path::new(&fixture)).unwrap();
-        eprintln!("decoded {}: {}", fixture, decoded.summary());
-        let merged = merge_decoded_settings(
-            &std::fs::read_to_string(&base).unwrap(),
-            &decoded,
-        )
-        .unwrap();
-        std::fs::write(&out, serde_json::to_string_pretty(&merged).unwrap()).unwrap();
-        eprintln!("merged settings written to {out}");
-    }
-
-    /// Manual check against a real production project. Run with:
-    /// `SPINE_FIXTURE=D:\Resources\SI\UI\Chest\Chest.spine cargo test --ignored real_fixture`
-    /// Expected for Chest.spine: min 256, max 4096.
-    #[test]
-    #[ignore]
-    fn real_fixture() {
-        let path = std::env::var("SPINE_FIXTURE").expect("set SPINE_FIXTURE");
-        let d = read_export_settings(Path::new(&path)).expect("decode real project");
-        eprintln!("decoded: outer={:?} pack={:?}", d.outer, d.pack);
-        assert!(d.pack_sizes.min_width >= 16);
-    }
-}
+#[path = "spine_project_tests.rs"]
+mod tests;

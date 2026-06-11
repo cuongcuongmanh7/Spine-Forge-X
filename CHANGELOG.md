@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+- **Tìm ra nguyên nhân gốc các giá trị "lệch ×2" khi đọc `.spine` — và sửa decoder**: số nguyên trong project file được Spine lưu dạng varint **zigzag** (n ≥ 0 lưu thành 2n); decoder cũ đọc unsigned thuần nên mọi field int ra gấp đôi. Đã chứng minh bằng thí nghiệm có kiểm soát (padding 3 → file ghi 6, max 700 → 1400, min 128 → 256) — xem `docs/research-padding-not-decoded.md`.
+- **Sửa bug min/max đọc gấp đôi** ở mode "Preset nền + min/max từng .spine": ví dụ project đặt max 2048 trước đây bị đọc thành 4096 (min cũng vậy → có thể ép page phình to hơn ý artist).
+- **Decoder giờ nhận page size tùy ý** (vd max 700) thay vì chỉ power-of-two — trước đây project dùng size lẻ bị báo "không tìm thấy pack settings" và rơi hết về preset.
+- **Đọc thêm được từ `.spine`**: `paddingX/Y`, `edgePadding`, `duplicatePadding`, `alphaThreshold`, `premultiplyAlpha`, `bleed`, `multipleOfFour`, và **`packing` (cả Rectangles lẫn Polygons)** — các lần "demote" trước (`multipleOfFour`, `alphaThreshold`) là do nhiễu bởi bug min/max gấp đôi + hiểu nhầm zigzag, nay đã loại.
+- **Validate end-to-end mạnh nhất**: decode `.spine` → merge lên preset → Spine CLI export → **toàn bộ atlas + PNG giống từng byte** bản export từ editor, cho cả 2 chế độ packing (Rectangles và Polygons), không chỉnh tay field nào. (`skel.bytes` lệch ở vùng hash là đặc tính nondeterminism của CLI re-export, không liên quan settings.)
+- Giờ mode "Preset nền + min/max từng .spine" gần như lấy trọn cấu hình pack atlas từ file: min/max, scale, padding, các bool, và packing — chỉ còn vài field runtime (filter/wrap/format) lấy từ preset nền.
+
 ## v0.2.17
 - **Chạy một bản duy nhất (single instance)**: trước đây khi app đang ẩn ở khay hệ thống, mở lại app sẽ chạy một tiến trình mới hoàn toàn (hai icon tray, hai bản dùng chung file cấu hình → có thể ghi đè lẫn nhau). Giờ mở lại app sẽ khôi phục đúng cửa sổ đang ẩn ở tray thay vì tạo tiến trình mới.
 
