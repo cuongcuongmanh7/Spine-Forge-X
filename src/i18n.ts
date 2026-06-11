@@ -205,9 +205,9 @@ export const copy = {
     exportSettingsSource: 'Nguồn settings export',
     presetModeLabel: 'Dùng preset cho mọi file',
     presetModeHelp: 'Mọi file .spine export bằng đúng preset nền đã chọn ở trên.',
-    perProjectModeLabel: 'Preset nền + min/max từ từng .spine',
+    perProjectModeLabel: 'Dùng settings từ từng .spine',
     lastExportSettingsHelp:
-      'Dùng preset nền làm gốc, rồi đọc settings export lưu trong TỪNG project (min/max pack atlas, cleanUp, format...) ghi đè lên trên; field không đọc được giữ giá trị preset. Lưu ý: settings trong project là của lần save cuối, có thể lệch với lần export cuối nếu artist chỉnh dialog sau khi save. File không parse được sẽ export bằng preset nền (xem log).',
+      'Dùng preset nền làm gốc, rồi đọc settings export lưu trong TỪNG project (min/max, scale, padding, packing, cleanUp, format...) ghi đè lên trên; field không đọc được giữ giá trị preset. Lưu ý: settings trong project là của lần save cuối, có thể lệch với lần export cuối nếu artist chỉnh dialog sau khi save. File không parse được sẽ export bằng preset nền (xem log).',
     globalPreset: 'Preset global',
     noPreset: 'Không dùng preset',
     builtInPreset: 'Built-in',
@@ -549,9 +549,9 @@ export const copy = {
     exportSettingsSource: 'Export settings source',
     presetModeLabel: 'Use preset for all files',
     presetModeHelp: 'Every .spine file exports with exactly the base preset selected above.',
-    perProjectModeLabel: 'Base preset + each .spine’s pack sizes',
+    perProjectModeLabel: 'Use settings from each .spine',
     lastExportSettingsHelp:
-      'Uses the base preset as the starting point, then reads the export settings stored in EACH project (pack atlas min/max, cleanUp, format...) and overrides on top; fields that cannot be decoded keep the preset value. Note: stored settings reflect the last project save, which can differ from the last export if the dialog was changed afterwards. Files that fail to parse export with the base preset (see log).',
+      'Uses the base preset as the starting point, then reads the export settings stored in EACH project (min/max, scale, padding, packing, cleanUp, format...) and overrides on top; fields that cannot be decoded keep the preset value. Note: stored settings reflect the last project save, which can differ from the last export if the dialog was changed afterwards. Files that fail to parse export with the base preset (see log).',
     globalPreset: 'Global preset',
     noPreset: 'No preset',
     builtInPreset: 'Built-in',

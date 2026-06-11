@@ -26,6 +26,24 @@ fn hibit(s: &str) -> Vec<u8> {
     b
 }
 
+/// Header version stamp: mimics the layout dumped from real projects —
+/// `<byte> '0'|80 ' ' '0'|80 ' ' <version digits, last |0x80>`.
+/// (3001_Lucius.spine: `12 B0 20 B0 20 "3.8.9" B9`; the 4.3 re-save:
+/// `47 B0 20 B0 20 "4.3.1" B7`.)
+#[test]
+fn detects_editor_version_in_header() {
+    let mut v43 = vec![0x47, 0xB0, 0x20, 0xB0, 0x20];
+    v43.extend(hibit("4.3.17"));
+    assert_eq!(detect_editor_version(&v43).as_deref(), Some("4.3.17"));
+
+    let mut v38 = vec![0x12, 0xB0, 0x20, 0xB0, 0x20];
+    v38.extend(hibit("3.8.99"));
+    assert_eq!(detect_editor_version(&v38).as_deref(), Some("3.8.99"));
+
+    // No version stamp → None (error message stays generic).
+    assert_eq!(detect_editor_version(&[0x00, 0x01, 0x02, 0x03]), None);
+}
+
 fn pack_block(min: u64, max: u64) -> Vec<u8> {
     let mut b = Vec::new();
     for (id, v) in [(0x07u8, min), (0x08, min), (0x09, max), (0x0A, max)] {

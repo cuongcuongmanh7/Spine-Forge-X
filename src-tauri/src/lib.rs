@@ -1618,7 +1618,7 @@ fn create_last_export_settings(
         Ok(decoded) => decoded,
         Err(reason) => {
             let note = format!(
-                "Không parse được settings từ project ({reason}); dùng preset nền — {}",
+                "[WARN] Không parse được settings từ project ({reason}); file này export bằng preset nền — {}",
                 path_to_string(input_file)
             );
             // Same path the plain GlobalJson mode takes, including the legacy
@@ -2275,7 +2275,9 @@ mod tests {
         let plan = create_last_export_settings(&request, &spine).unwrap();
         assert_eq!(plan.arg.as_deref(), Some(preset.to_string_lossy().as_ref()));
         assert!(plan.temp_file.is_none());
-        assert!(plan.note.unwrap().contains("dùng preset nền"));
+        let note = plan.note.unwrap();
+        assert!(note.starts_with("[WARN]"), "fallback note must be a warning: {note}");
+        assert!(note.contains("export bằng preset nền"));
 
         let _ = fs::remove_dir_all(&dir);
     }

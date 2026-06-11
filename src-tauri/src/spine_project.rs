@@ -105,7 +105,30 @@ pub fn merge_decoded_settings(
 pub fn read_export_settings(path: &Path) -> Result<DecodedSettings, String> {
     let bytes = std::fs::read(path).map_err(|e| format!("đọc file thất bại: {e}"))?;
     let data = inflate_project(&bytes)?;
-    decode(&data).ok_or_else(|| "không tìm thấy pack settings trong project".to_string())
+    decode(&data).ok_or_else(|| match detect_editor_version(&data) {
+        Some(v) if !v.starts_with("3.") => format!(
+            "project được save bởi Spine {v} — decoder chỉ hỗ trợ format 3.8.x, settings trong file 4.x chưa đọc được"
+        ),
+        Some(v) => format!("không tìm thấy pack settings trong project (Spine {v})"),
+        None => "không tìm thấy pack settings trong project".to_string(),
+    })
+}
+
+/// Editor version stamped as a hibit string near the start of the payload
+/// (observed on real files: "3.8.99", "4.3.17"). Used only to make
+/// scan-failure errors actionable — a 4.x file is a different binary layout,
+/// not a corrupt 3.8 one.
+fn detect_editor_version(data: &[u8]) -> Option<String> {
+    hibit_strings(data, 0, 64.min(data.len()))
+        .into_iter()
+        .find_map(|(_, s)| {
+            let token = s.trim();
+            let looks_like_version = token.len() >= 3
+                && token.contains('.')
+                && token.starts_with(|c: char| c.is_ascii_digit())
+                && token.chars().all(|c| c.is_ascii_digit() || c == '.');
+            looks_like_version.then(|| token.to_string())
+        })
 }
 
 /// `.spine` projects are raw deflate (no zlib header).
