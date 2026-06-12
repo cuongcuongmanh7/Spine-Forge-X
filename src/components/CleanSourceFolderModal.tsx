@@ -1,42 +1,14 @@
 import { useEffect, useMemo, useState } from 'react';
-import { FolderOpen, Archive, X, Search, RotateCw, CircleStop, Check, Circle } from 'lucide-react';
+import { FolderOpen, Archive, X, Search } from 'lucide-react';
 import { open } from '@tauri-apps/plugin-dialog';
 import { confirm } from '@tauri-apps/plugin-dialog';
 import { useApp } from '../useAppController';
 import type { CleanUnitInfo } from '../types';
 import { CleanFolderDetailModal } from './CleanFolderDetailModal';
-
-function formatBytes(bytes: number): string {
-  if (bytes <= 0) return '0 B';
-  const units = ['B', 'KB', 'MB', 'GB'];
-  const i = Math.min(units.length - 1, Math.floor(Math.log(bytes) / Math.log(1024)));
-  return `${(bytes / 1024 ** i).toFixed(i === 0 ? 0 : 1)} ${units[i]}`;
-}
-
-/** Reduce a full path to its last two segments, e.g. "3001_Lucius/hero.spine". */
-function shortenPath(path: string): string {
-  const segments = path.split(/[\\/]+/).filter(Boolean);
-  return segments.slice(-2).join('/');
-}
-
-/**
- * Folder path relative to the scanned root, so sibling sub-trees with the same
- * leaf name stay distinct (e.g. "Chibi/9901" vs "Splash/9901"). Falls back to
- * the leaf when the folder isn't under the root.
- */
-function relativeToRoot(folder: string, root: string): string {
-  const f = folder.replace(/\\/g, '/').replace(/\/+$/, '');
-  const r = root.trim().replace(/\\/g, '/').replace(/\/+$/, '');
-  if (r && f.toLowerCase().startsWith(r.toLowerCase() + '/')) {
-    return f.slice(r.length + 1);
-  }
-  return f.split('/').filter(Boolean).pop() || folder;
-}
-
-/** Normalise a folder path for matching scan-progress events to picker units. */
-function normFolder(path: string): string {
-  return path.replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase();
-}
+import { CleanSourcePicker } from './cleanSource/CleanSourcePicker';
+import { CleanSourceTable } from './cleanSource/CleanSourceTable';
+import { CleanSourceScanOverlay } from './cleanSource/CleanSourceScanOverlay';
+import { normFolder } from './cleanSource/helpers';
 
 export function CleanSourceFolderModal() {
   const {
@@ -278,125 +250,29 @@ export function CleanSourceFolderModal() {
             ) : unitCount === 1 ? (
               <p className="helper-text">{t.cleanSourceCount.replace('{count}', '1')}</p>
             ) : (
-              <div className="clean-source-picker">
-                <div className="clean-source-picker-head">
-                  <span
-                    className={`helper-text ${
-                      selectedUnits.length > LARGE_SCAN_THRESHOLD ? 'field-status warning' : ''
-                    }`}
-                  >
-                    {t.cleanSourceSelected
-                      .replace('{count}', String(selectedUnits.length))
-                      .replace('{total}', String(unitCount))}
-                  </span>
-                  <span className="clean-source-picker-actions">
-                    <button type="button" className="link-button" onClick={selectAll}>
-                      {t.cleanSourceSelectAll}
-                    </button>
-                    <button type="button" className="link-button" onClick={selectNone}>
-                      {t.cleanSourceSelectNone}
-                    </button>
-                  </span>
-                </div>
-                <ul className="clean-source-picker-list">
-                  {(units ?? []).map((u) => {
-                    const rel = relativeToRoot(u.folder, root);
-                    const slash = rel.lastIndexOf('/');
-                    const prefix = slash >= 0 ? rel.slice(0, slash) : '';
-                    const leaf = slash >= 0 ? rel.slice(slash + 1) : rel;
-                    return (
-                      <li key={u.spineFile}>
-                        <label title={u.folder}>
-                          <input
-                            type="checkbox"
-                            checked={!deselected.has(u.spineFile)}
-                            onChange={() => toggleUnit(u.spineFile)}
-                          />
-                          <span className="clean-source-picker-name">
-                            {prefix && <span className="cs-prefix">{prefix}</span>}
-                            <span className="cs-leaf">
-                              {prefix ? '/' : ''}
-                              {leaf}
-                            </span>
-                          </span>
-                        </label>
-                      </li>
-                    );
-                  })}
-                </ul>
-              </div>
+              <CleanSourcePicker
+                t={t}
+                units={units ?? []}
+                root={root}
+                deselected={deselected}
+                selectedCount={selectedUnits.length}
+                unitCount={unitCount}
+                largeThreshold={LARGE_SCAN_THRESHOLD}
+                onToggle={toggleUnit}
+                onSelectAll={selectAll}
+                onSelectNone={selectNone}
+              />
             )
           )}
 
           {summary && (
-            <>
-              <table className="clean-source-table">
-                <thead>
-                  <tr>
-                    <th>{t.cleanSourceColFolder}</th>
-                    <th>{t.cleanSourceColUsed}</th>
-                    <th>{t.cleanSourceColUnused}</th>
-                    <th>{t.cleanSourceColIssues}</th>
-                    <th aria-label={t.cleanSourceMove} />
-                  </tr>
-                </thead>
-                <tbody>
-                  {summary.units.map((unit, rowIndex) => {
-                    const issues = unit.missing.length + unit.ambiguous.length;
-                    const name = unit.folder.replace(/\\/g, '/').split('/').pop() || unit.folder;
-                    const cls = [unit.error ? 'has-error' : unit.unused.length ? 'has-unused' : '', unit.error ? '' : 'clickable']
-                      .filter(Boolean)
-                      .join(' ');
-                    return (
-                      <tr
-                        key={unit.folder}
-                        className={cls}
-                        onClick={() => !unit.error && setDetailIndex(rowIndex)}
-                        title={unit.error ? unit.folder : t.cleanSourceViewDetail}
-                      >
-                        <td title={unit.folder}>
-                          <span
-                            className={`status-dot ${unit.error ? 'neutral' : unit.unused.length ? 'red' : 'green'}`}
-                          />
-                          {name}
-                        </td>
-                        <td>{unit.error ? '—' : unit.used}</td>
-                        <td>
-                          {unit.error ? '—' : unit.unused.length}
-                          {!unit.error && unit.unused.length > 0 && (
-                            <span className="muted"> ({formatBytes(unit.unusedBytes)})</span>
-                          )}
-                        </td>
-                        <td title={[...unit.missing, ...unit.ambiguous].join(', ')}>
-                          {unit.error ? <span className="field-status error">{unit.error}</span> : issues || ''}
-                        </td>
-                        <td>
-                          {!unit.error && unit.unused.length > 0 && (
-                            <button
-                              className="icon-button warning"
-                              title={t.cleanSourceMove}
-                              aria-label={t.cleanSourceMove}
-                              disabled={busy}
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                void moveFolder(rowIndex);
-                              }}
-                            >
-                              <Archive size={16} />
-                            </button>
-                          )}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-              <p className="helper-text">
-                {t.cleanSourceTotal
-                  .replace('{count}', String(summary.totalUnused))
-                  .replace('{size}', formatBytes(summary.totalUnusedBytes))}
-              </p>
-            </>
+            <CleanSourceTable
+              t={t}
+              summary={summary}
+              busy={busy}
+              onRowClick={setDetailIndex}
+              onMoveFolder={(rowIndex) => void moveFolder(rowIndex)}
+            />
           )}
         </div>
 
@@ -415,43 +291,18 @@ export function CleanSourceFolderModal() {
       </div>
     </div>
     {scanning && (
-      <div className="run-overlay scan-overlay" role="alertdialog" aria-modal="true" aria-busy="true">
-        <div className="run-overlay-card">
-          <RotateCw className="spin run-overlay-spinner" size={26} />
-          <h2 className="run-overlay-title">{t.cleanSourceScanning}</h2>
-          <div className="run-overlay-progress">
-            <progress value={scanPercent} max={100} />
-            <span>{scanCurrent} / {scanTotal} · {scanPercent}%</span>
-          </div>
-          {selectedUnits.length > 0 ? (
-            <ul className="scan-overlay-list">
-              {selectedUnits.map((u) => {
-                const done = scannedFolders.has(normFolder(u.folder));
-                return (
-                  <li key={u.spineFile} className={done ? 'done' : 'pending'}>
-                    {done ? (
-                      <Check size={14} className="scan-overlay-check" />
-                    ) : (
-                      <Circle size={14} className="scan-overlay-pending" />
-                    )}
-                    <span className="scan-overlay-name" title={u.folder}>
-                      {relativeToRoot(u.folder, root)}
-                    </span>
-                  </li>
-                );
-              })}
-            </ul>
-          ) : (
-            liveProgress.file && (
-              <p className="run-overlay-file" title={liveProgress.file}>{shortenPath(liveProgress.file)}</p>
-            )
-          )}
-          <button className="secondary-button" disabled={isStopping} onClick={() => void stopExport()}>
-            {isStopping ? <RotateCw className="spin" size={16} /> : <CircleStop size={16} />}
-            {isStopping ? t.stopRequested : t.stop}
-          </button>
-        </div>
-      </div>
+      <CleanSourceScanOverlay
+        t={t}
+        scanPercent={scanPercent}
+        scanCurrent={scanCurrent}
+        scanTotal={scanTotal}
+        selectedUnits={selectedUnits}
+        scannedFolders={scannedFolders}
+        root={root}
+        progressFile={liveProgress.file}
+        isStopping={isStopping}
+        onStop={() => void stopExport()}
+      />
     )}
     {detailIndex !== null && summary && summary.units[detailIndex] && (
       <CleanFolderDetailModal

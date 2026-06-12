@@ -1,5 +1,8 @@
 # Changelog
 
+## v0.3.2
+- **Tái cấu trúc frontend — tách file i18n + 2 modal lớn (không đổi hành vi)**: tiếp tục dọn nợ v0.3.x ở phía giao diện, không thêm/đổi tính năng nào nhìn thấy được. (1) `i18n.ts` (727 dòng, gần trần 800) tách thành `i18n/{vi,en,types,index}.ts` — mỗi locale một file; `en` giờ được TypeScript bắt buộc khớp đúng tập key của `vi` nên hai ngôn ngữ không thể lệch nhau âm thầm. (2) `CleanSourceFolderModal` (467→318 dòng) tách phần chọn folder, bảng kết quả và overlay đang-quét ra các component con (`cleanSource/`). (3) `PresetEditorModal` (376→117 dòng) tách toàn bộ tab biểu mẫu ra `preset/PresetFormTab`. API import của i18n giữ nguyên (`./i18n`); toàn bộ test (`cargo test` 58, frontend 26) + build + file-size guard vẫn xanh.
+
 ## v0.3.1
 - **Tái cấu trúc backend — gom code lặp (không đổi hành vi)**: tiếp nối chuỗi dọn nợ v0.3.x, bản này gom các đoạn lặp đi lặp lại trong backend Rust thành module dùng chung, không thêm/đổi tính năng nào nhìn thấy được. (1) `paths.rs` — gom các helper xử lý đường dẫn (bỏ dấu nháy quanh path do kéo-thả/dán để lại, `Path`→`String`, kiểm tra non-ASCII, chuẩn hoá `packSource`) vốn nằm rải rác + lặp `trim_matches('"')` ở ~24 chỗ. (2) `error.rs` — trait `ResultExt` (`.str_err()` / `.context(...)`) thay cho ~40 lần lặp `.map_err(|e| e.to_string())` / `.map_err(|e| format!("…: {e}"))`. (3) `concurrent.rs` — bộ lập lịch song song dùng chung (`run_indexed`: semaphore giới hạn job + đếm tiến độ theo thứ tự hoàn thành + tôn trọng nút Stop) cho cả export hàng loạt lẫn quét Clean Source, vốn trước đây chép gần như y hệt ở hai nơi. Toàn bộ test (`cargo test` 58, frontend 26) + build vẫn xanh.
 
