@@ -1,10 +1,20 @@
 #![recursion_limit = "256"]
 
 mod cleaner;
+mod concurrent;
+mod error;
+mod paths;
 mod presets;
 mod spine_project;
 mod system;
 mod tray;
+
+use error::ResultExt;
+// Re-export so existing `crate::path_to_string` / `crate::normalize_pack_source`
+// references in sibling modules keep resolving after the move into `paths`.
+pub(crate) use paths::{
+    has_non_ascii, normalize_pack_source, parse_quoted_path, path_to_string, unquote,
+};
 
 use serde::{Deserialize, Serialize};
 use std::{
@@ -21,8 +31,7 @@ use tauri::{Emitter, Manager, State, Window};
 use tokio::{
     io::{AsyncBufReadExt, BufReader},
     process::Command,
-    sync::{Mutex, Semaphore},
-    task::JoinSet,
+    sync::Mutex,
     time,
 };
 use walkdir::WalkDir;
@@ -256,7 +265,7 @@ fn auto_detect_spine() -> Result<String, String> {
 
 #[tauri::command]
 async fn detect_spine_version(window: Window, spine_path: String) -> Result<String, String> {
-    let path = PathBuf::from(spine_path.trim_matches('"'));
+    let path = parse_quoted_path(&spine_path);
     if !path.exists() {
         return Err("Spine executable không tồn tại.".to_string());
     }
@@ -264,7 +273,7 @@ async fn detect_spine_version(window: Window, spine_path: String) -> Result<Stri
     let mut cmd = Command::new(path);
     cmd.arg("--version").stdout(Stdio::piped()).stderr(Stdio::piped());
     apply_no_window(&mut cmd);
-    let output = cmd.output().await.map_err(|e| e.to_string())?;
+    let output = cmd.output().await.str_err()?;
 
     let mut text = String::new();
     text.push_str(&String::from_utf8_lossy(&output.stdout));
@@ -287,7 +296,7 @@ async fn detect_spine_version(window: Window, spine_path: String) -> Result<Stri
 
 #[tauri::command]
 fn scan_spine_files(input_path: String) -> Result<ScanResult, String> {
-    let path = PathBuf::from(input_path.trim_matches('"'));
+    let path = parse_quoted_path(&input_path);
     if !path.exists() {
         return Err("Input path không tồn tại.".to_string());
     }
@@ -340,7 +349,7 @@ fn validate_settings(
     let mut output_ok = false;
     let mut output_warning = false;
 
-    let spine = PathBuf::from(spine_path.trim_matches('"'));
+    let spine = parse_quoted_path(&spine_path);
     if spine_path.trim().is_empty() {
         errors.push("Chưa chọn Spine executable.".to_string());
     } else if !spine.exists() {
@@ -362,7 +371,7 @@ fn validate_settings(
     }
 
     if !output_path.trim().is_empty() {
-        let output = PathBuf::from(output_path.trim_matches('"'));
+        let output = parse_quoted_path(&output_path);
         if !output.exists() {
             output_warning = true;
             warnings.push("Output directory chưa tồn tại; app sẽ thử tạo khi chạy.".to_string());
@@ -384,7 +393,7 @@ fn validate_settings(
         || export_mode == "lastExportSettings")
         && !global_json_path.trim().is_empty()
     {
-        let global = PathBuf::from(global_json_path.trim_matches('"'));
+        let global = parse_quoted_path(&global_json_path);
         if !global.exists() {
             errors.push("Global .export.json không tồn tại.".to_string());
         }
@@ -407,7 +416,7 @@ fn validate_settings(
 
 #[tauri::command]
 fn clean_timestamp_exports(input_path: String) -> Result<CleanResult, String> {
-    let root = PathBuf::from(input_path.trim_matches('"'));
+    let root = parse_quoted_path(&input_path);
     if !root.exists() {
         return Err("Input path không tồn tại.".to_string());
     }
@@ -485,71 +494,53 @@ async fn start_batch_export(
     }
 
     let shared_request = Arc::new(request);
-    let semaphore = Arc::new(Semaphore::new(parallel_jobs));
     let state_arc: Arc<AppState> = Arc::clone(&state);
-    // Shared counter tracking how many files have been fully processed (any outcome).
-    // Each task atomically increments this after export_one_file returns, so progress
-    // events always arrive in completion order (1, 2, 3, …) rather than spawn order.
-    let completed_count = Arc::new(AtomicUsize::new(0));
 
-    // Spawn one task per file; each task acquires a semaphore permit before calling
-    // export_one_file, so at most `parallel_jobs` exports run concurrently.
-    let mut join_set: JoinSet<(usize, FileOutcome, Option<String>)> = JoinSet::new();
+    // One task per file, capped at `parallel_jobs` concurrent exports (see
+    // concurrent::run_indexed). Each task re-checks the stop flag — it could have
+    // been set while it waited for a permit — and reports completion order via
+    // `done.tick()` so progress events arrive 1, 2, 3, … rather than in spawn order.
+    let results = concurrent::run_indexed(
+        shared_request.files.clone(),
+        parallel_jobs,
+        &state_arc.stop_requested,
+        |_index, file, done| {
+            let req = Arc::clone(&shared_request);
+            let app_state = Arc::clone(&state_arc);
+            let win = window.clone();
+            let run_folder = run_folder_name.clone();
+            async move {
+                if !may_start_next(&app_state.stop_requested) {
+                    return (FileOutcome::Skipped, None);
+                }
 
-    for (index, file) in shared_request.files.iter().enumerate() {
-        // Check stop flag BEFORE queuing so a Stop request drains the queue immediately.
-        if !may_start_next(&state_arc.stop_requested) {
-            let _ = window.emit("spine-log", "Batch stopped by user.");
-            break;
-        }
+                // This job now holds a permit and is actively exporting — let the
+                // UI overlay list it (removed again on the spine-progress event).
+                let _ = win.emit("spine-job-start", file.clone());
 
-        let file = file.clone();
-        let run_folder = run_folder_name.clone();
-        let req = Arc::clone(&shared_request);
-        let sem = Arc::clone(&semaphore);
-        let app_state = Arc::clone(&state_arc);
-        let win = window.clone();
-        let counter = Arc::clone(&completed_count);
+                let output_dir_hint = {
+                    let input_path = std::path::PathBuf::from(file.as_str());
+                    resolve_output_dir(&req, &input_path, &run_folder).ok()
+                };
 
-        join_set.spawn(async move {
-            // Check stop flag once before blocking on the semaphore.
-            if !may_start_next(&app_state.stop_requested) {
-                return (index, FileOutcome::Skipped, None);
+                let outcome =
+                    export_one_file(win.clone(), app_state, req, &file, &run_folder).await;
+
+                let current = done.tick();
+                let _ = win.emit(
+                    "spine-progress",
+                    ProgressPayload {
+                        current,
+                        total,
+                        file: file.clone(),
+                    },
+                );
+
+                (outcome, output_dir_hint)
             }
-
-            // Acquire permit — blocks if `parallel_jobs` tasks are already running.
-            // The permit is held for the lifetime of the export call and released on drop.
-            let _permit = sem.acquire().await;
-
-            // Re-check stop flag after acquiring the permit (could have been set while waiting).
-            if !may_start_next(&app_state.stop_requested) {
-                return (index, FileOutcome::Skipped, None);
-            }
-
-            // This job now holds a permit and is actively exporting — let the UI
-            // overlay list it (it is removed again on the spine-progress event).
-            let _ = win.emit("spine-job-start", file.clone());
-
-            let output_dir_hint = {
-                let input_path = std::path::PathBuf::from(file.as_str());
-                resolve_output_dir(&req, &input_path, &run_folder).ok()
-            };
-
-            let outcome = export_one_file(win.clone(), app_state, req, &file, &run_folder).await;
-
-            // Emit progress AFTER processing completes — ensures current reflects actual
-            // completion order across parallel tasks, not spawn order.
-            let current = counter.fetch_add(1, Ordering::SeqCst) + 1;
-            let payload = ProgressPayload {
-                current,
-                total,
-                file: file.clone(),
-            };
-            let _ = win.emit("spine-progress", payload);
-
-            (index, outcome, output_dir_hint)
-        });
-    }
+        },
+    )
+    .await;
 
     let mut completed = 0usize;
     let mut failed = 0usize;
@@ -557,27 +548,20 @@ async fn start_batch_export(
     let mut output_folders = Vec::new();
     let mut stopped = false;
 
-    while let Some(result) = join_set.join_next().await {
-        match result {
-            Ok((_index, outcome, output_dir_hint)) => match outcome {
-                FileOutcome::Completed => {
-                    completed += 1;
-                    if let Some(dir) = output_dir_hint {
-                        output_folders.push(dir);
-                    }
+    for (_index, (outcome, output_dir_hint)) in results {
+        match outcome {
+            FileOutcome::Completed => {
+                completed += 1;
+                if let Some(dir) = output_dir_hint {
+                    output_folders.push(dir);
                 }
-                FileOutcome::Failed(reason) => {
-                    failed += 1;
-                    let _ = window.emit("spine-error", format!("Failed: {reason}"));
-                }
-                FileOutcome::Skipped => {
-                    skipped += 1;
-                }
-            },
-            Err(join_err) => {
-                // Task panicked — treat as a failed file.
+            }
+            FileOutcome::Failed(reason) => {
                 failed += 1;
-                let _ = window.emit("spine-error", format!("Task error: {join_err}"));
+                let _ = window.emit("spine-error", format!("Failed: {reason}"));
+            }
+            FileOutcome::Skipped => {
+                skipped += 1;
             }
         }
     }
@@ -585,6 +569,7 @@ async fn start_batch_export(
     // If the stop flag was set, reflect that in the result.
     if state_arc.stop_requested.load(Ordering::SeqCst) {
         stopped = true;
+        let _ = window.emit("spine-log", "Batch stopped by user.");
     }
 
     output_folders.sort();
@@ -677,7 +662,7 @@ fn filter_excluded_units(units: Vec<CleanUnit>, excluded: &[String]) -> Vec<Clea
     }
     let excluded: Vec<String> = excluded
         .iter()
-        .map(|p| normalize_path_for_compare(p.trim_matches('"')))
+        .map(|p| normalize_path_for_compare(unquote(p)))
         .collect();
     units
         .into_iter()
@@ -770,9 +755,9 @@ fn write_temp_json_export_settings(out_dir: &Path, spine_file: &Path) -> Result<
     let settings_path = out_dir.join("clean-export.export.json");
     fs::write(
         &settings_path,
-        serde_json::to_string_pretty(&settings).map_err(|e| e.to_string())?,
+        serde_json::to_string_pretty(&settings).str_err()?,
     )
-    .map_err(|e| e.to_string())?;
+    .str_err()?;
     Ok(settings_path)
 }
 
@@ -786,12 +771,12 @@ async fn references_from_spine(
 ) -> Result<Vec<String>, String> {
     let out_dir = unicode_temp_dir("clean");
     let _ = fs::remove_dir_all(&out_dir);
-    fs::create_dir_all(&out_dir).map_err(|e| e.to_string())?;
+    fs::create_dir_all(&out_dir).str_err()?;
     let _guard = TempDirGuard(vec![out_dir.clone()]);
 
     let settings = write_temp_json_export_settings(&out_dir, spine_file)?;
 
-    let mut cmd = Command::new(spine_path.trim_matches('"'));
+    let mut cmd = Command::new(unquote(spine_path));
     cmd.arg("--update")
         .arg(target_version)
         .arg("--input")
@@ -804,7 +789,7 @@ async fn references_from_spine(
         .stderr(Stdio::piped());
     apply_no_window(&mut cmd);
 
-    let mut child = cmd.spawn().map_err(|e| e.to_string())?;
+    let mut child = cmd.spawn().str_err()?;
     let pid = child.id();
     if let Some(pid) = pid {
         state.running_children.lock().await.push(pid);
@@ -847,7 +832,7 @@ async fn references_from_spine(
     // Collect output files. A project may hold several skeletons (base + per-skin
     // variants), so we union across every atlas / skeleton the CLI wrote.
     let outputs: Vec<PathBuf> = fs::read_dir(&out_dir)
-        .map_err(|e| e.to_string())?
+        .str_err()?
         .filter_map(Result::ok)
         .map(|e| e.path())
         .filter(|p| p.is_file())
@@ -866,7 +851,7 @@ async fn references_from_spine(
     // preserving skin folders and renamed basenames the JSON skeleton drops.
     let atlas_paths: Vec<&PathBuf> = outputs.iter().filter(|p| has_ext(p, "atlas")).collect();
     for atlas in &atlas_paths {
-        let content = fs::read_to_string(atlas).map_err(|e| e.to_string())?;
+        let content = fs::read_to_string(atlas).str_err()?;
         refs.extend(cleaner::extract_atlas_references(&content));
     }
 
@@ -888,7 +873,7 @@ async fn references_from_spine(
             return Err("Không tìm thấy atlas/JSON sau khi export.".to_string());
         }
         for json_path in &json_paths {
-            let content = fs::read_to_string(json_path).map_err(|e| e.to_string())?;
+            let content = fs::read_to_string(json_path).str_err()?;
             refs.extend(cleaner::extract_json_references(&content));
         }
     }
@@ -990,65 +975,61 @@ async fn run_clean_units(
         .map(|n| n.get())
         .unwrap_or(4);
     let parallel = cores.clamp(4, 8).min(total.max(1));
-    let semaphore = Arc::new(Semaphore::new(parallel));
-    let completed = Arc::new(AtomicUsize::new(0));
     // One backup timestamp per run (each folder gets its own _unused_backup/<stamp>).
     let stamp = chrono::Local::now().format("%Y-%m-%d_%H-%M-%S").to_string();
 
-    let mut join_set: JoinSet<(usize, FolderScan, Option<(usize, String)>)> = JoinSet::new();
-    for (index, unit) in units.into_iter().enumerate() {
-        if !may_start_next(&state.stop_requested) {
-            break;
-        }
-        let sem = Arc::clone(&semaphore);
-        let st = Arc::clone(state);
-        let win = window.clone();
-        let sp = spine_path.to_string();
-        let tv = target_version.to_string();
-        let stamp = stamp.clone();
-        let counter = Arc::clone(&completed);
-        join_set.spawn(async move {
-            let _permit = sem.acquire().await;
-            if !may_start_next(&st.stop_requested) {
-                return (index, FolderScan::empty(&unit, Some("Đã dừng.".to_string())), None);
-            }
-            let mut scan = scan_unit(&st, &sp, &tv, &unit).await;
-            let mut moved_info = None;
-            if do_move && scan.error.is_none() && !scan.unused.is_empty() {
-                match cleaner::move_unused(&unit.images_dir, &scan.unused, &stamp) {
-                    Ok(backup) => {
-                        // Moving files changes the image set; drop the now-stale
-                        // cache entry so the next scan re-exports this unit.
-                        st.scan_cache.lock().await.remove(&unit.spine_file);
-                        moved_info = Some((scan.unused.len(), backup));
-                    }
-                    Err(e) => scan.error = Some(e),
+    let indexed = concurrent::run_indexed(
+        units,
+        parallel,
+        &state.stop_requested,
+        |_index, unit, done| {
+            let st = Arc::clone(state);
+            let win = window.clone();
+            let sp = spine_path.to_string();
+            let tv = target_version.to_string();
+            let stamp = stamp.clone();
+            async move {
+                if !may_start_next(&st.stop_requested) {
+                    return (FolderScan::empty(&unit, Some("Đã dừng.".to_string())), None);
                 }
+                let mut scan = scan_unit(&st, &sp, &tv, &unit).await;
+                let mut moved_info = None;
+                if do_move && scan.error.is_none() && !scan.unused.is_empty() {
+                    match cleaner::move_unused(&unit.images_dir, &scan.unused, &stamp) {
+                        Ok(backup) => {
+                            // Moving files changes the image set; drop the now-stale
+                            // cache entry so the next scan re-exports this unit.
+                            st.scan_cache.lock().await.remove(&unit.spine_file);
+                            moved_info = Some((scan.unused.len(), backup));
+                        }
+                        Err(e) => scan.error = Some(e),
+                    }
+                }
+                let current = done.tick();
+                let _ = win.emit(
+                    "spine-progress",
+                    ProgressPayload {
+                        current,
+                        total,
+                        file: scan.folder.clone(),
+                    },
+                );
+                let detail = match &scan.error {
+                    Some(err) => format!("LỖI: {err}"),
+                    None => format!("{} unused", scan.unused.len()),
+                };
+                let _ = win.emit("spine-log", format!("[{current}/{total}] {} — {detail}", scan.folder));
+                (scan, moved_info)
             }
-            let current = counter.fetch_add(1, Ordering::SeqCst) + 1;
-            let _ = win.emit(
-                "spine-progress",
-                ProgressPayload {
-                    current,
-                    total,
-                    file: scan.folder.clone(),
-                },
-            );
-            let detail = match &scan.error {
-                Some(err) => format!("LỖI: {err}"),
-                None => format!("{} unused", scan.unused.len()),
-            };
-            let _ = win.emit("spine-log", format!("[{current}/{total}] {} — {detail}", scan.folder));
-            (index, scan, moved_info)
-        });
-    }
+        },
+    )
+    .await;
 
+    // run_indexed returns completion order; restore the original unit order.
     let mut results: Vec<Option<(FolderScan, Option<(usize, String)>)>> =
         (0..total).map(|_| None).collect();
-    while let Some(joined) = join_set.join_next().await {
-        if let Ok((index, scan, moved)) = joined {
-            results[index] = Some((scan, moved));
-        }
+    for (index, pair) in indexed {
+        results[index] = Some(pair);
     }
     results.into_iter().flatten().collect()
 }
@@ -1061,7 +1042,7 @@ fn move_unused_images(images_dir: String, files: Vec<String>) -> Result<String, 
     if files.is_empty() {
         return Err("Không có ảnh thừa để chuyển.".to_string());
     }
-    let dir = PathBuf::from(images_dir.trim_matches('"'));
+    let dir = parse_quoted_path(&images_dir);
     let entries: Vec<cleaner::ImageEntry> = files
         .into_iter()
         .map(|absolute_path| cleaner::ImageEntry {
@@ -1079,7 +1060,7 @@ fn move_unused_images(images_dir: String, files: Vec<String>) -> Result<String, 
 /// otherwise spawn the Spine CLI once per skeleton.
 #[tauri::command]
 fn count_clean_units(root: String, excluded: Vec<String>) -> usize {
-    let root_path = PathBuf::from(root.trim_matches('"'));
+    let root_path = parse_quoted_path(&root);
     if !root_path.exists() {
         return 0;
     }
@@ -1101,7 +1082,7 @@ struct CleanUnitInfo {
 /// the unchecked ones are passed back as `excluded` to scan/clean.
 #[tauri::command]
 fn list_clean_units(root: String) -> Vec<CleanUnitInfo> {
-    let root_path = PathBuf::from(root.trim_matches('"'));
+    let root_path = parse_quoted_path(&root);
     if !root_path.exists() {
         return Vec::new();
     }
@@ -1124,7 +1105,7 @@ async fn scan_source_folders(
     root: String,
     excluded: Vec<String>,
 ) -> Result<BatchScanSummary, String> {
-    let root_path = PathBuf::from(root.trim_matches('"'));
+    let root_path = parse_quoted_path(&root);
     if !root_path.exists() {
         return Err("Path không tồn tại.".to_string());
     }
@@ -1172,7 +1153,7 @@ async fn clean_source_folders(
     root: String,
     excluded: Vec<String>,
 ) -> Result<BatchCleanResult, String> {
-    let root_path = PathBuf::from(root.trim_matches('"'));
+    let root_path = parse_quoted_path(&root);
     if !root_path.exists() {
         return Err("Path không tồn tại.".to_string());
     }
@@ -1443,10 +1424,10 @@ fn resolve_output_dir(
                 return Ok(path_to_string(&parent.join(run_folder_name)));
             }
 
-            let mut output_dir = PathBuf::from(output_root.trim_matches('"'));
+            let mut output_dir = parse_quoted_path(output_root);
 
             if request.preserve_relative_paths {
-                let input_root = PathBuf::from(request.input_root.trim_matches('"'));
+                let input_root = parse_quoted_path(&request.input_root);
                 let relative_base = if input_root.is_file() {
                     input_root
                         .parent()
@@ -1479,7 +1460,7 @@ fn resolve_output_dir(
             } else {
                 source_folder_name
             };
-            let mut output_dir = PathBuf::from(output_root.trim_matches('"'));
+            let mut output_dir = parse_quoted_path(output_root);
             output_dir.push(folder_name);
             Ok(path_to_string(&output_dir))
         }
@@ -1499,7 +1480,7 @@ fn resolve_output_dir(
             let id = clean_source_folder_name(source_folder_name);
 
             // base = unityRoot/<destType>
-            let mut base = PathBuf::from(output_root.trim_matches('"'));
+            let mut base = parse_quoted_path(output_root);
             base.push(request.linked_dest_type.trim());
 
             // Reuse an existing id folder if one is found, else create a new folder named after
@@ -1709,8 +1690,8 @@ fn write_temp_export_settings(settings: &serde_json::Value) -> Result<PathBuf, S
         std::process::id(),
         seq
     ));
-    let json = serde_json::to_string_pretty(settings).map_err(|e| e.to_string())?;
-    fs::write(&temp_file, json).map_err(|e| e.to_string())?;
+    let json = serde_json::to_string_pretty(settings).str_err()?;
+    fs::write(&temp_file, json).str_err()?;
     Ok(temp_file)
 }
 
@@ -1905,17 +1886,6 @@ fn sanitize_folder_part(value: &str) -> String {
     }
 }
 
-/// Map our UI pack-source value to the string Spine actually recognises in
-/// `.export.json`. Spine expects `attachments` or `imagefolders`; the legacy
-/// value `folder` is silently ignored by Spine (it falls back to attachments),
-/// so translate it to the correct enum.
-pub(crate) fn normalize_pack_source(value: &str) -> &str {
-    match value.trim() {
-        "folder" => "imagefolders",
-        other => other,
-    }
-}
-
 /// If `arg` points to an `.export.json` file whose `packSource` is the legacy/invalid value
 /// "folder", write a corrected copy ("imagefolders") to a temp file and return a plan pointing
 /// at it. Returns `Ok(None)` when the file needs no rewrite (or isn't a readable JSON preset),
@@ -2025,15 +1995,6 @@ fn may_start_next(stop_requested: &AtomicBool) -> bool {
     !stop_requested.load(Ordering::SeqCst)
 }
 
-pub(crate) fn path_to_string(path: &Path) -> String {
-    path.to_string_lossy().to_string()
-}
-
-/// True when `s` contains any non-ASCII character (e.g. Vietnamese/Chinese path segments).
-fn has_non_ascii(s: &str) -> bool {
-    !s.is_ascii()
-}
-
 /// Build a unique ASCII temp directory path under the system temp dir.
 fn unicode_temp_dir(suffix: &str) -> PathBuf {
     // A process-wide counter guarantees uniqueness even when several temp dirs
@@ -2064,13 +2025,13 @@ fn copy_spine_to_temp(input_file: &Path) -> Result<(PathBuf, PathBuf), String> {
 
     let temp_dir = unicode_temp_dir("in");
     let _ = fs::remove_dir_all(&temp_dir);
-    fs::create_dir_all(&temp_dir).map_err(|e| e.to_string())?;
+    fs::create_dir_all(&temp_dir).str_err()?;
 
-    for entry in fs::read_dir(parent).map_err(|e| e.to_string())?.filter_map(Result::ok) {
+    for entry in fs::read_dir(parent).str_err()?.filter_map(Result::ok) {
         let path = entry.path();
         if path.is_file() {
             if let Some(name) = path.file_name() {
-                fs::copy(&path, temp_dir.join(name)).map_err(|e| e.to_string())?;
+                fs::copy(&path, temp_dir.join(name)).str_err()?;
             }
         }
     }
@@ -2080,20 +2041,20 @@ fn copy_spine_to_temp(input_file: &Path) -> Result<(PathBuf, PathBuf), String> {
 
 /// Recursively copy every file/subdir from `src` into `dst` (creating `dst` as needed).
 fn copy_dir_recursive(src: &Path, dst: &Path) -> Result<(), String> {
-    fs::create_dir_all(dst).map_err(|e| e.to_string())?;
+    fs::create_dir_all(dst).str_err()?;
     for entry in WalkDir::new(src).min_depth(1).into_iter().filter_map(Result::ok) {
         let rel = entry
             .path()
             .strip_prefix(src)
-            .map_err(|e| e.to_string())?;
+            .str_err()?;
         let target = dst.join(rel);
         if entry.file_type().is_dir() {
-            fs::create_dir_all(&target).map_err(|e| e.to_string())?;
+            fs::create_dir_all(&target).str_err()?;
         } else if entry.file_type().is_file() {
             if let Some(p) = target.parent() {
-                fs::create_dir_all(p).map_err(|e| e.to_string())?;
+                fs::create_dir_all(p).str_err()?;
             }
-            fs::copy(entry.path(), &target).map_err(|e| e.to_string())?;
+            fs::copy(entry.path(), &target).str_err()?;
         }
     }
     Ok(())
@@ -2309,14 +2270,6 @@ mod tests {
         assert!(note.contains("export bằng preset nền"));
 
         let _ = fs::remove_dir_all(&dir);
-    }
-
-    #[test]
-    fn has_non_ascii_detects_unicode() {
-        assert!(!has_non_ascii("D:/Projects/Spine/Enemy/4001"));
-        assert!(has_non_ascii("D:/Dự án/Nhân vật"));
-        assert!(has_non_ascii("D:/项目/角色"));
-        assert!(!has_non_ascii(""));
     }
 
     #[test]

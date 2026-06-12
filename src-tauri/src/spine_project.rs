@@ -28,6 +28,8 @@ use serde_json::{Map, Value};
 use std::io::Read;
 use std::path::Path;
 
+use crate::error::ResultExt;
+
 /// Hard cap for the inflated payload; the largest real project seen so far
 /// inflates to ~30 MB, so 512 MB is generous while still bounding memory.
 const MAX_INFLATED_BYTES: u64 = 512 * 1024 * 1024;
@@ -77,8 +79,8 @@ pub fn merge_decoded_settings(
     base_preset: &str,
     decoded: &DecodedSettings,
 ) -> Result<Value, String> {
-    let mut value: Value = serde_json::from_str(base_preset)
-        .map_err(|e| format!("Preset nền không phải JSON hợp lệ: {e}"))?;
+    let mut value: Value =
+        serde_json::from_str(base_preset).context("Preset nền không phải JSON hợp lệ")?;
     let root = value
         .as_object_mut()
         .ok_or_else(|| "Preset nền không phải JSON object.".to_string())?;
@@ -103,7 +105,7 @@ pub fn merge_decoded_settings(
 }
 
 pub fn read_export_settings(path: &Path) -> Result<DecodedSettings, String> {
-    let bytes = std::fs::read(path).map_err(|e| format!("đọc file thất bại: {e}"))?;
+    let bytes = std::fs::read(path).context("đọc file thất bại")?;
     let data = inflate_project(&bytes)?;
     decode(&data).ok_or_else(|| match detect_editor_version(&data) {
         Some(v) if !v.starts_with("3.") => format!(
@@ -137,7 +139,7 @@ fn inflate_project(bytes: &[u8]) -> Result<Vec<u8>, String> {
     flate2::read::DeflateDecoder::new(bytes)
         .take(MAX_INFLATED_BYTES)
         .read_to_end(&mut out)
-        .map_err(|e| format!("inflate thất bại (không phải project 3.8?): {e}"))?;
+        .context("inflate thất bại (không phải project 3.8?)")?;
     if out.is_empty() {
         return Err("inflate ra rỗng".to_string());
     }

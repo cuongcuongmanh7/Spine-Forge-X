@@ -1,7 +1,7 @@
 //! Export-preset management: listing, importing, editing and deleting the
 //! `.export.json` presets (bundled built-ins + user presets in app data).
 
-use crate::path_to_string;
+use crate::{error::ResultExt, parse_quoted_path, path_to_string};
 use serde::Serialize;
 use std::{
     fs,
@@ -26,7 +26,7 @@ pub(crate) fn list_export_presets(app: AppHandle) -> Result<Vec<ExportPreset>, S
     }
 
     let user_dir = user_preset_dir(&app)?;
-    fs::create_dir_all(&user_dir).map_err(|e| e.to_string())?;
+    fs::create_dir_all(&user_dir).str_err()?;
     collect_presets_from_dir(&user_dir, false, &mut presets);
 
     presets.sort_by(|a, b| {
@@ -44,7 +44,7 @@ pub(crate) fn import_user_export_preset(
     app: AppHandle,
     source_path: String,
 ) -> Result<ExportPreset, String> {
-    let source = PathBuf::from(source_path.trim_matches('"'));
+    let source = parse_quoted_path(&source_path);
     if !source.is_file() {
         return Err("Preset source không tồn tại.".to_string());
     }
@@ -54,13 +54,13 @@ pub(crate) fn import_user_export_preset(
         .and_then(|value| value.to_str())
         .ok_or_else(|| "Không đọc được tên preset.".to_string())?;
     let safe_name = validate_preset_file_name(name)?;
-    let content = fs::read_to_string(&source).map_err(|e| e.to_string())?;
+    let content = fs::read_to_string(&source).str_err()?;
     validate_export_json_content(&content)?;
 
     let user_dir = user_preset_dir(&app)?;
-    fs::create_dir_all(&user_dir).map_err(|e| e.to_string())?;
+    fs::create_dir_all(&user_dir).str_err()?;
     let target = user_dir.join(&safe_name);
-    fs::write(&target, content).map_err(|e| e.to_string())?;
+    fs::write(&target, content).str_err()?;
 
     Ok(ExportPreset {
         name: safe_name,
@@ -73,13 +73,13 @@ pub(crate) fn import_user_export_preset(
 pub(crate) fn read_user_export_preset(app: AppHandle, name: String) -> Result<String, String> {
     let safe_name = validate_preset_file_name(&name)?;
     let path = user_preset_dir(&app)?.join(safe_name);
-    fs::read_to_string(path).map_err(|e| e.to_string())
+    fs::read_to_string(path).str_err()
 }
 
 /// Read any .export.json preset by absolute path (built-in resource or user), for the editor.
 #[tauri::command]
 pub(crate) fn read_export_preset(path: String) -> Result<String, String> {
-    let target = PathBuf::from(path.trim_matches('"'));
+    let target = parse_quoted_path(&path);
     if !target
         .file_name()
         .and_then(|name| name.to_str())
@@ -88,7 +88,7 @@ pub(crate) fn read_export_preset(path: String) -> Result<String, String> {
     {
         return Err("Chỉ đọc được file .export.json.".to_string());
     }
-    fs::read_to_string(&target).map_err(|e| e.to_string())
+    fs::read_to_string(&target).str_err()
 }
 
 /// Save (create or overwrite) a user preset from edited content, into the user preset dir.
@@ -101,9 +101,9 @@ pub(crate) fn save_user_export_preset(
     let safe_name = validate_preset_file_name(&name)?;
     validate_export_json_content(&content)?;
     let user_dir = user_preset_dir(&app)?;
-    fs::create_dir_all(&user_dir).map_err(|e| e.to_string())?;
+    fs::create_dir_all(&user_dir).str_err()?;
     let target = user_dir.join(&safe_name);
-    fs::write(&target, content).map_err(|e| e.to_string())?;
+    fs::write(&target, content).str_err()?;
     Ok(ExportPreset {
         name: safe_name,
         path: path_to_string(&target),
@@ -116,7 +116,7 @@ pub(crate) fn delete_user_export_preset(app: AppHandle, name: String) -> Result<
     let safe_name = validate_preset_file_name(&name)?;
     let path = user_preset_dir(&app)?.join(safe_name);
     if path.exists() {
-        fs::remove_file(path).map_err(|e| e.to_string())?;
+        fs::remove_file(path).str_err()?;
     }
     Ok(())
 }
@@ -136,7 +136,7 @@ fn user_preset_dir(app: &AppHandle) -> Result<PathBuf, String> {
     app.path()
         .app_data_dir()
         .map(|path| path.join("export-presets"))
-        .map_err(|e| e.to_string())
+        .str_err()
 }
 
 fn collect_presets_from_dir(dir: &Path, built_in: bool, presets: &mut Vec<ExportPreset>) {
@@ -179,8 +179,8 @@ pub(crate) fn validate_preset_file_name(name: &str) -> Result<String, String> {
 }
 
 pub(crate) fn validate_export_json_content(content: &str) -> Result<(), String> {
-    let value: serde_json::Value = serde_json::from_str(content)
-        .map_err(|e| format!("Preset không phải JSON hợp lệ: {e}"))?;
+    let value: serde_json::Value =
+        serde_json::from_str(content).context("Preset không phải JSON hợp lệ")?;
     let class = value
         .get("class")
         .and_then(|value| value.as_str())

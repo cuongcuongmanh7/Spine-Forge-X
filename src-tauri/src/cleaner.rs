@@ -15,6 +15,8 @@ use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::path::{Path, PathBuf};
 
+use crate::error::ResultExt;
+
 use serde::Serialize;
 use serde_json::Value;
 use walkdir::WalkDir;
@@ -451,9 +453,9 @@ pub fn move_unused(images_dir: &Path, unused: &[ImageEntry], stamp: &str) -> Res
             .map_err(|_| format!("Refusing to move file outside images dir: {}", item.absolute_path))?;
         let destination = backup_dir.join(relative);
         if let Some(dir) = destination.parent() {
-            fs::create_dir_all(dir).map_err(|e| e.to_string())?;
+            fs::create_dir_all(dir).str_err()?;
         }
-        fs::rename(&absolute, &destination).map_err(|e| e.to_string())?;
+        fs::rename(&absolute, &destination).str_err()?;
     }
 
     Ok(backup_dir.to_string_lossy().to_string())

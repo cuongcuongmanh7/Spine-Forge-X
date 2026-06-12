@@ -1,5 +1,8 @@
 # Changelog
 
+## v0.3.1
+- **Tái cấu trúc backend — gom code lặp (không đổi hành vi)**: tiếp nối chuỗi dọn nợ v0.3.x, bản này gom các đoạn lặp đi lặp lại trong backend Rust thành module dùng chung, không thêm/đổi tính năng nào nhìn thấy được. (1) `paths.rs` — gom các helper xử lý đường dẫn (bỏ dấu nháy quanh path do kéo-thả/dán để lại, `Path`→`String`, kiểm tra non-ASCII, chuẩn hoá `packSource`) vốn nằm rải rác + lặp `trim_matches('"')` ở ~24 chỗ. (2) `error.rs` — trait `ResultExt` (`.str_err()` / `.context(...)`) thay cho ~40 lần lặp `.map_err(|e| e.to_string())` / `.map_err(|e| format!("…: {e}"))`. (3) `concurrent.rs` — bộ lập lịch song song dùng chung (`run_indexed`: semaphore giới hạn job + đếm tiến độ theo thứ tự hoàn thành + tôn trọng nút Stop) cho cả export hàng loạt lẫn quét Clean Source, vốn trước đây chép gần như y hệt ở hai nơi. Toàn bộ test (`cargo test` 58, frontend 26) + build vẫn xanh.
+
 ## v0.3.0
 - **Tái cấu trúc nội bộ — tách "god-hook" `useAppController` (không đổi hành vi)**: hook điều khiển trung tâm đã phình tới ~1690 dòng (vượt xa trần 800 của file-size guard). Bản này tách nó theo domain thành các hook riêng — `useWorkspace` (dự án/session + runtime + vòng đời), `useScanInput` (quét input + danh sách file), `useExportEngine` (export đơn/hàng loạt + overlay + log/output), `useSpineDetection`, `useLinkedProjects` — cùng module helper thuần `controllerHelpers`. `useAppController` giờ chỉ compose các hook và giữ nguyên context API, còn **636 dòng** (lọt trần mặc định; đã gỡ baseline grandfather). Không có thay đổi nào nhìn thấy được với người dùng; toàn bộ test (`cargo test`, 26 test frontend) + build vẫn xanh. Mở màn cho chuỗi refactor v0.3.x.
 

@@ -1,22 +1,27 @@
 //! Small filesystem/OS utility commands used across the UI: path checks,
 //! opening files/URLs in the system shell, text writes and thumbnails.
 
-use std::{fs, path::PathBuf};
+use std::fs;
 use tokio::process::Command;
+
+use crate::{
+    error::ResultExt,
+    paths::{parse_quoted_path, unquote},
+};
 
 #[tauri::command]
 pub(crate) fn path_exists(path: String) -> bool {
-    let trimmed = path.trim().trim_matches('"');
-    !trimmed.is_empty() && PathBuf::from(trimmed).exists()
+    let trimmed = unquote(path.trim());
+    !trimmed.is_empty() && parse_quoted_path(trimmed).exists()
 }
 
 #[tauri::command]
 pub(crate) fn write_text_file(path: String, content: String) -> Result<(), String> {
-    let target = PathBuf::from(path.trim_matches('"'));
+    let target = parse_quoted_path(&path);
     if let Some(parent) = target.parent() {
-        fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+        fs::create_dir_all(parent).str_err()?;
     }
-    fs::write(&target, content).map_err(|e| e.to_string())
+    fs::write(&target, content).str_err()
 }
 
 /// Read an image file and return it as a base64 data URL, for thumbnail display
@@ -25,12 +30,12 @@ pub(crate) fn write_text_file(path: String, content: String) -> Result<(), Strin
 #[tauri::command]
 pub(crate) fn read_image_data_url(path: String) -> Result<String, String> {
     use base64::Engine;
-    let p = PathBuf::from(path.trim_matches('"'));
-    let meta = fs::metadata(&p).map_err(|e| e.to_string())?;
+    let p = parse_quoted_path(&path);
+    let meta = fs::metadata(&p).str_err()?;
     if meta.len() > 16 * 1024 * 1024 {
         return Err("Ảnh quá lớn để xem thumbnail.".to_string());
     }
-    let bytes = fs::read(&p).map_err(|e| e.to_string())?;
+    let bytes = fs::read(&p).str_err()?;
     let mime = match p
         .extension()
         .and_then(|e| e.to_str())
@@ -61,7 +66,7 @@ pub(crate) async fn open_url(url: String) -> Result<(), String> {
         Command::new("cmd")
             .args(["/c", "start", "", target])
             .spawn()
-            .map_err(|e| e.to_string())?;
+            .str_err()?;
     }
 
     #[cfg(target_os = "macos")]
@@ -69,7 +74,7 @@ pub(crate) async fn open_url(url: String) -> Result<(), String> {
         Command::new("open")
             .arg(target)
             .spawn()
-            .map_err(|e| e.to_string())?;
+            .str_err()?;
     }
 
     #[cfg(all(not(windows), not(target_os = "macos")))]
@@ -77,7 +82,7 @@ pub(crate) async fn open_url(url: String) -> Result<(), String> {
         Command::new("xdg-open")
             .arg(target)
             .spawn()
-            .map_err(|e| e.to_string())?;
+            .str_err()?;
     }
 
     Ok(())
@@ -85,7 +90,7 @@ pub(crate) async fn open_url(url: String) -> Result<(), String> {
 
 #[tauri::command]
 pub(crate) async fn open_path(path: String) -> Result<(), String> {
-    let target = PathBuf::from(path.trim_matches('"'));
+    let target = parse_quoted_path(&path);
     if !target.exists() {
         return Err("Path không tồn tại.".to_string());
     }
@@ -95,7 +100,7 @@ pub(crate) async fn open_path(path: String) -> Result<(), String> {
         Command::new("explorer")
             .arg(target)
             .spawn()
-            .map_err(|e| e.to_string())?;
+            .str_err()?;
     }
 
     #[cfg(target_os = "macos")]
@@ -103,7 +108,7 @@ pub(crate) async fn open_path(path: String) -> Result<(), String> {
         Command::new("open")
             .arg(target)
             .spawn()
-            .map_err(|e| e.to_string())?;
+            .str_err()?;
     }
 
     #[cfg(all(not(windows), not(target_os = "macos")))]
@@ -111,7 +116,7 @@ pub(crate) async fn open_path(path: String) -> Result<(), String> {
         Command::new("xdg-open")
             .arg(target)
             .spawn()
-            .map_err(|e| e.to_string())?;
+            .str_err()?;
     }
 
     Ok(())
@@ -121,12 +126,12 @@ pub(crate) async fn open_path(path: String) -> Result<(), String> {
 /// "Auto-fill from Unity root" — each subfolder becomes a candidate destination type.
 #[tauri::command]
 pub(crate) fn list_subdirectories(path: String) -> Result<Vec<String>, String> {
-    let root = PathBuf::from(path.trim_matches('"'));
+    let root = parse_quoted_path(&path);
     if !root.is_dir() {
         return Err("Path không phải thư mục hợp lệ.".to_string());
     }
     let mut names: Vec<String> = fs::read_dir(&root)
-        .map_err(|e| e.to_string())?
+        .str_err()?
         .filter_map(Result::ok)
         .filter(|entry| entry.path().is_dir())
         .filter_map(|entry| entry.file_name().into_string().ok())
