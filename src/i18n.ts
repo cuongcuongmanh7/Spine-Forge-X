@@ -348,7 +348,8 @@ export const copy = {
     overwriteConfirmTitle: 'Ghi đè output?',
     overwriteConfirmBody: '{count} folder đích đã tồn tại và sẽ bị ghi đè. Tiếp tục?',
     exportAllConfirmTitle: 'Xác nhận Export all',
-    exportAllConfirmBody: 'Sẽ export {total} phiên ({warn} phiên có cảnh báo), bỏ qua {skip} phiên chưa đủ điều kiện.'
+    exportAllConfirmBody: 'Sẽ export {total} phiên ({warn} phiên có cảnh báo), bỏ qua {skip} phiên chưa đủ điều kiện.',
+    sessionOverlapConfirmBody: '⚠️ {count} folder đích bị {sessions} phiên ghi trùng — phiên chạy sau sẽ đè kết quả của phiên trước. Kiểm tra lại nếu bạn định export ra các chỗ khác nhau.'
   },
   en: {
     subtitle: 'Batch export and version upgrade workflow for Spine projects.',
@@ -697,7 +698,8 @@ export const copy = {
     overwriteConfirmTitle: 'Overwrite output?',
     overwriteConfirmBody: '{count} target folder(s) already exist and will be overwritten. Continue?',
     exportAllConfirmTitle: 'Confirm Export all',
-    exportAllConfirmBody: 'Will export {total} sessions ({warn} with warnings), skipping {skip} not-ready sessions.'
+    exportAllConfirmBody: 'Will export {total} sessions ({warn} with warnings), skipping {skip} not-ready sessions.',
+    sessionOverlapConfirmBody: '⚠️ {count} target folder(s) are written by {sessions} sessions — a later session will overwrite an earlier one. Double-check if you meant to export to separate locations.'
   }
 };
 

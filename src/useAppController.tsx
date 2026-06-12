@@ -1316,23 +1316,48 @@ export function useAppControllerValue() {
     }
 
     // Collision check across all sessions that will run.
+    // - `existing`: target dirs that already hold files on disk (will be overwritten).
+    // - `dirOwners`: which sessions resolve to each dir, so we can flag two sessions in
+    //   THIS batch that write to the same folder — a silent overwrite check_output_collisions
+    //   misses when the target doesn't pre-exist (e.g. same .spine added to two sessions).
     const existing = new Set<string>();
+    const dirOwners = new Map<string, Set<string>>();
     for (const item of plan) {
+      const request = buildExportRequestFrom({ ...appConfig, ...item.session.config }, item.files);
       try {
-        const cols = await invoke<string[]>('check_output_collisions', {
-          request: buildExportRequestFrom({ ...appConfig, ...item.session.config }, item.files)
-        });
+        const cols = await invoke<string[]>('check_output_collisions', { request });
         cols.forEach((dir) => existing.add(dir));
       } catch {
         // ignore; treat as no collision
       }
+      try {
+        const dirs = await invoke<string[]>('resolve_output_dirs', { request });
+        for (const dir of dirs) {
+          const owners = dirOwners.get(dir) ?? new Set<string>();
+          owners.add(item.session.id);
+          dirOwners.set(dir, owners);
+        }
+      } catch {
+        // ignore; can't resolve → skip overlap detection for this session
+      }
+    }
+    // Folders that more than one session in this batch would write to.
+    const overlapDirs = [...dirOwners.values()].filter((owners) => owners.size > 1).length;
+    const overlapSessions = new Set<string>();
+    for (const owners of dirOwners.values()) {
+      if (owners.size > 1) owners.forEach((id) => overlapSessions.add(id));
     }
 
-    // Single combined confirm: summary + overwrite warning.
+    // Single combined confirm: summary + overlap + overwrite warning.
     let body = t.exportAllConfirmBody
       .replace('{total}', String(plan.length))
       .replace('{warn}', String(warned))
       .replace('{skip}', String(skipped));
+    if (overlapDirs > 0) {
+      body += `\n\n${t.sessionOverlapConfirmBody
+        .replace('{count}', String(overlapDirs))
+        .replace('{sessions}', String(overlapSessions.size))}`;
+    }
     if (existing.size > 0) {
       body += `\n\n${t.overwriteConfirmBody.replace('{count}', String(existing.size))}`;
     }

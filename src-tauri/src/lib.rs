@@ -1564,6 +1564,24 @@ fn check_output_collisions(request: BatchExportRequest) -> Result<Vec<String>, S
     Ok(existing)
 }
 
+/// Returns every output directory this request resolves to, regardless of whether
+/// it already exists on disk. The UI uses this to detect two sessions in the same
+/// "export all" batch that would write to the same folder (and silently overwrite
+/// each other) even when the target doesn't pre-exist — a case check_output_collisions
+/// can't catch because it only inspects existing dirs.
+#[tauri::command]
+fn resolve_output_dirs(request: BatchExportRequest) -> Result<Vec<String>, String> {
+    let run_folder_name = make_export_folder_name(&request.target_version);
+    let mut dirs = std::collections::BTreeSet::new();
+    for file in &request.files {
+        let input_file = PathBuf::from(file);
+        if let Ok(dir) = resolve_output_dir(&request, &input_file, &run_folder_name) {
+            dirs.insert(dir);
+        }
+    }
+    Ok(dirs.into_iter().collect())
+}
+
 fn resolve_export_plan(
     request: &BatchExportRequest,
     input_file: &Path,
@@ -2195,6 +2213,7 @@ pub fn run() {
             scan_spine_files,
             validate_settings,
             check_output_collisions,
+            resolve_output_dirs,
             presets::list_export_presets,
             presets::import_user_export_preset,
             presets::read_user_export_preset,

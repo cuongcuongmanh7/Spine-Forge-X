@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.2.24
+- **Export-all cảnh báo khi nhiều session ghi trùng folder đích**: khi cùng một file `.spine` (hoặc nhiều session) resolve ra **cùng một thư mục output** trong cùng một lần Export all, phiên chạy sau sẽ âm thầm đè kết quả của phiên trước. Trước đây không có cảnh báo nào vì kiểm tra ghi đè cũ chỉ soi các folder **đã tồn tại sẵn trên đĩa** — bỏ sót trường hợp folder chưa tồn tại nhưng hai phiên cùng nhắm tới. Giờ hộp xác nhận Export all báo rõ "{count} folder bị {n} phiên ghi trùng" để user kiểm tra lại trước khi chạy. Thêm command `resolve_output_dirs` (trả về mọi output dir đã resolve, kể cả chưa tồn tại) để frontend so trùng giữa các phiên.
+- **Nút bấm có hiệu ứng hover/active mượt hơn**: thêm transition + nhấc nhẹ khi hover (`translateY(-1px)`) và đổ bóng cho nút chính, cho cả primary/secondary/ghost/icon button.
+
 ## v0.2.23
 - **Icon + màu nút "Chuyển ảnh thừa → backup" hợp lý hơn**: đổi từ icon thùng rác (gây hiểu là xoá) sang icon hộp lưu trữ, và từ màu đỏ (danger) sang màu hổ phách (warning) ở cả nút từng folder lẫn nút tổng — thao tác này chuyển ảnh vào `_unused_backup` và **khôi phục được**, không phải xoá vĩnh viễn.
 - **Popup "Đang quét" chi tiết hơn**: hiện danh sách từng folder kèm trạng thái cập nhật trực tiếp (✓ đã quét xong / ○ đang chờ) và % tiến độ bên cạnh số đếm, thay vì chỉ một dòng tên file.

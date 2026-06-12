@@ -1923,6 +1923,50 @@ input.field-invalid:focus {
   background: var(--surface-soft);
 }
 
+.primary-button,
+.secondary-button,
+.ghost-button,
+.icon-button {
+  transition: background 0.15s var(--ease), border-color 0.15s var(--ease),
+    transform 0.1s var(--ease), box-shadow 0.15s var(--ease);
+}
+
+.primary-button:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--primary), #000 8%);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px color-mix(in srgb, var(--primary), transparent 70%);
+}
+
+.secondary-button:hover:not(:disabled),
+.ghost-button:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--surface-soft), var(--text) 8%);
+  border-color: var(--text-muted);
+  transform: translateY(-1px);
+}
+
+.icon-button:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--surface-soft), var(--text) 10%);
+  color: var(--text-strong);
+}
+
+.primary-button:active:not(:disabled),
+.secondary-button:active:not(:disabled),
+.ghost-button:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.icon-button:active:not(:disabled) {
+  transform: scale(0.94);
+}
+
+.primary-button:focus-visible,
+.secondary-button:focus-visible,
+.ghost-button:focus-visible,
+.icon-button:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
 button:disabled {
   opacity: 0.5;
   cursor: not-allowed;

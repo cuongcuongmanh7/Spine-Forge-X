@@ -6,6 +6,16 @@ Source-of-truth tiến độ toàn dự án.
 
 ---
 
+## v0.2.24 — Export-all: cảnh báo session ghi trùng folder đích ✅ Done
+
+> Bump `0.2.23 → 0.2.24`; tag `v0.2.24`.
+
+**Bối cảnh:** file `.spine` không thuộc độc quyền session nào — cùng file có thể nằm trong nhiều session. Khi Export all, nếu hai session resolve ra cùng output dir, phiên sau đè phiên trước mà không cảnh báo (collision check cũ chỉ soi folder đã tồn tại trên đĩa).
+
+- [x] **Backend `resolve_output_dirs`** (`src-tauri/src/lib.rs`): sibling của `check_output_collisions`, trả về toàn bộ output dir đã resolve bất kể có tồn tại hay chưa. Đăng ký trong `invoke_handler`.
+- [x] **Frontend overlap detection** (`exportProjectSessions` trong `useAppController.tsx`): gom `dirOwners: Map<dir, Set<sessionId>>` từ `resolve_output_dirs` mỗi phiên; folder có >1 owner → cảnh báo trong hộp xác nhận Export all (kèm số folder + số phiên liên quan). Giữ nguyên cảnh báo ghi đè folder-đã-tồn-tại.
+- [x] **i18n** `sessionOverlapConfirmBody` (vi + en).
+
 ## v0.2.23 — UI polish: icon backup, overlay quét, hint input, skeleton thumbnail ✅ Done
 
 > Bump `0.2.22 → 0.2.23`; tag `v0.2.23`.
