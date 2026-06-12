@@ -1,6 +1,6 @@
 [package]
 name = "spineforge-x"
-version = "0.2.27"
+version = "0.3.0"
 description = "Batch export and version upgrade workflow for Spine projects."
 authors = ["SpineForge X"]
 edition = "2021"

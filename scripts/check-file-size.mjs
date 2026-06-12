@@ -21,10 +21,11 @@ const EXEMPT = new Set(['src-tauri/src/lib.rs']);
 
 // Grandfathered files: current line count is their ceiling. Lower these as they shrink.
 const BASELINE = {
-  // styles.css and useAppController slipped past their ceilings in commits that
-  // didn't run the build guard (pre-v0.2.14); re-baselined at their actual size.
-  'src/styles.css': 2572,
-  'src/useAppController.tsx': 1701
+  // styles.css slipped past its ceiling in commits that didn't run the build guard
+  // (pre-v0.2.14); re-baselined at its actual size.
+  // useAppController was split into per-domain hooks in v0.3.0 (useWorkspace / useScanInput /
+  // useExportEngine / useSpineDetection / useLinkedProjects) and now fits the default ceiling.
+  'src/styles.css': 2572
 };
 
 /** Recursively collect source files under a root directory. */

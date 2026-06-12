@@ -339,12 +339,16 @@ Shipped ở commit `c133cac`.
 
 ---
 
-## v0.3.0 — macOS Support 📋 Planned
+## v0.3.x — Refactor & dọn nợ kỹ thuật 🔧 In progress
 
-- [ ] Verify auto-detect path macOS + không cảnh báo `.exe`
-- [ ] `tauri.conf.json` macOS bundle: signingIdentity / entitlements / minimumSystemVersion
-- [ ] `icon.icns`
-- [ ] Notarization + CI job macOS
+> Mục tiêu: tách file vượt trần, gom duplication, **không đổi hành vi user-facing**.
+> Mỗi bản giữ `cargo test` + `npm test` + `npm run build` xanh, file-size guard pass.
+> Bối cảnh: sau nhiều feature v0.2.x, các điểm vượt chuẩn: `useAppController.tsx` (1689 dòng, grandfather 1701), `i18n.ts` (727), `lib.rs` (2562, miễn guard) + duplication backend (path-trim 25+, error-to-string 23+, parallel-scheduler lặp). macOS Support dời xuống v0.5.0.
+
+- [x] **v0.3.0 — Tách god-hook `useAppController` theo domain** ✅: `useWorkspace` (dự án/session + runtime + vòng đời + config-updater + recordRun), `useScanInput`, `useExportEngine`, `useSpineDetection`, `useLinkedProjects` + helper thuần `controllerHelpers`. `useAppControllerValue` compose lại, **giữ nguyên context API** (`useApp()`). `useAppController.tsx` 1689 → **636 dòng**; đã gỡ baseline grandfather trong `scripts/check-file-size.mjs`. `tsc` + 26 test frontend + `cargo test` + build xanh; không đổi hành vi user-facing.
+- [ ] **v0.3.1 — Backend: gom duplication**: `paths.rs` (`parse_quoted_path`, `normalize_pack_source`, `has_non_ascii`), `ResultExt::context`, `concurrent.rs` (`ParallelScheduler` dùng chung cho batch export + clean).
+- [ ] **v0.3.2 — i18n split + chẻ modal lớn**: `i18n.ts` → `i18n/{index,vi,en,types}.ts`; `CleanSourceFolderModal` / `PresetEditorModal` thành coordinator + sub-component.
+- [ ] **v0.3.3 — `lib.rs` → cấu trúc `commands/`**: tách theo nhóm (`export`/`validate`/`clean`/`spine`); cân nhắc chẻ `export_one_file` (177 dòng); gỡ miễn guard sau khi < 800.
 
 ---
 
@@ -356,6 +360,17 @@ Shipped ở commit `c133cac`.
 - [ ] Package menu/nút "Export to SpineForge" trong Unity Editor
 
 > Lên plan chi tiết riêng sau khi Pha 1 (Linked Project) verify xong — design doc mục IX.
+
+---
+
+## v0.5.0 — macOS Support 📋 Deferred
+
+> Tạm hoãn từ v0.3.0 (2026-06): ưu tiên dọn nợ kỹ thuật v0.3.x trước khi mở rộng nền tảng.
+
+- [ ] Verify auto-detect path macOS + không cảnh báo `.exe`
+- [ ] `tauri.conf.json` macOS bundle: signingIdentity / entitlements / minimumSystemVersion
+- [ ] `icon.icns`
+- [ ] Notarization + CI job macOS
 
 ---
 

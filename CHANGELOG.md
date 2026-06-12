@@ -1,5 +1,8 @@
 # Changelog
 
+## v0.3.0
+- **Tái cấu trúc nội bộ — tách "god-hook" `useAppController` (không đổi hành vi)**: hook điều khiển trung tâm đã phình tới ~1690 dòng (vượt xa trần 800 của file-size guard). Bản này tách nó theo domain thành các hook riêng — `useWorkspace` (dự án/session + runtime + vòng đời), `useScanInput` (quét input + danh sách file), `useExportEngine` (export đơn/hàng loạt + overlay + log/output), `useSpineDetection`, `useLinkedProjects` — cùng module helper thuần `controllerHelpers`. `useAppController` giờ chỉ compose các hook và giữ nguyên context API, còn **636 dòng** (lọt trần mặc định; đã gỡ baseline grandfather). Không có thay đổi nào nhìn thấy được với người dùng; toàn bộ test (`cargo test`, 26 test frontend) + build vẫn xanh. Mở màn cho chuỗi refactor v0.3.x.
+
 ## v0.2.27
 - **Sửa: file đã loại khỏi export vẫn bị tính trùng (badge vẫn sáng)**: phần dò overlap chỉ lọc `excludedFiles` ở nhánh quét-folder, nên khi danh sách file lấy từ cache runtime (session đang mở) hoặc từ `inputFiles` thì file đã chuyển sang "không export" vẫn lọt vào → badge cảnh báo vẫn hiện oan. Giờ `excludedFiles` được lọc cho **mọi nguồn** file trước khi tính trùng.
 - **Icon ⚠️ ngay cạnh từng file `.spine` bị trùng cross-session trong section Input**: thay vì chỉ có badge ở cấp session, mỗi dòng file giờ hiện icon hổ phách nếu file đó cũng nằm ở session khác **trong cùng dự án**, tooltip nêu rõ tên (các) session kia ("Cũng được dùng ở: …"). Giúp pinpoint đúng file để loại, thay vì phải tự dò. (Trùng output folder vẫn để ở badge session vì nó là cấp thư mục, không quy về 1 file.)
