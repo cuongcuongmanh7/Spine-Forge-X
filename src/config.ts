@@ -164,6 +164,17 @@ export type Session = {
 /** Per-session readiness shown as a colored dot in the sidebar. */
 export type SessionStatus = 'green' | 'yellow' | 'red';
 
+/**
+ * Cross-session overlap within the same project, surfaced as a sidebar badge so the
+ * user notices BEFORE running Export all (where the later session overwrites the earlier).
+ * - sharedInput: this session shares at least one input .spine with another session (attention).
+ * - outputCollision: this session resolves to an output dir another session also targets (danger).
+ */
+export type SessionOverlap = {
+  sharedInput: boolean;
+  outputCollision: boolean;
+};
+
 /** Ephemeral, never persisted. Reset on app restart. */
 export type SessionRuntime = {
   files: string[];

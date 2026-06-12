@@ -1,5 +1,8 @@
 # Changelog
 
+## v0.2.25
+- **Badge cảnh báo trùng lặp ngay trên danh sách session** (tiếp nối v0.2.24): thay vì chỉ báo lúc bấm Export all, mỗi session row giờ hiện badge ⚠️ khi phát hiện trùng với session khác **trong cùng dự án**, ở hai mức: **vàng** = dùng chung file `.spine` (chú ý — có thể cố ý), **đỏ** = ghi ra cùng folder đích (nguy hiểm, Export all sẽ đè nhau). Việc dò trùng tận dụng `refreshSessionStatuses` (vốn đã quét tất cả session để tính chấm trạng thái), gọi thêm `resolve_output_dirs` mỗi phiên và đối chiếu input/output trong phạm vi từng dự án. Tooltip giải thích rõ từng mức.
+
 ## v0.2.24
 - **Export-all cảnh báo khi nhiều session ghi trùng folder đích**: khi cùng một file `.spine` (hoặc nhiều session) resolve ra **cùng một thư mục output** trong cùng một lần Export all, phiên chạy sau sẽ âm thầm đè kết quả của phiên trước. Trước đây không có cảnh báo nào vì kiểm tra ghi đè cũ chỉ soi các folder **đã tồn tại sẵn trên đĩa** — bỏ sót trường hợp folder chưa tồn tại nhưng hai phiên cùng nhắm tới. Giờ hộp xác nhận Export all báo rõ "{count} folder bị {n} phiên ghi trùng" để user kiểm tra lại trước khi chạy. Thêm command `resolve_output_dirs` (trả về mọi output dir đã resolve, kể cả chưa tồn tại) để frontend so trùng giữa các phiên.
 - **Nút bấm có hiệu ứng hover/active mượt hơn**: thêm transition + nhấc nhẹ khi hover (`translateY(-1px)`) và đổ bóng cho nút chính, cho cả primary/secondary/ghost/icon button.

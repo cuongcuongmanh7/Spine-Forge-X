@@ -6,6 +6,17 @@ Source-of-truth tiến độ toàn dự án.
 
 ---
 
+## v0.2.25 — Badge cảnh báo trùng lặp inline trên session list ✅ Done
+
+> Bump `0.2.24 → 0.2.25`; tag `v0.2.25`.
+
+**Bối cảnh:** v0.2.24 chỉ cảnh báo lúc Export all (trong dialog xác nhận). User muốn thấy ngay trên UI khi các session dùng chung file/đè output, không phải chờ tới lúc export.
+
+- [x] **`SessionOverlap` type** (`src/config.ts`): `{ sharedInput, outputCollision }`.
+- [x] **`refreshSessionStatuses` tính overlap** (`useAppController.tsx`): chuyển từ chỉ đếm file sang resolve cả file-list + `resolve_output_dirs` mỗi phiên; phase 2 dựng `fileOwners`/`dirOwners` **theo từng dự án** (Export all chạy 1 dự án/lần), file/dir có >1 owner → đánh dấu các phiên liên quan. Lưu vào state `sessionOverlaps`, expose qua context.
+- [x] **Badge trong Sidebar** (`SessionRow`): icon `AlertTriangle`, `danger` (đỏ, outputCollision) lấn át `warn` (vàng, sharedInput). CSS `.session-overlap-badge.warn/.danger` trong `styles.css`.
+- [x] **i18n** `overlapInputBadge` / `overlapOutputBadge` (vi + en).
+
 ## v0.2.24 — Export-all: cảnh báo session ghi trùng folder đích ✅ Done
 
 > Bump `0.2.23 → 0.2.24`; tag `v0.2.24`.

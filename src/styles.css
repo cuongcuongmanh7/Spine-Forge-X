@@ -470,6 +470,20 @@ body.col-resizing {
   animation: pulse 1.4s ease-in-out infinite;
 }
 
+.session-overlap-badge {
+  flex: 0 0 auto;
+  display: inline-grid;
+  place-items: center;
+}
+
+.session-overlap-badge.warn {
+  color: #d97706;
+}
+
+.session-overlap-badge.danger {
+  color: #ef4444;
+}
+
 .session-menu-trigger {
   flex: 0 0 auto;
   display: inline-grid;

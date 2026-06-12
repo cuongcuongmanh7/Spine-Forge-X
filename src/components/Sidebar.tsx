@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import {
+  AlertTriangle,
   ChevronDown,
   ChevronRight,
   Copy,
@@ -67,7 +68,8 @@ function SessionRow({ session }: { session: Session }) {
     menuOpenId,
     setMenuOpenId,
     runningSessionId,
-    sessionStatuses
+    sessionStatuses,
+    sessionOverlaps
   } = useApp();
 
   const isActive = session.id === activeSessionId;
@@ -87,6 +89,10 @@ function SessionRow({ session }: { session: Session }) {
   const subtitle = sessionSubtitle(session);
   const status = sessionStatuses[session.id] ?? 'red';
   const statusTitle = status === 'green' ? t.statusReady : status === 'yellow' ? t.statusWarning : t.statusBlocked;
+  // Cross-session overlap badge: output collision (danger) outranks shared input (attention).
+  const overlap = sessionOverlaps[session.id];
+  const overlapKind = overlap?.outputCollision ? 'danger' : overlap?.sharedInput ? 'warn' : null;
+  const overlapTitle = overlap?.outputCollision ? t.overlapOutputBadge : t.overlapInputBadge;
 
   return (
     <div
@@ -123,6 +129,17 @@ function SessionRow({ session }: { session: Session }) {
             {label}
           </span>
           {subtitle && <span className="session-subtitle" title={subtitle}>{subtitle}</span>}
+        </span>
+      )}
+
+      {!isRenaming && overlapKind && (
+        <span
+          className={`session-overlap-badge ${overlapKind}`}
+          title={overlapTitle}
+          role="img"
+          aria-label={overlapTitle}
+        >
+          <AlertTriangle size={13} />
         </span>
       )}
 
