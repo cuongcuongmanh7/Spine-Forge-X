@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { X, ChevronLeft, ChevronRight, AlertTriangle, Trash2 } from 'lucide-react';
+import { X, ChevronLeft, ChevronRight, AlertTriangle, Archive } from 'lucide-react';
 import { confirm } from '@tauri-apps/plugin-dialog';
 import { useApp } from '../useAppController';
 import type { FolderScan, ImageEntry } from '../types';
@@ -36,7 +36,13 @@ function Thumb({ entry, url }: { entry: ImageEntry; url: string | null | undefin
   return (
     <div className="thumb-card" title={`${entry.relativePath} (${formatBytes(entry.sizeBytes)})`}>
       <div className="thumb-img">
-        {url ? <img src={url} alt={name} loading="lazy" /> : <span className="empty-thumb" />}
+        {url ? (
+          <img src={url} alt={name} loading="lazy" />
+        ) : url === null ? (
+          <span className="empty-thumb" />
+        ) : (
+          <span className="thumb-loading" aria-label="Loading" />
+        )}
       </div>
       <span className="thumb-name">{name}</span>
     </div>
@@ -164,11 +170,11 @@ export function CleanFolderDetailModal({
           </span>
           <span className="footer-spacer" />
           <button
-            className="danger-button"
+            className="warning-button"
             disabled={isCleaningSourceFolder || unit.unused.length === 0}
             onClick={moveThisFolder}
           >
-            <Trash2 size={16} /> {t.cleanSourceMove}
+            <Archive size={16} /> {t.cleanSourceMove}
           </button>
           <button className="primary-button" onClick={onClose}>
             {t.done}

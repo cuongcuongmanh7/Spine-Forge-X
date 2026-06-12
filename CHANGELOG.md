@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.2.23
+- **Icon + màu nút "Chuyển ảnh thừa → backup" hợp lý hơn**: đổi từ icon thùng rác (gây hiểu là xoá) sang icon hộp lưu trữ, và từ màu đỏ (danger) sang màu hổ phách (warning) ở cả nút từng folder lẫn nút tổng — thao tác này chuyển ảnh vào `_unused_backup` và **khôi phục được**, không phải xoá vĩnh viễn.
+- **Popup "Đang quét" chi tiết hơn**: hiện danh sách từng folder kèm trạng thái cập nhật trực tiếp (✓ đã quét xong / ○ đang chờ) và % tiến độ bên cạnh số đếm, thay vì chỉ một dòng tên file.
+- **Input path rỗng có gợi ý nhẹ**: khi để trống/xoá đường dẫn giờ hiện gợi ý xanh "Nhập đường dẫn hoặc chọn folder/file để bắt đầu" thay vì im lặng — vẫn **không** báo đỏ oan (đỏ chỉ dành cho path đã quét mà ra 0 file).
+- **Thumbnail trong popup chi tiết folder hiện trạng thái đang tải**: ảnh chưa tải xong hiện hiệu ứng skeleton nhấp nháy thay vì ô xám trống, phân biệt rõ "đang tải" với "tải lỗi".
+
 ## v0.2.22
 - **Sửa lỗi nghiêm trọng của parallel jobs làm hỏng export hàng loạt**: khi chạy nhiều job song song, các job được lập kế hoạch trong cùng một mili-giây/cùng tiến trình dùng chung **một file settings tạm** (tên chỉ gồm timestamp + PID), nên job xong đầu tiên xóa file đó khiến các job còn lại chết với `Export settings JSON file does not exist`. Giờ mỗi job có file tạm riêng (thêm bộ đếm tăng dần), export song song chạy đúng. Lỗi chỉ xuất hiện khi parallel > 1; chạy tuần tự không bị.
 - **Popup "Đang xử lý" hiển thị rõ từng job đang chạy + đồng hồ**: thêm danh sách các file đang export song song (mỗi dòng có spinner và thời gian riêng), cùng tổng thời gian đã chạy của cả lần export. Khi Export-all, đồng hồ tổng tính cho cả batch.

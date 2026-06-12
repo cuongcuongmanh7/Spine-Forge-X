@@ -6,6 +6,34 @@ Source-of-truth tiến độ toàn dự án. Chi tiết kỹ thuật từng task
 
 ---
 
+## v0.2.23 — UI polish: icon backup, overlay quét, hint input, skeleton thumbnail ✅ Done
+
+> Bump `0.2.22 → 0.2.23`; tag `v0.2.23`.
+
+**Bối cảnh:** gom các món polish UI nhỏ theo phản hồi của user thành một release nhanh, không đổi backend.
+
+- [x] **Icon + màu "Chuyển ảnh thừa → backup"**: `Trash2` → `Archive`, class `danger`/`danger-button` → `warning`/`warning-button` (amber) ở cả 3 nút (`CleanSourceFolderModal` per-row + tổng, `CleanFolderDetailModal`). Thêm style `.warning-button` + `.icon-button.warning` trong `styles.css` (mirror `.danger-button`, màu `#d97706`/`#a36500`).
+- [x] **Overlay quét chi tiết**: tận dụng `spine-progress` (emit `file = folder` khi mỗi unit xong) — tích luỹ set `scannedFolders`, render checklist từng folder (✓ done / ○ pending) + `%` cạnh số đếm. CSS `.scan-overlay-list` trong `RunOverlay.css`. Fallback dòng file cũ khi chưa list được units.
+- [x] **Hint input rỗng**: thêm `isEmpty` → notice `info` "Nhập đường dẫn…" (không đỏ); border đỏ vẫn chỉ cho `scanCameUpEmpty`. Key `inputEmptyHint` (VI/EN).
+- [x] **Skeleton thumbnail**: phân biệt `url === undefined` (đang tải → `.thumb-loading` shimmer, có `prefers-reduced-motion`) với `url === null` (lỗi → `empty-thumb`).
+- [x] Verify: `tsc --noEmit` xanh.
+
+---
+
+## v0.2.22 — Sửa parallel-jobs hỏng export hàng loạt + overlay job list + polish input/dashboard ✅ Done
+
+> Bump `0.2.21 → 0.2.22`; tag `v0.2.22`.
+
+**Bối cảnh:** parallel jobs > 1 làm hỏng export hàng loạt do dùng chung file settings tạm; nhân tiện gom thêm vài polish overlay/input/dashboard.
+
+- [x] **Fix temp-file parallel jobs**: mỗi job có file settings tạm riêng (thêm bộ đếm tăng dần) thay vì chỉ timestamp + PID — job xong đầu không còn xoá file của job khác (`Export settings JSON file does not exist`).
+- [x] **Overlay "Đang xử lý" liệt kê job**: danh sách file đang export song song (spinner + thời gian riêng từng job) + tổng thời gian cả lần export/batch.
+- [x] **Input path an toàn hơn**: sửa path xoá ngay list file đã quét; lọc `excludedFiles` theo path mới; tách border đỏ (`scanCameUpEmpty`) vs hint Scan (`needsRescan`).
+- [x] **Dashboard cột thời gian**: thời gian mỗi lần chạy + tổng ở chân bảng (`45s`/`1m 23s`/`1h 02m`); bản ghi cũ hiện "—".
+- [x] Nội bộ: tách `buildExportRequestFrom`/`resolveLinkedTarget` ra `src/exportRequest.ts`; CSS overlay → `components/RunOverlay.css`; thêm `builds/` vào `.gitignore`.
+
+---
+
 ## v0.2.21 — Clean-unused modal khớp danh sách loại trừ của session ✅ Done
 
 > Bump `0.2.20 → 0.2.21`; tag `v0.2.21`.

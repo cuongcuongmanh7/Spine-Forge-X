@@ -2326,6 +2326,32 @@ progress {
   cursor: not-allowed;
 }
 
+/* Amber "move to backup" CTA — significant but recoverable, so warmer than danger. */
+.warning-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  border-radius: var(--radius-lg);
+  border: 1px solid color-mix(in srgb, #d97706, var(--border) 40%);
+  background: color-mix(in srgb, #d97706, var(--surface) 86%);
+  color: #a36500;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s var(--ease);
+}
+.warning-button:hover:not(:disabled) {
+  background: color-mix(in srgb, #d97706, var(--surface) 78%);
+}
+.warning-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.icon-button.warning {
+  color: #a36500;
+}
+
 .status-dot {
   display: inline-block;
   width: 9px;
@@ -2443,6 +2469,26 @@ progress {
   height: 40%;
   border-radius: 6px;
   background: var(--border);
+}
+/* Shimmering placeholder while a thumbnail's data URL is still loading. */
+.thumb-loading {
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(
+    100deg,
+    color-mix(in srgb, var(--surface), var(--bg) 40%) 30%,
+    color-mix(in srgb, var(--surface-soft, var(--surface)), #fff 8%) 50%,
+    color-mix(in srgb, var(--surface), var(--bg) 40%) 70%
+  );
+  background-size: 200% 100%;
+  animation: thumb-shimmer 1.2s ease-in-out infinite;
+}
+@keyframes thumb-shimmer {
+  from { background-position: 200% 0; }
+  to { background-position: -200% 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .thumb-loading { animation: none; }
 }
 .thumb-name {
   font-size: 11px;

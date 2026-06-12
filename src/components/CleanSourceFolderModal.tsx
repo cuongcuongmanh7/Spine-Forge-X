@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { FolderOpen, Trash2, X, Search, RotateCw, CircleStop } from 'lucide-react';
+import { FolderOpen, Archive, X, Search, RotateCw, CircleStop, Check, Circle } from 'lucide-react';
 import { open } from '@tauri-apps/plugin-dialog';
 import { confirm } from '@tauri-apps/plugin-dialog';
 import { useApp } from '../useAppController';
@@ -33,6 +33,11 @@ function relativeToRoot(folder: string, root: string): string {
   return f.split('/').filter(Boolean).pop() || folder;
 }
 
+/** Normalise a folder path for matching scan-progress events to picker units. */
+function normFolder(path: string): string {
+  return path.replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase();
+}
+
 export function CleanSourceFolderModal() {
   const {
     t,
@@ -60,6 +65,9 @@ export function CleanSourceFolderModal() {
   const summary = cleanScanSummary;
   const setSummary = setCleanScanSummary;
   const [scanning, setScanning] = useState(false);
+  // Folders the backend has reported finished during the current scan (normalised
+  // paths). Drives the live per-folder checklist in the scan overlay.
+  const [scannedFolders, setScannedFolders] = useState<Set<string>>(new Set());
   const [detailIndex, setDetailIndex] = useState<number | null>(null);
   // Cheap pre-scan list of .spine units (no export), so the user can see the
   // scope and pick which sub-folders to scan. null = not listed yet.
@@ -118,6 +126,15 @@ export function CleanSourceFolderModal() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [root]);
 
+  // Accumulate finished folders while scanning. The backend emits a progress
+  // event with `file = folder` as each unit completes (units run concurrently,
+  // so this is a "done" set, not a strict order).
+  useEffect(() => {
+    if (!scanning || !liveProgress.file) return;
+    const key = normFolder(liveProgress.file);
+    setScannedFolders((prev) => (prev.has(key) ? prev : new Set(prev).add(key)));
+  }, [scanning, liveProgress.file, liveProgress.current]);
+
   function toggleUnit(spineFile: string) {
     setDeselected((prev) => {
       const next = new Set(prev);
@@ -160,6 +177,7 @@ export function CleanSourceFolderModal() {
       });
       if (!ok) return;
     }
+    setScannedFolders(new Set());
     setScanning(true);
     setSummary(null);
     try {
@@ -355,7 +373,7 @@ export function CleanSourceFolderModal() {
                         <td>
                           {!unit.error && unit.unused.length > 0 && (
                             <button
-                              className="icon-button danger"
+                              className="icon-button warning"
                               title={t.cleanSourceMove}
                               aria-label={t.cleanSourceMove}
                               disabled={busy}
@@ -364,7 +382,7 @@ export function CleanSourceFolderModal() {
                                 void moveFolder(rowIndex);
                               }}
                             >
-                              <Trash2 size={16} />
+                              <Archive size={16} />
                             </button>
                           )}
                         </td>
@@ -384,11 +402,11 @@ export function CleanSourceFolderModal() {
 
         <div className="modal-footer">
           <button
-            className="danger-button"
+            className="warning-button"
             disabled={busy || !summary || summary.totalUnused === 0}
             onClick={move}
           >
-            <Trash2 size={16} /> {t.cleanSourceMove}
+            <Archive size={16} /> {t.cleanSourceMove}
           </button>
           <button className="primary-button" onClick={close}>
             {t.done}
@@ -403,10 +421,30 @@ export function CleanSourceFolderModal() {
           <h2 className="run-overlay-title">{t.cleanSourceScanning}</h2>
           <div className="run-overlay-progress">
             <progress value={scanPercent} max={100} />
-            <span>{scanCurrent} / {scanTotal}</span>
+            <span>{scanCurrent} / {scanTotal} · {scanPercent}%</span>
           </div>
-          {liveProgress.file && (
-            <p className="run-overlay-file" title={liveProgress.file}>{shortenPath(liveProgress.file)}</p>
+          {selectedUnits.length > 0 ? (
+            <ul className="scan-overlay-list">
+              {selectedUnits.map((u) => {
+                const done = scannedFolders.has(normFolder(u.folder));
+                return (
+                  <li key={u.spineFile} className={done ? 'done' : 'pending'}>
+                    {done ? (
+                      <Check size={14} className="scan-overlay-check" />
+                    ) : (
+                      <Circle size={14} className="scan-overlay-pending" />
+                    )}
+                    <span className="scan-overlay-name" title={u.folder}>
+                      {relativeToRoot(u.folder, root)}
+                    </span>
+                  </li>
+                );
+              })}
+            </ul>
+          ) : (
+            liveProgress.file && (
+              <p className="run-overlay-file" title={liveProgress.file}>{shortenPath(liveProgress.file)}</p>
+            )
           )}
           <button className="secondary-button" disabled={isStopping} onClick={() => void stopExport()}>
             {isStopping ? <RotateCw className="spin" size={16} /> : <CircleStop size={16} />}

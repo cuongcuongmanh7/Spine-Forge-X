@@ -41,6 +41,8 @@ export function InputSection() {
   const pathPending = merged.inputPath.trim() !== '' && !isScanning && files.length === 0;
   const scanCameUpEmpty = pathPending && scannedPath === merged.inputPath;
   const needsRescan = pathPending && scannedPath !== merged.inputPath;
+  // Empty path with nothing loaded — a gentle nudge, not an error (no red border).
+  const isEmpty = merged.inputPath.trim() === '' && !isScanning && files.length === 0;
 
   // Count display names so we only show the disambiguating folder when names collide.
   const nameCounts = useMemo(() => {
@@ -90,6 +92,12 @@ export function InputSection() {
         <div className="notice info" role="status" aria-live="polite">
           <Info size={18} />
           <span>{t.inputNeedsScan}</span>
+        </div>
+      )}
+      {isEmpty && (
+        <div className="notice info" role="status" aria-live="polite">
+          <Info size={18} />
+          <span>{t.inputEmptyHint}</span>
         </div>
       )}
       {files.length > 0 && (
