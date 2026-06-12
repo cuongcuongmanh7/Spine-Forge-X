@@ -17,6 +17,7 @@ import {
 import { basename } from '../sessions';
 import type { Project, Session } from '../config';
 import { useApp } from '../useAppController';
+import './Sidebar.css';
 
 const SIDEBAR_MIN = 200;
 const SIDEBAR_MAX = 420;

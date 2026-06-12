@@ -1,0 +1,14 @@
+/* Cross-session overlap badge on a session row (see SessionRow). */
+.session-overlap-badge {
+  flex: 0 0 auto;
+  display: inline-grid;
+  place-items: center;
+}
+
+.session-overlap-badge.warn {
+  color: #d97706;
+}
+
+.session-overlap-badge.danger {
+  color: #ef4444;
+}

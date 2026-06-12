@@ -24,6 +24,7 @@ import {
 import { formatMessage, formatSummary, getCopy, type Translations } from './i18n';
 import { computeCanStart, statusFromValidation } from './validation';
 import { buildExportRequestFrom, resolveLinkedTarget } from './exportRequest';
+import { computeSessionStatuses } from './sessionStatus';
 import { commonParentPath } from './paths';
 import { useAppUpdater } from './useAppUpdater';
 import { useDragDrop } from './useDragDrop';
@@ -1127,89 +1128,17 @@ export function useAppControllerValue() {
 
   // `statusFromValidation` is imported from ./validation (pure, unit-tested).
 
-  // Per-session readiness dot. Based on config only (not ephemeral runtime files) so it is reload-stable.
+  // Per-session readiness dot + cross-session overlap badge. The heavy lifting (validate,
+  // resolve files/output dirs, compute overlap) lives in sessionStatus.ts; here we just feed
+  // it the in-memory scanned files and store the result.
   async function refreshSessionStatuses() {
-    // Phase 1 — per session: validate, resolve the file list, and resolve the output dirs.
-    // We need the actual files (not just a count) to detect cross-session overlap below.
-    const perSession = await Promise.all(
-      sessions.map(async (s) => {
-        const cfg: MergedConfig = { ...appConfig, ...s.config };
-        let status: SessionStatus = 'red';
-        // Resolve files this session would export: in-memory runtime → saved inputFiles →
-        // scan the input folder. Mirrors the Export-all preflight.
-        let files = runtimeByIdRef.current[s.id]?.files ?? [];
-        if (files.length === 0 && s.config.inputFiles.length > 0) files = s.config.inputFiles;
-        if (files.length === 0 && s.config.inputPath.trim()) {
-          try {
-            const scan = await invoke<ScanResult>('scan_spine_files', { inputPath: s.config.inputPath });
-            const excluded = new Set(s.config.excludedFiles ?? []);
-            files = scan.files.filter((f) => !excluded.has(f));
-          } catch {
-            files = [];
-          }
-        }
-        try {
-          const result = await invoke<ValidateResult>('validate_settings', {
-            spinePath: cfg.spinePath,
-            outputPath:
-              cfg.outputPolicy === 'linkedProject' ? resolveLinkedTarget(cfg)?.unityRoot ?? '' : cfg.outputPath,
-            outputPolicy: cfg.outputPolicy,
-            exportMode: cfg.exportMode,
-            globalJsonPath: cfg.globalJsonPath
-          });
-          status = statusFromValidation(s, result, files.length);
-        } catch {
-          status = 'red';
-        }
-        // Best-effort: resolve where these files would land so we can flag two sessions
-        // that target the same folder. Skip if we couldn't resolve any files.
-        let outDirs: string[] = [];
-        if (files.length > 0) {
-          try {
-            outDirs = await invoke<string[]>('resolve_output_dirs', {
-              request: buildExportRequestFrom(cfg, files)
-            });
-          } catch {
-            outDirs = [];
-          }
-        }
-        return { id: s.id, projectId: s.projectId, status, files, outDirs };
-      })
-    );
-    setSessionStatuses(Object.fromEntries(perSession.map((p) => [p.id, p.status])));
-
-    // Phase 2 — cross-session overlap, scoped per project (Export all runs one project at a
-    // time, so only same-project sessions can collide in a single batch).
-    const overlaps: Record<string, SessionOverlap> = {};
-    const byProject = new Map<string, typeof perSession>();
-    for (const p of perSession) {
-      const list = byProject.get(p.projectId) ?? [];
-      list.push(p);
-      byProject.set(p.projectId, list);
+    const runtimeFilesById: Record<string, string[]> = {};
+    for (const s of sessions) {
+      const files = runtimeByIdRef.current[s.id]?.files;
+      if (files && files.length > 0) runtimeFilesById[s.id] = files;
     }
-    for (const group of byProject.values()) {
-      const fileOwners = new Map<string, Set<string>>();
-      const dirOwners = new Map<string, Set<string>>();
-      for (const p of group) {
-        for (const f of p.files) {
-          const owners = fileOwners.get(f) ?? new Set<string>();
-          owners.add(p.id);
-          fileOwners.set(f, owners);
-        }
-        for (const d of p.outDirs) {
-          const owners = dirOwners.get(d) ?? new Set<string>();
-          owners.add(p.id);
-          dirOwners.set(d, owners);
-        }
-      }
-      const sharedInput = new Set<string>();
-      for (const owners of fileOwners.values()) if (owners.size > 1) owners.forEach((id) => sharedInput.add(id));
-      const outputCollision = new Set<string>();
-      for (const owners of dirOwners.values()) if (owners.size > 1) owners.forEach((id) => outputCollision.add(id));
-      for (const p of group) {
-        overlaps[p.id] = { sharedInput: sharedInput.has(p.id), outputCollision: outputCollision.has(p.id) };
-      }
-    }
+    const { statuses, overlaps } = await computeSessionStatuses(sessions, appConfig, runtimeFilesById);
+    setSessionStatuses(statuses);
     setSessionOverlaps(overlaps);
   }
 

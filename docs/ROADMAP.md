@@ -6,6 +6,13 @@ Source-of-truth tiến độ toàn dự án.
 
 ---
 
+## v0.2.26 — Tách module để qua file-size guard (build fix cho v0.2.25) ✅ Done
+
+> Bump `0.2.25 → 0.2.26`; tag `v0.2.26`. v0.2.25 fail CI ở `check-file-size`, không ra artifact.
+
+- [x] **`src/sessionStatus.ts`** (`computeSessionStatuses`): gánh phần probe từng session (validate + resolve file-list + `resolve_output_dirs`) và `computeOverlaps` theo dự án. `refreshSessionStatuses` trong `useAppController.tsx` còn là wrapper mỏng → file tụt dưới trần.
+- [x] **`src/components/Sidebar.css`**: chuyển style `.session-overlap-badge` khỏi `styles.css` (đang +11 dòng quá trần), import trong `Sidebar.tsx`. Theo tiền lệ `RunOverlay.css`.
+
 ## v0.2.25 — Badge cảnh báo trùng lặp inline trên session list ✅ Done
 
 > Bump `0.2.24 → 0.2.25`; tag `v0.2.25`.

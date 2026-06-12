@@ -1,5 +1,8 @@
 # Changelog
 
+## v0.2.26
+- **Sửa build CI hỏng ở v0.2.25 (file-size guard)**: phần tính status + overlap làm `useAppController.tsx` và `styles.css` vượt trần dòng. Tách logic resolve file/output + dò overlap ra module riêng `src/sessionStatus.ts` (`computeSessionStatuses`), và chuyển CSS badge sang `src/components/Sidebar.css`. Không đổi hành vi — chỉ tách module cho gọn; v0.2.25 không ra được artifact nên gộp tính năng badge vào bản này.
+
 ## v0.2.25
 - **Badge cảnh báo trùng lặp ngay trên danh sách session** (tiếp nối v0.2.24): thay vì chỉ báo lúc bấm Export all, mỗi session row giờ hiện badge ⚠️ khi phát hiện trùng với session khác **trong cùng dự án**, ở hai mức: **vàng** = dùng chung file `.spine` (chú ý — có thể cố ý), **đỏ** = ghi ra cùng folder đích (nguy hiểm, Export all sẽ đè nhau). Việc dò trùng tận dụng `refreshSessionStatuses` (vốn đã quét tất cả session để tính chấm trạng thái), gọi thêm `resolve_output_dirs` mỗi phiên và đối chiếu input/output trong phạm vi từng dự án. Tooltip giải thích rõ từng mức.
 
