@@ -94,16 +94,6 @@ File `.spine` 3.8.x là **raw deflate**. Số nguyên trong block settings đư�
 
 ---
 
-## Roadmap
+## Roadmap & phiên bản
 
-Xem [docs/ROADMAP.md](docs/ROADMAP.md) (source-of-truth tiến độ). Tóm tắt:
-
-- ✅ **v0.2.x** — batch export, parallel jobs, Linked Project, Clean Source, tray, per-project `.spine` settings (mới nhất: v0.2.18 — decode zigzag, packing).
-- 📋 **v0.3.0** — macOS support (signing, notarization, `.icns`).
-- 📋 **v0.4.0** — Unity Headless Trigger (nút "Export to SpineForge" trong Unity Editor).
-
----
-
-## Phiên bản
-
-Hiện tại: **v0.2.18**. Lịch sử thay đổi user-facing ở [CHANGELOG.md](CHANGELOG.md).
+Tiến độ toàn dự án ở [docs/ROADMAP.md](docs/ROADMAP.md); lịch sử thay đổi user-facing (kèm phiên bản hiện tại) ở [CHANGELOG.md](CHANGELOG.md).
