@@ -28,12 +28,16 @@ async function probeSession(
   if (files.length === 0 && session.config.inputPath.trim()) {
     try {
       const scan = await invoke<ScanResult>('scan_spine_files', { inputPath: session.config.inputPath });
-      const excluded = new Set(session.config.excludedFiles ?? []);
-      files = scan.files.filter((f) => !excluded.has(f));
+      files = scan.files;
     } catch {
       files = [];
     }
   }
+  // Drop files the user moved to "not exported" — Export all skips them, so they must not
+  // count toward overlap. Applied to every source: the runtime cache can hold a pre-exclusion
+  // snapshot of the active session, so filtering only the fresh scan branch leaked excluded files.
+  const excluded = new Set(session.config.excludedFiles ?? []);
+  if (excluded.size > 0) files = files.filter((f) => !excluded.has(f));
 
   let status: SessionStatus = 'red';
   try {
@@ -63,12 +67,24 @@ async function probeSession(
 }
 
 /**
+ * Per-session, per-file map of which OTHER sessions also include that input file.
+ * Shape: `{ [sessionId]: { [filePath]: otherSessionIds[] } }`. Only shared files appear,
+ * so the input list can flag the exact rows that overlap (and name the other sessions).
+ */
+export type SharedInputMap = Record<string, Record<string, string[]>>;
+
+/**
  * Cross-session overlap, scoped per project (Export all runs one project at a time, so only
  * same-project sessions can collide in a single batch). A file or output dir owned by more
  * than one session marks every owner: sharedInput (attention) and/or outputCollision (danger).
+ * Also returns the per-file sharing map for the input-list badges.
  */
-function computeOverlaps(probes: SessionProbe[]): Record<string, SessionOverlap> {
+function computeOverlaps(probes: SessionProbe[]): {
+  overlaps: Record<string, SessionOverlap>;
+  sharedInputFiles: SharedInputMap;
+} {
   const overlaps: Record<string, SessionOverlap> = {};
+  const sharedInputFiles: SharedInputMap = {};
   const byProject = new Map<string, SessionProbe[]>();
   for (const p of probes) {
     const list = byProject.get(p.projectId) ?? [];
@@ -91,14 +107,22 @@ function computeOverlaps(probes: SessionProbe[]): Record<string, SessionOverlap>
       }
     }
     const sharedInput = new Set<string>();
-    for (const owners of fileOwners.values()) if (owners.size > 1) owners.forEach((id) => sharedInput.add(id));
+    for (const [file, owners] of fileOwners) {
+      if (owners.size <= 1) continue;
+      const ids = [...owners];
+      ids.forEach((id) => sharedInput.add(id));
+      // For each owner, record the OTHER owners of this exact file.
+      for (const id of ids) {
+        (sharedInputFiles[id] ??= {})[file] = ids.filter((other) => other !== id);
+      }
+    }
     const outputCollision = new Set<string>();
     for (const owners of dirOwners.values()) if (owners.size > 1) owners.forEach((id) => outputCollision.add(id));
     for (const p of group) {
       overlaps[p.id] = { sharedInput: sharedInput.has(p.id), outputCollision: outputCollision.has(p.id) };
     }
   }
-  return overlaps;
+  return { overlaps, sharedInputFiles };
 }
 
 /**
@@ -109,8 +133,13 @@ export async function computeSessionStatuses(
   sessions: Session[],
   appConfig: AppConfig,
   runtimeFilesById: Record<string, string[]>
-): Promise<{ statuses: Record<string, SessionStatus>; overlaps: Record<string, SessionOverlap> }> {
+): Promise<{
+  statuses: Record<string, SessionStatus>;
+  overlaps: Record<string, SessionOverlap>;
+  sharedInputFiles: SharedInputMap;
+}> {
   const probes = await Promise.all(sessions.map((s) => probeSession(s, appConfig, runtimeFilesById[s.id])));
   const statuses = Object.fromEntries(probes.map((p) => [p.id, p.status]));
-  return { statuses, overlaps: computeOverlaps(probes) };
+  const { overlaps, sharedInputFiles } = computeOverlaps(probes);
+  return { statuses, overlaps, sharedInputFiles };
 }

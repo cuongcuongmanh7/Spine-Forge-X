@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.2.27
+- **Sửa: file đã loại khỏi export vẫn bị tính trùng (badge vẫn sáng)**: phần dò overlap chỉ lọc `excludedFiles` ở nhánh quét-folder, nên khi danh sách file lấy từ cache runtime (session đang mở) hoặc từ `inputFiles` thì file đã chuyển sang "không export" vẫn lọt vào → badge cảnh báo vẫn hiện oan. Giờ `excludedFiles` được lọc cho **mọi nguồn** file trước khi tính trùng.
+- **Icon ⚠️ ngay cạnh từng file `.spine` bị trùng cross-session trong section Input**: thay vì chỉ có badge ở cấp session, mỗi dòng file giờ hiện icon hổ phách nếu file đó cũng nằm ở session khác **trong cùng dự án**, tooltip nêu rõ tên (các) session kia ("Cũng được dùng ở: …"). Giúp pinpoint đúng file để loại, thay vì phải tự dò. (Trùng output folder vẫn để ở badge session vì nó là cấp thư mục, không quy về 1 file.)
+
 ## v0.2.26
 - **Sửa build CI hỏng ở v0.2.25 (file-size guard)**: phần tính status + overlap làm `useAppController.tsx` và `styles.css` vượt trần dòng. Tách logic resolve file/output + dò overlap ra module riêng `src/sessionStatus.ts` (`computeSessionStatuses`), và chuyển CSS badge sang `src/components/Sidebar.css`. Không đổi hành vi — chỉ tách module cho gọn; v0.2.25 không ra được artifact nên gộp tính năng badge vào bản này.
 

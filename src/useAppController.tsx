@@ -24,7 +24,7 @@ import {
 import { formatMessage, formatSummary, getCopy, type Translations } from './i18n';
 import { computeCanStart, statusFromValidation } from './validation';
 import { buildExportRequestFrom, resolveLinkedTarget } from './exportRequest';
-import { computeSessionStatuses } from './sessionStatus';
+import { computeSessionStatuses, type SharedInputMap } from './sessionStatus';
 import { commonParentPath } from './paths';
 import { useAppUpdater } from './useAppUpdater';
 import { useDragDrop } from './useDragDrop';
@@ -135,6 +135,7 @@ export function useAppControllerValue() {
   const [projectMenuOpenId, setProjectMenuOpenId] = useState<string | null>(null);
   const [sessionStatuses, setSessionStatuses] = useState<Record<string, SessionStatus>>({});
   const [sessionOverlaps, setSessionOverlaps] = useState<Record<string, SessionOverlap>>({});
+  const [sharedInputFiles, setSharedInputFiles] = useState<SharedInputMap>({});
 
   const [targetVersions, setTargetVersions] = useState<string[]>(targetVersionPresets);
 
@@ -1137,9 +1138,14 @@ export function useAppControllerValue() {
       const files = runtimeByIdRef.current[s.id]?.files;
       if (files && files.length > 0) runtimeFilesById[s.id] = files;
     }
-    const { statuses, overlaps } = await computeSessionStatuses(sessions, appConfig, runtimeFilesById);
+    const { statuses, overlaps, sharedInputFiles: shared } = await computeSessionStatuses(
+      sessions,
+      appConfig,
+      runtimeFilesById
+    );
     setSessionStatuses(statuses);
     setSessionOverlaps(overlaps);
+    setSharedInputFiles(shared);
   }
 
   function buildExportRequest() {
@@ -1530,6 +1536,7 @@ export function useAppControllerValue() {
     exportProjectSessions,
     sessionStatuses,
     sessionOverlaps,
+    sharedInputFiles,
     projectDialogOpen,
     setProjectDialogOpen,
 

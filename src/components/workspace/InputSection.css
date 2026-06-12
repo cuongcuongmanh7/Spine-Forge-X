@@ -1,0 +1,7 @@
+/* Per-file cross-session overlap marker: this .spine is also used by another session. */
+.file-pill-shared {
+  display: inline-grid;
+  place-items: center;
+  flex: 0 0 auto;
+  color: #d97706;
+}

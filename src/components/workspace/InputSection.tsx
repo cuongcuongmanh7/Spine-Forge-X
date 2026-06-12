@@ -4,6 +4,7 @@ import { Section } from '../common';
 import { SpineFileIcon } from '../SpineFileIcon';
 import { basename } from '../../sessions';
 import { useApp } from '../../useAppController';
+import './InputSection.css';
 
 /** Display name for a spine file: the file name without the .spine extension. */
 function spineName(path: string): string {
@@ -30,11 +31,23 @@ export function InputSection() {
     scanInput,
     chooseInputFolder,
     chooseInputFiles,
-    isChoosingInputFolder,
     isChoosingInputFiles,
+    isChoosingInputFolder,
     isScanning,
-    scannedPath
+    scannedPath,
+    activeSessionId,
+    sessions,
+    sharedInputFiles
   } = useApp();
+
+  // Which files in this session are also used by another session, and the names of those
+  // sessions (for the per-row tooltip). Empty when nothing overlaps.
+  const sharedHere = (activeSessionId && sharedInputFiles[activeSessionId]) || {};
+  const sessionName = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const s of sessions) map.set(s.id, s.name || basename(s.config.inputPath) || t.untitledSession);
+    return map;
+  }, [sessions, t.untitledSession]);
 
   // "Scanned this exact path and found nothing" (error, red border) vs
   // "path was edited but not rescanned yet" (neutral hint, no alarm).
@@ -106,6 +119,10 @@ export function InputSection() {
             const name = spineName(file);
             const duplicated = (nameCounts.get(name) ?? 0) > 1;
             const folder = parentName(file);
+            const sharedWith = sharedHere[file];
+            const sharedTitle = sharedWith?.length
+              ? t.sharedWithSessions.replace('{names}', sharedWith.map((id) => sessionName.get(id) ?? id).join(', '))
+              : undefined;
             return (
               <div className="file-pill" key={file} title={file}>
                 <SpineFileIcon size={16} />
@@ -113,6 +130,11 @@ export function InputSection() {
                   {name}
                   {duplicated && folder && <span className="file-path-note"> · {folder}</span>}
                 </span>
+                {sharedTitle && (
+                  <span className="file-pill-shared" title={sharedTitle} role="img" aria-label={sharedTitle}>
+                    <AlertTriangle size={13} />
+                  </span>
+                )}
                 <button className="file-pill-remove" title={t.remove} aria-label={`${t.remove}: ${name}`} onClick={() => removeFile(file)}>
                   <Trash2 size={13} />
                 </button>

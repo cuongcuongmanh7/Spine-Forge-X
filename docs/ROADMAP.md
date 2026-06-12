@@ -6,6 +6,17 @@ Source-of-truth tiến độ toàn dự án.
 
 ---
 
+## v0.2.27 — Fix excluded-file overlap + icon trùng per-file trong Input ✅ Done
+
+> Bump `0.2.26 → 0.2.27`; tag `v0.2.27`.
+
+**Bối cảnh:** hai edge case sau v0.2.25/26: (1) file đã loại khỏi export vẫn làm badge sáng; (2) badge ở cấp session không chỉ rõ file nào trùng.
+
+- [x] **Fix exclusion leak** (`src/sessionStatus.ts` `probeSession`): lọc `excludedFiles` cho mọi nguồn file (runtime cache / `inputFiles` / scan), không chỉ nhánh scan. Cache runtime của session đang mở có thể giữ snapshot trước khi loại → trước đây lọt.
+- [x] **Per-file shared-input map** (`computeOverlaps` → trả thêm `SharedInputMap`: `sessionId → file → otherSessionIds[]`). Lưu state `sharedInputFiles`, expose qua context.
+- [x] **Icon per-file trong InputSection** (`src/components/workspace/InputSection.tsx`): dòng file có icon `AlertTriangle` hổ phách nếu file nằm ở session khác cùng dự án; tooltip `sharedWithSessions` nêu tên các session. CSS tách ra `InputSection.css` (styles.css sát trần). Chỉ tín hiệu chung-input; trùng output vẫn ở badge session.
+- [x] **i18n** `sharedWithSessions` (vi + en).
+
 ## v0.2.26 — Tách module để qua file-size guard (build fix cho v0.2.25) ✅ Done
 
 > Bump `0.2.25 → 0.2.26`; tag `v0.2.26`. v0.2.25 fail CI ở `check-file-size`, không ra artifact.
