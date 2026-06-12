@@ -14,10 +14,10 @@ const ROOTS = ['src', 'src-tauri/src'];
 const EXTENSIONS = ['.ts', '.tsx', '.rs', '.css'];
 const DEFAULT_MAX = 800;
 
-// Files exempt from the guard entirely (no ceiling). lib.rs is the Tauri command
-// hub — commands must live alongside the builder, so it grows with each feature;
-// a module split here isn't worth blocking releases over.
-const EXEMPT = new Set(['src-tauri/src/lib.rs']);
+// Files exempt from the guard entirely (no ceiling). Empty since v0.3.3, when
+// lib.rs was split into model / util / export / clean (+ tests) and dropped from
+// ~2780 lines to a slim command shell that fits the default ceiling.
+const EXEMPT = new Set();
 
 // Grandfathered files: current line count is their ceiling. Lower these as they shrink.
 const BASELINE = {

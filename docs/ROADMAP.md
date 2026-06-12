@@ -339,7 +339,7 @@ Shipped ở commit `c133cac`.
 
 ---
 
-## v0.3.x — Refactor & dọn nợ kỹ thuật 🔧 In progress
+## v0.3.x — Refactor & dọn nợ kỹ thuật ✅ Done
 
 > Mục tiêu: tách file vượt trần, gom duplication, **không đổi hành vi user-facing**.
 > Mỗi bản giữ `cargo test` + `npm test` + `npm run build` xanh, file-size guard pass.
@@ -348,7 +348,7 @@ Shipped ở commit `c133cac`.
 - [x] **v0.3.0 — Tách god-hook `useAppController` theo domain** ✅: `useWorkspace` (dự án/session + runtime + vòng đời + config-updater + recordRun), `useScanInput`, `useExportEngine`, `useSpineDetection`, `useLinkedProjects` + helper thuần `controllerHelpers`. `useAppControllerValue` compose lại, **giữ nguyên context API** (`useApp()`). `useAppController.tsx` 1689 → **636 dòng**; đã gỡ baseline grandfather trong `scripts/check-file-size.mjs`. `tsc` + 26 test frontend + `cargo test` + build xanh; không đổi hành vi user-facing.
 - [x] **v0.3.1 — Backend: gom duplication** ✅: `src/paths.rs` (`parse_quoted_path`/`unquote`, `path_to_string`, `has_non_ascii`, `normalize_pack_source`) — gom ~24 chỗ lặp `PathBuf::from(x.trim_matches('"'))`; `src/error.rs` `ResultExt` (`.str_err()` + `.context()`) thay ~40 lần `.map_err(|e| e.to_string())` / `format!`; `src/concurrent.rs` `run_indexed` (semaphore + `JoinSet` + counter hoàn thành + stop-gate) dùng chung cho `start_batch_export` và `run_clean_units` (xoá ~25 dòng boilerplate mỗi nơi). Không đổi hành vi user-facing; `cargo test` 58 (+2 unit test `paths`) + frontend 26 + build + clippy (không warning mới) xanh.
 - [x] **v0.3.2 — i18n split + chẻ modal lớn** ✅: `i18n.ts` (727) → `i18n/{vi,en,types,index}.ts` (giữ API `./i18n`; `en: Translations` ép khớp key với `vi`). `CleanSourceFolderModal` (467→318) → `cleanSource/{CleanSourcePicker,CleanSourceTable,CleanSourceScanOverlay,helpers}`. `PresetEditorModal` (376→117) → `preset/PresetFormTab` (280). Không đổi hành vi; `tsc` + frontend 26 + `cargo test` 58 + build + file-size guard (76 files) xanh.
-- [ ] **v0.3.3 — `lib.rs` → cấu trúc `commands/`**: tách theo nhóm (`export`/`validate`/`clean`/`spine`); cân nhắc chẻ `export_one_file` (177 dòng); gỡ miễn guard sau khi < 800.
+- [x] **v0.3.3 — `lib.rs` → tách module theo nhóm** ✅: `lib.rs` (~2784) chẻ thành `model.rs` (kiểu dữ liệu, 277), `util.rs` (helper lá, 333), `export.rs` (engine + plan + lệnh collision, 681), `clean.rs` (clean-source + lệnh, 527), `tests.rs` (unit/property test, 591). `lib.rs` còn **449 dòng** (lệnh nhỏ + `run()`). Đã **gỡ miễn trừ guard** trong `scripts/check-file-size.mjs` — mọi file Rust giờ dưới trần 800. Wiring qua `pub(crate) use` re-export ở crate root nên `generate_handler!` (lệnh moved gọi theo path `export::`/`clean::`) + test (`use crate::{…}`) vẫn resolve. Không đổi hành vi; `cargo test` 58 + clippy (không warning mới) + build xanh. (Không chẻ `export_one_file` — giữ nguyên để khỏi đổi luồng.)
 
 ---
 

@@ -1,5 +1,8 @@
 # Changelog
 
+## v0.3.3
+- **Tái cấu trúc backend — tách `lib.rs` thành các module theo nhóm (không đổi hành vi)**: bước cuối của chuỗi dọn nợ v0.3.x. `src-tauri/src/lib.rs` (command hub ~2780 dòng, lâu nay được miễn trừ khỏi guard kích thước) được chẻ thành: `model.rs` (toàn bộ kiểu dữ liệu dùng chung), `util.rs` (helper lá: dò Spine/parse version, predicate path, temp-dir cho Unicode workaround, process), `export.rs` (engine export một file + dựng plan + lệnh dò trùng output), `clean.rs` (quét/dọn ảnh thừa + lệnh liên quan), và `tests.rs` (toàn bộ unit/property test). `lib.rs` còn **449 dòng** — chỉ còn các lệnh nhỏ + `run()`; và đã **gỡ luôn miễn trừ guard** (giờ mọi file Rust đều nằm dưới trần 800). Không thay đổi gì nhìn thấy được với người dùng; `cargo test` 58 + clippy (không warning mới) + frontend 26 + build xanh.
+
 ## v0.3.2
 - **Tái cấu trúc frontend — tách file i18n + 2 modal lớn (không đổi hành vi)**: tiếp tục dọn nợ v0.3.x ở phía giao diện, không thêm/đổi tính năng nào nhìn thấy được. (1) `i18n.ts` (727 dòng, gần trần 800) tách thành `i18n/{vi,en,types,index}.ts` — mỗi locale một file; `en` giờ được TypeScript bắt buộc khớp đúng tập key của `vi` nên hai ngôn ngữ không thể lệch nhau âm thầm. (2) `CleanSourceFolderModal` (467→318 dòng) tách phần chọn folder, bảng kết quả và overlay đang-quét ra các component con (`cleanSource/`). (3) `PresetEditorModal` (376→117 dòng) tách toàn bộ tab biểu mẫu ra `preset/PresetFormTab`. API import của i18n giữ nguyên (`./i18n`); toàn bộ test (`cargo test` 58, frontend 26) + build + file-size guard vẫn xanh.
 
