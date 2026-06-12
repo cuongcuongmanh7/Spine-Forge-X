@@ -1,6 +1,6 @@
 # SpineForge X — Roadmap & Progress
 
-Source-of-truth tiến độ toàn dự án. Chi tiết kỹ thuật từng task xem `.kiro/specs/spineforge-x/tasks.md`.
+Source-of-truth tiến độ toàn dự án.
 
 **Quy ước:** `[x]` xong · `[ ]` chưa làm · `[~]` đang làm.
 
@@ -229,7 +229,7 @@ Shipped ở commit `c133cac`.
 
 ## v0.2.8 — Test coverage hoàn tất + Validation polish ✅ Done
 
-**Mục tiêu:** đóng nốt các mục treo sau v0.2.7, **không thêm tính năng user-facing lớn**. Đóng cổng verify e2e v0.2.6 (đang là điều kiện coi v0.2.6 thực sự xong). Chi tiết task tham chiếu `.kiro/specs/spineforge-x/tasks.md`.
+**Mục tiêu:** đóng nốt các mục treo sau v0.2.7, **không thêm tính năng user-facing lớn**. Đóng cổng verify e2e v0.2.6 (đang là điều kiện coi v0.2.6 thực sự xong).
 
 ### A. Frontend hook-level tests (Vitest + React Testing Library) — ưu tiên 1
 - [x] Thêm `@testing-library/react`; mock `@tauri-apps/api` (`invoke`/`event.listen`) trong `src/test-setup.ts` để render được `useAppController`
