@@ -1,5 +1,8 @@
 # Changelog
 
+## v0.3.4
+- **Bảo mật: bật Content-Security-Policy + thêm LICENSE và SECURITY.md (chuẩn bị public repo)**: trước đây `app.security.csp` để `null` (tắt hoàn toàn CSP). Vì app có các lệnh ghi/xoá file trên đường dẫn tuỳ ý (`write_text_file`, `clean_source_folders`, `move_unused_images`), một XSS trong webview — nếu sau này lỡ render nội dung không tin cậy — sẽ gọi được thẳng các lệnh đó. Bản này khoá CSP về `default-src 'self'` và chỉ mở đúng những gì app cần: `data:`/`blob:`/`asset:` cho thumbnail ảnh, `'unsafe-inline'` style + `fonts.googleapis.com`/`fonts.gstatic.com` cho font Be Vietnam Pro, `ipc:`/`asset.localhost` cho cầu IPC của Tauri; chặn `object-src`, `base-uri`, `frame-ancestors`. Không đổi hành vi nhìn thấy được. Đồng thời thêm `LICENSE` (MIT) + khai báo `license` trong `package.json`/`Cargo.toml`, và `SECURITY.md` (báo lỗ hổng riêng qua email) để repo đủ chuẩn trước khi chuyển sang public.
+
 ## v0.3.3
 - **Tái cấu trúc backend — tách `lib.rs` thành các module theo nhóm (không đổi hành vi)**: bước cuối của chuỗi dọn nợ v0.3.x. `src-tauri/src/lib.rs` (command hub ~2780 dòng, lâu nay được miễn trừ khỏi guard kích thước) được chẻ thành: `model.rs` (toàn bộ kiểu dữ liệu dùng chung), `util.rs` (helper lá: dò Spine/parse version, predicate path, temp-dir cho Unicode workaround, process), `export.rs` (engine export một file + dựng plan + lệnh dò trùng output), `clean.rs` (quét/dọn ảnh thừa + lệnh liên quan), và `tests.rs` (toàn bộ unit/property test). `lib.rs` còn **449 dòng** — chỉ còn các lệnh nhỏ + `run()`; và đã **gỡ luôn miễn trừ guard** (giờ mọi file Rust đều nằm dưới trần 800). Không thay đổi gì nhìn thấy được với người dùng; `cargo test` 58 + clippy (không warning mới) + frontend 26 + build xanh.
 

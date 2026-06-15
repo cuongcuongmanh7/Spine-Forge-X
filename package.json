@@ -1,7 +1,8 @@
 {
   "name": "spineforge-x",
   "private": true,
-  "version": "0.3.3",
+  "version": "0.3.4",
+  "license": "MIT",
   "type": "module",
   "scripts": {
     "dev": "vite",

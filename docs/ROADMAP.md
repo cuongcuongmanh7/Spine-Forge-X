@@ -6,6 +6,17 @@ Source-of-truth tiến độ toàn dự án.
 
 ---
 
+## v0.3.4 — Bật CSP + LICENSE/SECURITY.md (chuẩn bị public repo) ✅ Done
+
+> Bump `0.3.3 → 0.3.4`; tag `v0.3.4`.
+
+**Bối cảnh:** rà soát bảo mật trước khi chuyển repo GitLab sang public. Không lộ secret (token CI qua biến môi trường, pubkey updater vốn công khai, không có key file nào bị track), lệnh CLI an toàn (không qua shell). Khe hở chính: CSP để `null`.
+
+- [x] **Bật CSP** (`src-tauri/tauri.conf.json` `app.security.csp`): `default-src 'self'` + mở đúng nhu cầu (data/blob/asset cho thumbnail, unsafe-inline + Google Fonts cho font, ipc/asset.localhost cho IPC). Defense-in-depth cho các lệnh ghi/xoá file trên path tuỳ ý.
+- [x] **LICENSE (MIT)** + `license` field trong `package.json` & `Cargo.toml`.
+- [x] **SECURITY.md**: hướng dẫn báo lỗ hổng riêng qua email, supported versions, scope (loại trừ lỗi của Spine editor).
+- [ ] **Việc thủ công còn lại trước khi public**: xác nhận CI/CD Variables (`GITLAB_TOKEN`, key ký updater) là Masked + Protected; bật fork-pipeline approval để fork không lạm dụng Windows runner self-hosted; smoke-test bản cài (thumbnail `data:` + auto-updater) để chắc CSP không vỡ.
+
 ## v0.2.27 — Fix excluded-file overlap + icon trùng per-file trong Input ✅ Done
 
 > Bump `0.2.26 → 0.2.27`; tag `v0.2.27`.
