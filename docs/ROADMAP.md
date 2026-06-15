@@ -6,6 +6,16 @@ Source-of-truth tiến độ toàn dự án.
 
 ---
 
+## v0.3.5 — Inter self-host + siết CSP (bỏ Google Fonts) ✅ Done
+
+> Bump `0.3.4 → 0.3.5`; tag `v0.3.5`.
+
+**Bối cảnh:** nối tiếp v0.3.4 — Google Fonts là dependency mạng duy nhất còn lại và là lý do CSP phải mở 2 domain Google. Self-host font để app offline-safe, không FOUT, CSP gọn hơn.
+
+- [x] **Đổi sang Inter, self-host** (`src/assets/fonts/InterVariable.woff2`, ~352KB variable 100–900, có dấu tiếng Việt): `@font-face` local trong `styles.css`, `font-family` ưu tiên `Inter`; bỏ dòng `@import` Google Fonts. Dùng chung cho en + vi.
+- [x] **Siết CSP** (`tauri.conf.json`): `font-src 'self'`, `style-src 'self' 'unsafe-inline'` — gỡ `fonts.googleapis.com`/`fonts.gstatic.com`.
+- [x] **`Inter-LICENSE.txt`** (SIL OFL 1.1) kèm theo font.
+
 ## v0.3.4 — Bật CSP + LICENSE/SECURITY.md (chuẩn bị public repo) ✅ Done
 
 > Bump `0.3.3 → 0.3.4`; tag `v0.3.4`.

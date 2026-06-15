@@ -1,0 +1,10 @@
+/* Self-hosted Inter so the app needs no network and the CSP can drop the
+   Google Fonts domains. Variable font covers weights 100–900 incl. Vietnamese.
+   Kept out of styles.css (which sits at its size-guard ceiling). */
+@font-face {
+  font-family: "Inter";
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url("./assets/fonts/InterVariable.woff2") format("woff2");
+}

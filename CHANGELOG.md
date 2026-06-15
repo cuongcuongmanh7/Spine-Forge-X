@@ -1,5 +1,8 @@
 # Changelog
 
+## v0.3.5
+- **Đổi font UI sang Inter + self-host (bỏ phụ thuộc Google Fonts, siết CSP)**: trước đây font Be Vietnam Pro tải từ `fonts.googleapis.com` mỗi lần mở app — là dependency mạng duy nhất, gây nhấp nháy font (FOUT) và buộc CSP phải mở 2 domain Google. Bản này đóng gói font ngay trong app: chuyển sang **Inter** (variable, 100–900, có sẵn dấu tiếng Việt) tải về `src/assets/fonts/InterVariable.woff2` + `@font-face` local, nên app chạy **offline**, không ping Google, không FOUT. Nhờ đó CSP siết tiếp về `font-src 'self'` và `style-src 'self' 'unsafe-inline'` (gỡ `fonts.googleapis.com`/`fonts.gstatic.com`). Font dùng chung cho cả mode tiếng Anh lẫn tiếng Việt như trước. Kèm `Inter-LICENSE.txt` (SIL OFL 1.1) theo yêu cầu license của font.
+
 ## v0.3.4
 - **Bảo mật: bật Content-Security-Policy + thêm LICENSE và SECURITY.md (chuẩn bị public repo)**: trước đây `app.security.csp` để `null` (tắt hoàn toàn CSP). Vì app có các lệnh ghi/xoá file trên đường dẫn tuỳ ý (`write_text_file`, `clean_source_folders`, `move_unused_images`), một XSS trong webview — nếu sau này lỡ render nội dung không tin cậy — sẽ gọi được thẳng các lệnh đó. Bản này khoá CSP về `default-src 'self'` và chỉ mở đúng những gì app cần: `data:`/`blob:`/`asset:` cho thumbnail ảnh, `'unsafe-inline'` style + `fonts.googleapis.com`/`fonts.gstatic.com` cho font Be Vietnam Pro, `ipc:`/`asset.localhost` cho cầu IPC của Tauri; chặn `object-src`, `base-uri`, `frame-ancestors`. Không đổi hành vi nhìn thấy được. Đồng thời thêm `LICENSE` (MIT) + khai báo `license` trong `package.json`/`Cargo.toml`, và `SECURITY.md` (báo lỗ hổng riêng qua email) để repo đủ chuẩn trước khi chuyển sang public.
 
