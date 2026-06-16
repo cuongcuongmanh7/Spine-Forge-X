@@ -1,0 +1,69 @@
+name: release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+# tauri-action needs write access to create the GitHub Release and upload assets.
+permissions:
+  contents: write
+
+jobs:
+  release-windows:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - name: Install dependencies
+        run: npm ci
+
+      # Pull the release notes for this version out of CHANGELOG.md so the GitHub
+      # Release body matches what the in-app updater shows.
+      - name: Extract release notes
+        id: notes
+        shell: pwsh
+        run: |
+          $version = "${{ github.ref_name }}".TrimStart("v")
+          $notes = "SpineForge X $version"
+          if (Test-Path "CHANGELOG.md") {
+            $changelog = [System.IO.File]::ReadAllText((Join-Path (Get-Location) "CHANGELOG.md"), [System.Text.UTF8Encoding]::new($false))
+            $pattern = "(?ms)^##\s+v" + [regex]::Escape($version) + "\b.*?\r?\n(.*?)(?=^##\s+v|\z)"
+            $match = [regex]::Match($changelog, $pattern)
+            if ($match.Success -and $match.Groups[1].Value.Trim()) {
+              $notes = $match.Groups[1].Value.Trim()
+            }
+          }
+          $delimiter = "EOF_NOTES"
+          "body<<$delimiter`n$notes`n$delimiter" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+
+      - name: Build and release
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        with:
+          tagName: ${{ github.ref_name }}
+          releaseName: SpineForge X ${{ github.ref_name }}
+          releaseBody: ${{ steps.notes.outputs.body }}
+          releaseDraft: false
+          prerelease: false
+          # createUpdaterArtifacts in tauri.conf.json makes this emit latest.json + .sig.
+          includeUpdaterJson: true
+          args: --bundles nsis

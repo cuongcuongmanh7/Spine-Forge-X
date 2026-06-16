@@ -1,5 +1,8 @@
 # Changelog
 
+## v0.3.6
+- **Chuyển CI/CD từ GitLab sang GitHub Actions**: repo đã dời từ GitLab sang GitHub, nên toàn bộ quy trình phát hành được viết lại. Pipeline cũ (`.gitlab-ci.yml`, ~180 dòng PowerShell tự upload Generic Package Registry + gọi Release API + workaround UTF-8/Latin-1) được thay bằng một workflow gọn dùng `tauri-apps/tauri-action` chạy trên runner `windows-latest`: push tag `v*.*.*` là tự build installer NSIS, tạo GitHub Release và đính kèm installer, chữ ký `.sig`, cùng `latest.json` cho auto-updater. Endpoint auto-updater (`tauri.conf.json`) và link "phiên bản/changelog" trong app đổi sang GitHub Releases; `SECURITY.md` đổi kênh báo lỗ hổng sang GitHub. Không đổi hành vi nhìn thấy được của app (ngoài việc bản cập nhật giờ lấy từ GitHub). README cũng tách thành hai phần song ngữ Anh/Việt.
+
 ## v0.3.5
 - **Đổi font UI sang Inter + self-host (bỏ phụ thuộc Google Fonts, siết CSP)**: trước đây font Be Vietnam Pro tải từ `fonts.googleapis.com` mỗi lần mở app — là dependency mạng duy nhất, gây nhấp nháy font (FOUT) và buộc CSP phải mở 2 domain Google. Bản này đóng gói font ngay trong app: chuyển sang **Inter** (variable, 100–900, có sẵn dấu tiếng Việt) tải về `src/assets/fonts/InterVariable.woff2` + `@font-face` local, nên app chạy **offline**, không ping Google, không FOUT. Nhờ đó CSP siết tiếp về `font-src 'self'` và `style-src 'self' 'unsafe-inline'` (gỡ `fonts.googleapis.com`/`fonts.gstatic.com`). Font dùng chung cho cả mode tiếng Anh lẫn tiếng Việt như trước. Kèm `Inter-LICENSE.txt` (SIL OFL 1.1) theo yêu cầu license của font.
 

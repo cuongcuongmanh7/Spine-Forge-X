@@ -6,6 +6,17 @@ Source-of-truth tiến độ toàn dự án.
 
 ---
 
+## v0.3.6 — Chuyển CI/CD GitLab → GitHub Actions ✅ Done
+
+> Bump `0.3.5 → 0.3.6`; tag `v0.3.6`.
+
+**Bối cảnh:** repo đã dời từ GitLab sang GitHub. Quy trình release viết lại quanh GitHub Actions + `tauri-action` thay cho pipeline PowerShell thủ công của GitLab.
+
+- [x] **Workflow mới** (`.github/workflows/release.yml`): trigger `push` tag `v*.*.*`, runner `windows-latest`, dùng `tauri-apps/tauri-action` build NSIS → tạo Release → đính installer + `.sig` + `latest.json` (`includeUpdaterJson`). Release notes trích từ `CHANGELOG.md` qua bước PowerShell ghi ra `$GITHUB_OUTPUT` (UTF-8). Xoá `.gitlab-ci.yml`.
+- [x] **Đổi endpoint auto-updater** (`tauri.conf.json`) và `releasesUrl` (`src/config.ts`) sang GitHub Releases; `SECURITY.md` đổi kênh báo lỗ hổng sang GitHub issues.
+- [x] **README song ngữ**: tách thành hai phần English / Tiếng Việt + thêm mục Release & CI/CD.
+- [x] **Secrets GitHub**: `TAURI_SIGNING_PRIVATE_KEY` + `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` (đã thêm trên repo).
+
 ## v0.3.5 — Inter self-host + siết CSP (bỏ Google Fonts) ✅ Done
 
 > Bump `0.3.4 → 0.3.5`; tag `v0.3.5`.
@@ -25,7 +36,7 @@ Source-of-truth tiến độ toàn dự án.
 - [x] **Bật CSP** (`src-tauri/tauri.conf.json` `app.security.csp`): `default-src 'self'` + mở đúng nhu cầu (data/blob/asset cho thumbnail, unsafe-inline + Google Fonts cho font, ipc/asset.localhost cho IPC). Defense-in-depth cho các lệnh ghi/xoá file trên path tuỳ ý.
 - [x] **LICENSE (MIT)** + `license` field trong `package.json` & `Cargo.toml`.
 - [x] **SECURITY.md**: hướng dẫn báo lỗ hổng riêng qua email, supported versions, scope (loại trừ lỗi của Spine editor).
-- [ ] **Việc thủ công còn lại trước khi public**: xác nhận CI/CD Variables (`GITLAB_TOKEN`, key ký updater) là Masked + Protected; bật fork-pipeline approval để fork không lạm dụng Windows runner self-hosted; smoke-test bản cài (thumbnail `data:` + auto-updater) để chắc CSP không vỡ.
+- [ ] **Việc thủ công còn lại trước khi public**: thêm GitHub Actions secrets (`TAURI_SIGNING_PRIVATE_KEY`, `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`); smoke-test bản cài (thumbnail `data:` + auto-updater) để chắc CSP không vỡ. (Repo đã chuyển GitLab → GitHub, CI/CD chạy qua `tauri-action` trên `windows-latest`.)
 
 ## v0.2.27 — Fix excluded-file overlap + icon trùng per-file trong Input ✅ Done
 

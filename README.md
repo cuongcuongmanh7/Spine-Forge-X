@@ -1,5 +1,125 @@
 # SpineForge X
 
+**English** · [Tiếng Việt](#tiếng-việt)
+
+> Desktop tool for batch-exporting and version-upgrading Spine files — without breaking each project's own texture-atlas configuration.
+
+**SpineForge X** solves a specific problem: a studio has hundreds of `.spine` files that need upgrading from Spine 3.8.x to 4.3+ and re-exporting runtime data, but each project carries its own atlas-packing settings (min/max size, padding, packing…). Doing it by hand means opening every file, picking a version, choosing an export setting, and clicking export. SpineForge X automates the whole thing with realtime logs, parallel runs, output verification, and an error summary.
+
+Stack: **Tauri** (Rust backend + React/TypeScript frontend). Windows first, macOS later.
+
+---
+
+## Features
+
+- **Batch export** every `.spine` under a root folder via the Spine CLI, with a per-file timeout, output verification after exit 0, and a "X done / Y failed / Z skipped" summary.
+- **True parallel jobs** — run multiple Spine processes at once (Tokio semaphore + `JoinSet`), slider 1–8.
+- **Per-project export settings from `.spine`** — read the export settings stored inside each project file (atlas min/max, scale, padding, Rectangles/Polygons packing…) and override the base preset, no manual `.export.json` per file.
+- **Linked Project (Unity)** — route output straight into the Unity asset tree (`unityRoot/<Type>/<IdFolder>`), matching id by source folder name.
+- **Clean Source Folder** — scan and remove unused images (not referenced by the skeleton) when packing per folder; the used/unused list comes from the packed atlas, so it never mislabels images in a skin folder or renamed files.
+- **Background tray** + single instance — closing/minimizing hides to tray; reopening restores the exact hidden window.
+- **Region-based drag & drop** — drop a folder/file on the left half to set input, the right half to set output.
+- **Per-project dashboard**, **in-app changelog**, **auto-updater** with a "What's new" button.
+- **Unicode path workaround** — copy-to-temp-ASCII for paths with non-ASCII characters (a Spine CLI quirk).
+
+---
+
+## Requirements
+
+- [Node.js](https://nodejs.org/) 18+ and npm
+- [Rust](https://www.rust-lang.org/tools/install) (stable toolchain) + [Tauri v2 prerequisites](https://v2.tauri.app/start/prerequisites/)
+- **Spine editor** installed (needs `Spine.com` on Windows to run the CLI batch)
+
+---
+
+## Getting started
+
+```bash
+# Install frontend dependencies
+npm install
+
+# Run the app in dev mode (Vite + Tauri)
+npm run tauri dev
+```
+
+### Release build
+
+```bash
+npm run tauri build
+```
+
+> Note: `npm run tauri build` may **exit 1 at the updater-signing step** while the bundles (`.exe`/`.msi`) are still produced successfully — this is a known situation, check the `src-tauri/target/release/bundle/` folder.
+
+---
+
+## Development & testing
+
+```bash
+npm run dev          # frontend only (Vite)
+npm test             # frontend unit tests (Vitest + jsdom + RTL)
+npm run build        # file-size check + tsc + vite build
+npm run lint:size    # guard: block new files > 800 lines
+
+cd src-tauri
+cargo test           # backend unit + property tests (proptest)
+cargo clippy
+```
+
+The project follows a **keep files small** convention: `scripts/check-file-size.mjs` blocks files past the threshold; logic is split by domain (frontend hooks, separate Rust modules for `cleaner`, `presets`, `system`, `spine_project`, `tray`).
+
+---
+
+## Release & CI/CD
+
+Releases are published via **GitHub Actions**. Pushing a `v*.*.*` tag triggers [.github/workflows/release.yml](.github/workflows/release.yml), which uses `tauri-apps/tauri-action` on `windows-latest` to build the NSIS installer, create the GitHub Release, and attach the installer, `.sig`, and `latest.json` (consumed by the in-app auto-updater).
+
+```bash
+git tag -a v0.3.6 -m "v0.3.6"
+git push origin v0.3.6
+```
+
+Required repository secrets: `TAURI_SIGNING_PRIVATE_KEY` and `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`.
+
+---
+
+## Project structure
+
+```
+src/                    React/TypeScript frontend (domain hooks, components, i18n)
+src-tauri/              Rust backend
+  src/lib.rs            Command hub (Tauri commands)
+  src/spine_project.rs  .spine parser (raw deflate, varint zigzag) — reads export settings
+  src/cleaner.rs        Scan/remove unused images in the source folder
+  src/presets.rs        Export-preset management
+  src/tray.rs           System tray + single instance
+docs/                   Design doc, ROADMAP, research notes
+  ROADMAP.md            Source-of-truth for whole-project progress
+  SpineForge_Design_Doc.md
+export-sample/          Spine's official export sample script
+CHANGELOG.md            User-facing changelog (CI extracts per-version release notes)
+```
+
+---
+
+## `.spine` format (reference)
+
+A 3.8.x `.spine` file is **raw deflate**. Integers in the settings block are stored by Spine (libGDX `writeInt`) as **varint zigzag** — reading them as plain unsigned doubles the value. The decoder currently reads atlas min/max pack, scale, padding, the booleans, and packing (Rectangles/Polygons). Details: [docs/research-padding-not-decoded.md](docs/research-padding-not-decoded.md) and [docs/SpineForge_Design_Doc.md](docs/SpineForge_Design_Doc.md) §XI.
+
+> Reliability note: settings inside a `.spine` are accurate only **right after an export from the editor's Export window**. Exporting via script/preset/CLI does not write back to the file → values may be stale. Studios using a shared preset should pick the "use preset for all files" mode.
+
+---
+
+## Roadmap & versions
+
+Whole-project progress lives in [docs/ROADMAP.md](docs/ROADMAP.md); the user-facing change history (with the current version) is in [CHANGELOG.md](CHANGELOG.md).
+
+---
+---
+
+# Tiếng Việt
+
+[English](#spineforge-x) · **Tiếng Việt**
+
 > Công cụ desktop xuất hàng loạt (batch export) và nâng cấp phiên bản file Spine — không làm sai cấu hình texture atlas riêng của từng project.
 
 **SpineForge X** giải quyết bài toán: studio có hàng trăm file `.spine` cần nâng cấp từ Spine 3.8.x lên 4.3+ và export lại runtime data, nhưng mỗi project lại có settings pack atlas riêng (min/max size, padding, packing…). Làm thủ công thì phải mở từng file, chọn version, chọn export setting rồi bấm export. SpineForge X tự động hoá toàn bộ với log realtime, chạy song song, xác minh output và tổng kết lỗi.
@@ -64,6 +184,19 @@ cargo clippy
 ```
 
 Dự án có quy ước **giữ file nhỏ**: script `scripts/check-file-size.mjs` chặn file vượt ngưỡng; logic được tách theo domain (hook frontend, module Rust riêng cho `cleaner`, `presets`, `system`, `spine_project`, `tray`).
+
+---
+
+## Release & CI/CD
+
+Release được phát hành qua **GitHub Actions**. Push tag `v*.*.*` sẽ kích hoạt [.github/workflows/release.yml](.github/workflows/release.yml), dùng `tauri-apps/tauri-action` trên `windows-latest` để build installer NSIS, tạo GitHub Release, và đính kèm installer, `.sig`, `latest.json` (auto-updater trong app dùng file này).
+
+```bash
+git tag -a v0.3.6 -m "v0.3.6"
+git push origin v0.3.6
+```
+
+Secrets cần khai trên repo: `TAURI_SIGNING_PRIVATE_KEY` và `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`.
 
 ---
 

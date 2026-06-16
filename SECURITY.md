@@ -11,7 +11,7 @@ Only the latest released version of SpineForge X receives security fixes.
 
 ## Reporting a Vulnerability
 
-**Please do not report security vulnerabilities through public GitLab issues.**
+**Please do not report security vulnerabilities through public GitHub issues.**
 
 If you discover a security vulnerability in SpineForge X, report it privately by
 email to **cuongdm@ondigames.com**.
