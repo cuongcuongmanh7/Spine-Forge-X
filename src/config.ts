@@ -32,7 +32,10 @@ export const defaultAppConfig = {
   // instead of quitting. Synced to the Rust side, which enforces it.
   runInBackground: true,
   // Saved Unity links, reusable by any session via the `linkedProject` output policy.
-  linkedProjects: [] as LinkedProject[]
+  linkedProjects: [] as LinkedProject[],
+  // Asset Library warnings: an image folder or a .spine larger than these (in MB) is flagged.
+  libraryImageFolderWarnMB: 50,
+  librarySpineFileWarnMB: 10
 };
 
 export type AppConfig = typeof defaultAppConfig;
@@ -144,6 +147,42 @@ export type Project = {
   autoNamed: boolean;
   createdAt: number;
   updatedAt: number;
+};
+
+/**
+ * An imported master folder, scanned into an asset inventory. Separate from the export-oriented
+ * `Project` — a Library just records where the spine assets live so the dashboard can re-scan.
+ */
+export type Library = {
+  id: string;
+  name: string;
+  rootPath: string;
+  createdAt: number;
+  /** Epoch ms of the last successful scan; null until scanned once. */
+  lastScanAt: number | null;
+};
+
+/** One `.spine` asset in a library scan (mirrors the Rust `LibraryEntry`). */
+export type LibraryEntry = {
+  /** `.spine` path relative to the scanned root — drives folder/type grouping. */
+  relPath: string;
+  spineFile: string;
+  folder: string;
+  imagesDir: string;
+  spineBytes: number;
+  imageBytes: number;
+  imageCount: number;
+  /** Editor version (e.g. "3.8.99"); null when it couldn't be parsed. */
+  version: string | null;
+  error: string | null;
+};
+
+/** Result of scanning a master folder (mirrors the Rust `LibraryScan`). */
+export type LibraryScan = {
+  root: string;
+  entries: LibraryEntry[];
+  totalSpineBytes: number;
+  totalImageBytes: number;
 };
 
 export type Session = {

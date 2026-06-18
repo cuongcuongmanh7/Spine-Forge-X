@@ -275,3 +275,33 @@ pub(crate) struct CleanUnitInfo {
     /// The `.spine` path — used as the stable key and as the `excluded` token.
     pub(crate) spine_file: String,
 }
+
+/// One `.spine` in an asset-library scan: its location, sizes, image-folder
+/// footprint, and offline-parsed editor version. Warning evaluation and version
+/// grouping happen in the frontend (thresholds are UI-owned), so this stays raw.
+#[derive(Debug, Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct LibraryEntry {
+    /// `.spine` path relative to the scanned root (drives folder/type grouping).
+    pub(crate) rel_path: String,
+    pub(crate) spine_file: String,
+    /// The unit folder containing the `.spine`.
+    pub(crate) folder: String,
+    pub(crate) images_dir: String,
+    pub(crate) spine_bytes: u64,
+    pub(crate) image_bytes: u64,
+    pub(crate) image_count: usize,
+    /// Editor version (e.g. "3.8.99", "4.3.17"); `None` when it can't be parsed.
+    pub(crate) version: Option<String>,
+    pub(crate) error: Option<String>,
+}
+
+/// Result of scanning a master folder for `.spine` assets.
+#[derive(Debug, Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct LibraryScan {
+    pub(crate) root: String,
+    pub(crate) entries: Vec<LibraryEntry>,
+    pub(crate) total_spine_bytes: u64,
+    pub(crate) total_image_bytes: u64,
+}

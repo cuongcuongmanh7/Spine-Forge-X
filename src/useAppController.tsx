@@ -21,6 +21,7 @@ import { usePresets } from './usePresets';
 import { useSpineDetection } from './useSpineDetection';
 import { useLinkedProjects } from './useLinkedProjects';
 import { useWorkspace } from './useWorkspace';
+import { useLibrary } from './useLibrary';
 import { useScanInput } from './useScanInput';
 import { useExportEngine } from './useExportEngine';
 import type { Language, ThemeMode, Toast, ToastKind, ValidateResult } from './types';
@@ -131,6 +132,8 @@ export function useAppControllerValue() {
     newProject,
     renameProject,
     addSessionToProject,
+    createSessionFromLibrary,
+    createProjectFromLibrary,
     toggleProjectCollapsed,
     deleteProject
   } = useWorkspace({
@@ -148,6 +151,21 @@ export function useAppControllerValue() {
     runningIdRef,
     setSettingsOpen
   });
+
+  // Asset Library: import a master folder, scan into an inventory, browse stats/warnings.
+  const {
+    libraryOpen,
+    setLibraryOpen,
+    libraries,
+    activeLibrary,
+    activeLibraryId,
+    libraryScan,
+    isScanningLibrary,
+    importLibrary,
+    rescanLibrary,
+    selectLibrary,
+    deleteLibrary
+  } = useLibrary({ t, pushToast });
 
   const merged = useMemo<MergedConfig>(() => ({ ...appConfig, ...sessionConfig }), [appConfig, sessionConfig]);
 
@@ -474,6 +492,8 @@ export function useAppControllerValue() {
     renameProject,
     deleteProject,
     addSessionToProject,
+    createSessionFromLibrary,
+    createProjectFromLibrary,
     renamingProjectId,
     setRenamingProjectId,
     projectMenuOpenId,
@@ -512,6 +532,20 @@ export function useAppControllerValue() {
     setCleanSourceFolderOpen,
     dashboardOpen,
     setDashboardOpen,
+
+    // Asset Library
+    libraryOpen,
+    setLibraryOpen,
+    libraries,
+    activeLibrary,
+    activeLibraryId,
+    libraryScan,
+    isScanningLibrary,
+    importLibrary,
+    rescanLibrary,
+    selectLibrary,
+    deleteLibrary,
+
     isDragOver,
     dragPosition,
     outputDropEnabled,

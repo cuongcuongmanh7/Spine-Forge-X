@@ -420,6 +420,54 @@ export function useWorkspace({
     return session.id;
   }
 
+  /** Build a session pre-filled with explicit `.spine` files, skipping the setup wizard. */
+  function makeFilledSession(projectId: string, name: string, spineFiles: string[], inputPath: string): Session {
+    const base = createSession(t, sessions, projectId);
+    const trimmed = name.trim();
+    return {
+      ...base,
+      name: trimmed || base.name,
+      autoNamed: !trimmed,
+      wizardCompleted: true,
+      config: { ...base.config, inputPath, inputFiles: [...spineFiles] }
+    };
+  }
+
+  /** Create one export session in the target project from a library entry/group's spine files. */
+  function createSessionFromLibrary(name: string, spineFiles: string[], inputPath: string): string {
+    captureActiveRuntime();
+    const project = resolveTargetProject();
+    const session = makeFilledSession(project.id, name, spineFiles, inputPath);
+    runtimeByIdRef.current[session.id] = { ...emptyRuntime(), files: [...spineFiles] };
+    setSessions((list) => [session, ...list]);
+    setActiveProjectId(project.id);
+    setActiveSessionId(session.id);
+    loadRuntime(session);
+    return session.id;
+  }
+
+  /** Create a brand-new project from a whole library, one session per entry. */
+  function createProjectFromLibrary(
+    projectName: string,
+    items: { name: string; spineFiles: string[]; inputPath: string }[]
+  ): string {
+    captureActiveRuntime();
+    const base = createProject(t, projects);
+    const trimmed = projectName.trim();
+    const project = trimmed ? { ...base, name: trimmed, autoNamed: false } : base;
+    const created = items.map((item) => makeFilledSession(project.id, item.name, item.spineFiles, item.inputPath));
+    for (const s of created) runtimeByIdRef.current[s.id] = { ...emptyRuntime(), files: [...s.config.inputFiles] };
+    setProjects((list) => [project, ...list]);
+    setSessions((list) => [...created, ...list]);
+    setActiveProjectId(project.id);
+    const first = created[0];
+    if (first) {
+      setActiveSessionId(first.id);
+      loadRuntime(first);
+    }
+    return project.id;
+  }
+
   function toggleProjectCollapsed(id: string) {
     setCollapsedProjectIds((set) => {
       const next = new Set(set);
@@ -542,6 +590,8 @@ export function useWorkspace({
     newProject,
     renameProject,
     addSessionToProject,
+    createSessionFromLibrary,
+    createProjectFromLibrary,
     toggleProjectCollapsed,
     deleteProject
   };

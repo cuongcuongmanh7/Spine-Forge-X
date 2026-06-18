@@ -9,6 +9,7 @@ import {
   Pencil,
   Eraser,
   LayoutDashboard,
+  Library,
   Play,
   Plus,
   Settings,
@@ -336,7 +337,7 @@ function ProjectGroup({ project }: { project: Project }) {
 }
 
 export function Sidebar() {
-  const { t, projects, setProjectDialogOpen, setSettingsOpen, setCleanSourceFolderOpen, setDashboardOpen } = useApp();
+  const { t, projects, setProjectDialogOpen, setSettingsOpen, setCleanSourceFolderOpen, setDashboardOpen, setLibraryOpen } = useApp();
   const [width, setWidth] = useState(readSidebarWidth);
 
   useEffect(() => {
@@ -375,6 +376,10 @@ export function Sidebar() {
         )}
       </div>
       <div className="sidebar-footer">
+        <button className="sidebar-settings" onClick={() => setLibraryOpen(true)}>
+          <Library size={16} />
+          <span>{t.libraryFolder}</span>
+        </button>
         <button className="sidebar-settings" onClick={() => setDashboardOpen(true)}>
           <LayoutDashboard size={16} />
           <span>{t.dashboardFolder}</span>
