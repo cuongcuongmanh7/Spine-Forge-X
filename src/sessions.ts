@@ -3,6 +3,7 @@ import {
   defaultSessionConfig,
   type AppConfig,
   type Library,
+  type LibraryCleanState,
   type LibraryScan,
   type Project,
   type Session,
@@ -24,6 +25,7 @@ const KEYS = {
   libraries: 'spineforge.libraries',
   activeLibraryId: 'spineforge.activeLibraryId',
   libraryScanPrefix: 'spineforge.libraryScan.',
+  libraryCleanPrefix: 'spineforge.libraryClean.',
   viewMode: 'spineforge.viewMode'
 } as const;
 
@@ -510,6 +512,23 @@ export function persistLibraryScan(id: string, scan: LibraryScan) {
   localStorage.setItem(KEYS.libraryScanPrefix + id, JSON.stringify(scan));
 }
 
+export function loadLibraryCleanState(id: string): LibraryCleanState {
+  const stored = localStorage.getItem(KEYS.libraryCleanPrefix + id);
+  if (!stored) return {};
+  try {
+    const parsed = JSON.parse(stored) as unknown;
+    if (!parsed || typeof parsed !== 'object') return {};
+    return parsed as LibraryCleanState;
+  } catch {
+    return {};
+  }
+}
+
+export function persistLibraryCleanState(id: string, state: LibraryCleanState) {
+  localStorage.setItem(KEYS.libraryCleanPrefix + id, JSON.stringify(state));
+}
+
 export function clearLibraryScan(id: string) {
   localStorage.removeItem(KEYS.libraryScanPrefix + id);
+  localStorage.removeItem(KEYS.libraryCleanPrefix + id);
 }

@@ -1,17 +1,20 @@
 import { useEffect, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { confirm, open } from '@tauri-apps/plugin-dialog';
-import type { Library, LibraryScan } from './config';
+import type { Library, LibraryCleanState, LibraryEntry, LibraryScan } from './config';
 import type { Translations } from './i18n';
-import type { ToastKind } from './types';
+import type { FolderScan, ToastKind } from './types';
+import { cleanRecordForEntry, scanRecordForEntry } from './library';
 import {
   basename,
   clearLibraryScan,
   loadActiveLibraryId,
   loadLibraries,
+  loadLibraryCleanState,
   loadLibraryScan,
   makeId,
   persistActiveLibraryId,
+  persistLibraryCleanState,
   persistLibraries,
   persistLibraryScan
 } from './sessions';
@@ -37,6 +40,10 @@ export function useLibrary({ t, pushToast }: Options) {
     const id = loadActiveLibraryId();
     return id ? loadLibraryScan(id) : null;
   });
+  const [cleanState, setCleanState] = useState<LibraryCleanState>(() => {
+    const id = loadActiveLibraryId();
+    return id ? loadLibraryCleanState(id) : {};
+  });
   const [isScanning, setIsScanning] = useState(false);
 
   const activeLibrary = libraries.find((l) => l.id === activeLibraryId) ?? null;
@@ -52,9 +59,10 @@ export function useLibrary({ t, pushToast }: Options) {
   // Load the cached scan whenever the active library changes (e.g. switching libraries).
   useEffect(() => {
     setScan(activeLibraryId ? loadLibraryScan(activeLibraryId) : null);
+    setCleanState(activeLibraryId ? loadLibraryCleanState(activeLibraryId) : {});
   }, [activeLibraryId]);
 
-  async function runScan(library: Library) {
+  async function runScan(library: Library): Promise<LibraryScan | null> {
     setIsScanning(true);
     try {
       const result = await invoke<LibraryScan>('scan_library', { root: library.rootPath });
@@ -62,8 +70,10 @@ export function useLibrary({ t, pushToast }: Options) {
       setScan(result);
       setLibraries((list) => list.map((l) => (l.id === library.id ? { ...l, lastScanAt: Date.now() } : l)));
       pushToast(t.libraryScanDone.replace('{count}', String(result.entries.length)), 'success');
+      return result;
     } catch (error) {
       pushToast(`${t.libraryScanFailed}: ${String(error)}`, 'error');
+      return null;
     } finally {
       setIsScanning(false);
     }
@@ -93,7 +103,39 @@ export function useLibrary({ t, pushToast }: Options) {
   }
 
   async function rescan() {
-    if (activeLibrary) await runScan(activeLibrary);
+    if (activeLibrary) return runScan(activeLibrary);
+    return null;
+  }
+
+  function markLibraryEntriesClean(spineFiles: string[], sourceEntries: LibraryEntry[] = scan?.entries ?? []) {
+    if (!activeLibraryId || spineFiles.length === 0) return;
+    const selected = new Set(spineFiles);
+    const cleanedAt = Date.now();
+    setCleanState((current) => {
+      const next: LibraryCleanState = { ...current };
+      for (const entry of sourceEntries) {
+        if (selected.has(entry.spineFile)) {
+          next[entry.spineFile] = cleanRecordForEntry(entry, cleanedAt);
+        }
+      }
+      persistLibraryCleanState(activeLibraryId, next);
+      return next;
+    });
+  }
+
+  function markLibraryEntriesScanned(units: FolderScan[], sourceEntries: LibraryEntry[] = scan?.entries ?? []) {
+    if (!activeLibraryId || units.length === 0) return;
+    const entriesBySpine = new Map(sourceEntries.map((entry) => [entry.spineFile, entry]));
+    const scannedAt = Date.now();
+    setCleanState((current) => {
+      const next: LibraryCleanState = { ...current };
+      for (const unit of units) {
+        const entry = entriesBySpine.get(unit.spineFile);
+        if (entry) next[unit.spineFile] = scanRecordForEntry(entry, unit.unused.length, unit.unusedBytes, scannedAt);
+      }
+      persistLibraryCleanState(activeLibraryId, next);
+      return next;
+    });
   }
 
   function selectLibrary(id: string) {
@@ -124,9 +166,12 @@ export function useLibrary({ t, pushToast }: Options) {
     activeLibrary,
     activeLibraryId,
     libraryScan: scan,
+    libraryCleanState: cleanState,
     isScanningLibrary: isScanning,
     importLibrary,
     rescanLibrary: rescan,
+    markLibraryEntriesClean,
+    markLibraryEntriesScanned,
     selectLibrary,
     deleteLibrary
   };

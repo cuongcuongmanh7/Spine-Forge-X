@@ -10,6 +10,7 @@ import { LibraryClean } from './LibraryClean';
 import './LibraryView.css';
 
 type Tab = 'inventory' | 'clean' | 'coverage';
+type CleanScopeRequest = { id: number; spineFiles: string[] };
 
 /** Asset Library main view: master-folder list (left) + tabbed inventory/clean (right). */
 export function LibraryView() {
@@ -27,9 +28,15 @@ export function LibraryView() {
   } = useApp();
 
   const [tab, setTab] = useState<Tab>('inventory');
+  const [cleanScopeRequest, setCleanScopeRequest] = useState<CleanScopeRequest | null>(null);
   const { width, setWidth, startResize } = useSidebarWidth();
   const filter = useLibraryFilter();
   const entries = libraryScan?.entries ?? [];
+
+  function prepareCleanScan(spineFiles: string[]) {
+    setCleanScopeRequest({ id: Date.now(), spineFiles });
+    setTab('clean');
+  }
 
   return (
     <div className="library-view">
@@ -138,10 +145,10 @@ export function LibraryView() {
             <div className="library-panel">
               {/* Both panes stay mounted so Inventory filters + Clean scan survive a tab switch. */}
               <div className="library-tabpane" style={{ display: tab === 'inventory' ? 'block' : 'none' }}>
-                <LibraryInventory filter={filter} />
+                <LibraryInventory filter={filter} onPrepareCleanScan={prepareCleanScan} />
               </div>
               <div className="library-tabpane" style={{ display: tab === 'clean' ? 'block' : 'none' }}>
-                <LibraryClean filter={filter} />
+                <LibraryClean filter={filter} scopeRequest={cleanScopeRequest} />
               </div>
             </div>
           </>

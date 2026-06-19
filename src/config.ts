@@ -192,6 +192,22 @@ export type LibraryScan = {
   totalImageBytes: number;
 };
 
+/** Persistent "clean still valid" marker for one library entry. */
+export type LibraryCleanRecord = {
+  spineFile: string;
+  scannedAt: number;
+  cleanedAt?: number;
+  unusedCount: number;
+  unusedBytes: number;
+  spineBytes: number;
+  imageBytes: number;
+  imageCount: number;
+  version: string | null;
+  exported: boolean;
+};
+
+export type LibraryCleanState = Record<string, LibraryCleanRecord>;
+
 export type Session = {
   id: string;
   /** Every session belongs to exactly one project. */

@@ -1,4 +1,4 @@
-import type { LibraryEntry } from './config';
+import type { LibraryCleanRecord, LibraryEntry } from './config';
 
 /** Warning thresholds (in MB) sourced from AppConfig. */
 export type LibraryThresholds = {
@@ -38,6 +38,60 @@ export function entryWarnings(entry: LibraryEntry, thresholds: LibraryThresholds
 export function hasAnyWarning(entry: LibraryEntry, thresholds: LibraryThresholds): boolean {
   const w = entryWarnings(entry, thresholds);
   return w.heavyImages || w.heavySpine;
+}
+
+export function cleanRecordForEntry(entry: LibraryEntry, cleanedAt = Date.now()): LibraryCleanRecord {
+  return {
+    spineFile: entry.spineFile,
+    scannedAt: cleanedAt,
+    cleanedAt,
+    unusedCount: 0,
+    unusedBytes: 0,
+    spineBytes: entry.spineBytes,
+    imageBytes: entry.imageBytes,
+    imageCount: entry.imageCount,
+    version: entry.version,
+    exported: entry.exported
+  };
+}
+
+export function scanRecordForEntry(
+  entry: LibraryEntry,
+  unusedCount: number,
+  unusedBytes: number,
+  scannedAt = Date.now()
+): LibraryCleanRecord {
+  return {
+    spineFile: entry.spineFile,
+    scannedAt,
+    unusedCount,
+    unusedBytes,
+    spineBytes: entry.spineBytes,
+    imageBytes: entry.imageBytes,
+    imageCount: entry.imageCount,
+    version: entry.version,
+    exported: entry.exported
+  };
+}
+
+export function isCleanRecordCurrent(entry: LibraryEntry, record: LibraryCleanRecord | undefined): boolean {
+  return (
+    !!record &&
+    record.spineFile === entry.spineFile &&
+    record.spineBytes === entry.spineBytes &&
+    record.imageBytes === entry.imageBytes &&
+    record.imageCount === entry.imageCount &&
+    record.version === entry.version &&
+    record.exported === entry.exported
+  );
+}
+
+export type LibraryCleanStatus = 'clean' | 'warning' | 'unknown';
+
+export function cleanStatusForEntry(entry: LibraryEntry, record: LibraryCleanRecord | undefined): LibraryCleanStatus {
+  if (!record) return 'unknown';
+  if (!isCleanRecordCurrent(entry, record)) return 'warning';
+  return record.unusedCount === 0 ? 'clean' : 'warning';
 }
 
 /** A group is "version-mixed" when its entries span more than one major.minor version. */

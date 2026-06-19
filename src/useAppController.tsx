@@ -172,9 +172,12 @@ export function useAppControllerValue() {
     activeLibrary,
     activeLibraryId,
     libraryScan,
+    libraryCleanState,
     isScanningLibrary,
     importLibrary,
     rescanLibrary,
+    markLibraryEntriesClean,
+    markLibraryEntriesScanned,
     selectLibrary,
     deleteLibrary
   } = useLibrary({ t, pushToast });
@@ -552,9 +555,12 @@ export function useAppControllerValue() {
     activeLibrary,
     activeLibraryId,
     libraryScan,
+    libraryCleanState,
     isScanningLibrary,
     importLibrary,
     rescanLibrary,
+    markLibraryEntriesClean,
+    markLibraryEntriesScanned,
     selectLibrary,
     deleteLibrary,
 

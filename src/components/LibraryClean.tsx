@@ -3,9 +3,11 @@ import { invoke } from '@tauri-apps/api/core';
 import { ChevronDown, ChevronRight, Eraser, RotateCw } from 'lucide-react';
 import { useApp } from '../useAppController';
 import { formatBytes } from '../time';
-import { entryMatchesFilter, selectionSummary } from '../library';
+import { entryMatchesFilter, groupByFolder, groupByIdBand, selectionSummary } from '../library';
 import type { LibraryFilterApi } from '../useLibraryFilter';
 import type { BatchScanSummary, FolderScan, ImageEntry } from '../types';
+
+type CleanScopeRequest = { id: number; spineFiles: string[] } | null;
 
 /** Load `paths` to data URLs with a small concurrency cap; reports each result as it lands. */
 async function loadThumbs(
@@ -51,7 +53,7 @@ function Thumb({ entry, url }: { entry: ImageEntry; url: string | null | undefin
  * button re-scans via Spine CLI for a fresh atlas. Per-unit checkboxes pick what to move.
  * Scope follows the shared chip/search filter.
  */
-export function LibraryClean({ filter }: { filter: LibraryFilterApi }) {
+export function LibraryClean({ filter, scopeRequest }: { filter: LibraryFilterApi; scopeRequest: CleanScopeRequest }) {
   const {
     t,
     activeLibrary,
@@ -60,12 +62,17 @@ export function LibraryClean({ filter }: { filter: LibraryFilterApi }) {
     scanSourceFolders,
     cleanScanSummary,
     setCleanScanSummary,
+    rescanLibrary,
+    markLibraryEntriesClean,
+    markLibraryEntriesScanned,
     readImageDataUrl,
     pushToast
   } = useApp();
 
   const [working, setWorking] = useState(false);
   const [checked, setChecked] = useState<Set<string>>(new Set());
+  const [scanChecked, setScanChecked] = useState<Set<string>>(new Set());
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
   // Which unit's unused-image thumbnails are expanded, keyed by .spine path.
   const [expanded, setExpanded] = useState<string | null>(null);
   // Thumbnail cache keyed by absolute path — kept across expand/collapse.
@@ -79,8 +86,12 @@ export function LibraryClean({ filter }: { filter: LibraryFilterApi }) {
     () => entries.filter((e) => entryMatchesFilter(e, { facet, selectedCats, selectedVersions, query })),
     [entries, facet, selectedCats, selectedVersions, query]
   );
+  const includedKeys = useMemo(() => included.map((e) => e.spineFile).join('\n'), [included]);
+  const scanGroups = useMemo(() => (facet === 'id' ? groupByIdBand(included) : groupByFolder(included)), [facet, included]);
   const summaryText = selectionSummary({ facet, selectedCats, selectedVersions, query });
   const scopeAll = included.length === entries.length;
+  const selectedScanEntries = included.filter((e) => scanChecked.has(e.spineFile));
+  const scanAllChecked = included.length > 0 && included.every((e) => scanChecked.has(e.spineFile));
 
   // Units with unused images (or an error worth surfacing), keyed by .spine path.
   const units = cleanScanSummary?.units.filter((u) => u.unused.length > 0 || u.error) ?? [];
@@ -93,14 +104,50 @@ export function LibraryClean({ filter }: { filter: LibraryFilterApi }) {
     setChecked(new Set(result.units.filter((u) => u.unused.length > 0 && !u.error).map((u) => u.spineFile)));
   }
 
-  async function scanOffline() {
+  function toggleScanEntry(spineFile: string) {
+    setScanChecked((prev) => {
+      const next = new Set(prev);
+      if (next.has(spineFile)) next.delete(spineFile);
+      else next.add(spineFile);
+      return next;
+    });
+  }
+
+  function toggleScanGroup(groupEntries: typeof included) {
+    setScanChecked((prev) => {
+      const next = new Set(prev);
+      const allInGroup = groupEntries.every((e) => next.has(e.spineFile));
+      for (const entry of groupEntries) {
+        if (allInGroup) next.delete(entry.spineFile);
+        else next.add(entry.spineFile);
+      }
+      return next;
+    });
+  }
+
+  function toggleScanAll() {
+    setScanChecked(scanAllChecked ? new Set() : new Set(included.map((e) => e.spineFile)));
+  }
+
+  function toggleGroupCollapsed(key: string) {
+    setCollapsedGroups((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  }
+
+  async function scanOffline(sourceEntries = libraryScan?.entries) {
+    if (selectedScanEntries.length === 0) return;
     setWorking(true);
     try {
       const result = await invoke<BatchScanSummary>('scan_library_unused', {
         root,
-        selected: included.map((e) => e.spineFile)
+        selected: selectedScanEntries.map((e) => e.spineFile)
       });
       applySummary(result);
+      markLibraryEntriesScanned(result.units, sourceEntries);
     } catch (error) {
       pushToast(`${t.cleanSourceFailed}: ${String(error)}`, 'error');
     } finally {
@@ -108,12 +155,15 @@ export function LibraryClean({ filter }: { filter: LibraryFilterApi }) {
     }
   }
 
-  async function scanCli() {
+  async function scanCli(sourceEntries = libraryScan?.entries) {
+    if (selectedScanEntries.length === 0) return;
     setWorking(true);
     try {
-      const excluded = entries.filter((e) => !included.includes(e)).map((e) => e.spineFile);
+      const selected = new Set(selectedScanEntries.map((e) => e.spineFile));
+      const excluded = entries.filter((e) => !selected.has(e.spineFile)).map((e) => e.spineFile);
       const result = await scanSourceFolders(root, excluded);
       applySummary(result);
+      if (result) markLibraryEntriesScanned(result.units, sourceEntries);
     } finally {
       setWorking(false);
     }
@@ -137,23 +187,41 @@ export function LibraryClean({ filter }: { filter: LibraryFilterApi }) {
     if (selectedUnits.length === 0) return;
     setWorking(true);
     let moved = 0;
+    const cleanedSpineFiles: string[] = [];
     try {
       for (const u of selectedUnits) {
         try {
           await invoke<string>('move_unused_images', { imagesDir: u.imagesDir, files: u.unused.map((i) => i.absolutePath) });
           moved += u.unused.length;
+          cleanedSpineFiles.push(u.spineFile);
         } catch (error) {
           pushToast(`${t.cleanSourceFailed}: ${String(error)}`, 'error');
         }
       }
       pushToast(t.cleanSourceDone.replace('{count}', String(moved)), 'success');
-      await scanOffline();
+      const refreshed = await rescanLibrary();
+      if (cleanedSpineFiles.length > 0) markLibraryEntriesClean(cleanedSpineFiles, refreshed?.entries);
+      await scanOffline(refreshed?.entries);
     } finally {
       setWorking(false);
     }
   }
 
   const noSpine = !merged.spinePath.trim();
+
+  useEffect(() => {
+    setScanChecked((prev) => {
+      const includedSet = new Set(included.map((e) => e.spineFile));
+      if (prev.size === 0) return new Set(included.map((e) => e.spineFile));
+      return new Set([...prev].filter((spineFile) => includedSet.has(spineFile)));
+    });
+  }, [includedKeys, included]);
+
+  useEffect(() => {
+    if (!scopeRequest) return;
+    const includedSet = new Set(included.map((e) => e.spineFile));
+    setScanChecked(new Set(scopeRequest.spineFiles.filter((spineFile) => includedSet.has(spineFile))));
+  }, [scopeRequest, included]);
 
   function toggleExpand(unit: FolderScan) {
     setExpanded((cur) => (cur === unit.spineFile ? null : unit.spineFile));
@@ -183,25 +251,77 @@ export function LibraryClean({ filter }: { filter: LibraryFilterApi }) {
   return (
     <div className="library-pane">
       <div className="library-pane-head">
-        <div className="library-meta">
+        <div className="library-clean-toolbar">
           <span className="muted" title={root}>
             {root}
           </span>
           <span className="library-tabbar-actions">
-            <button className="primary-button" onClick={() => void scanOffline()} disabled={working || included.length === 0}>
+            <button className="primary-button" onClick={() => void scanOffline()} disabled={working || selectedScanEntries.length === 0}>
               <RotateCw size={15} className={working ? 'spin' : undefined} /> {t.cleanSourceScan}
             </button>
-            <button className="secondary-button" onClick={() => void scanCli()} disabled={working || noSpine || included.length === 0} title={t.libraryCleanCliHint}>
+            <button className="secondary-button" onClick={() => void scanCli()} disabled={working || noSpine || selectedScanEntries.length === 0} title={t.libraryCleanCliHint}>
               {t.libraryCleanCli}
             </button>
           </span>
         </div>
-        <p className="helper-text">
-          {t.libraryCleanScope.replace('{n}', String(included.length)).replace('{total}', String(entries.length))}
+        <p className="helper-text library-clean-scope">
+          {t.libraryCleanScope.replace('{n}', String(selectedScanEntries.length)).replace('{total}', String(entries.length))}
           {scopeAll ? ` (${t.libraryScopeAll})` : summaryText ? ` — ${summaryText}` : ''}
           {' · '}
           {t.libraryCleanOfflineNote}
         </p>
+        {included.length > 0 && (
+          <div className="library-scan-picker">
+            <div className="library-scan-picker-head">
+              <span className="library-chip-label">{t.cleanSourcePickFolders}</span>
+              <button className="ghost-button small" onClick={toggleScanAll} disabled={working}>
+                {scanAllChecked ? t.cleanSourceSelectNone : t.cleanSourceSelectAll}
+              </button>
+            </div>
+            <div className="library-scan-groups">
+              {scanGroups.map((group) => {
+                const isCollapsed = collapsedGroups.has(group.key);
+                const groupChecked = group.entries.every((e) => scanChecked.has(e.spineFile));
+                const groupIndeterminate = !groupChecked && group.entries.some((e) => scanChecked.has(e.spineFile));
+                return (
+                  <div className="library-scan-group" key={group.key}>
+                    <div className="library-scan-group-head">
+                      <input
+                        type="checkbox"
+                        checked={groupChecked}
+                        ref={(node) => {
+                          if (node) node.indeterminate = groupIndeterminate;
+                        }}
+                        onChange={() => toggleScanGroup(group.entries)}
+                        disabled={working}
+                        aria-label={`${t.cleanSourcePickFolders}: ${group.key}`}
+                      />
+                      <button className="library-group-toggle" onClick={() => toggleGroupCollapsed(group.key)} aria-expanded={!isCollapsed}>
+                        {isCollapsed ? <ChevronRight size={15} /> : <ChevronDown size={15} />}
+                        {group.key} <span className="muted">({group.entries.length})</span>
+                      </button>
+                    </div>
+                    {!isCollapsed && (
+                      <div className="library-scan-unit-list">
+                        {group.entries.map((entry) => (
+                          <label className="library-scan-unit" key={entry.spineFile} title={entry.spineFile}>
+                            <input
+                              type="checkbox"
+                              checked={scanChecked.has(entry.spineFile)}
+                              onChange={() => toggleScanEntry(entry.spineFile)}
+                              disabled={working}
+                            />
+                            <span>{entry.relPath}</span>
+                          </label>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
         {cleanScanSummary && (
           <div className="library-stats">
             <div className={`library-stat ${cleanScanSummary.totalUnused > 0 ? 'warn' : ''}`}>
