@@ -6,6 +6,20 @@ Source-of-truth tiến độ toàn dự án.
 
 ---
 
+## Unreleased — Spine Hub: Sync (Tier A) + binary preset + Library polish 🚧
+
+> Nhánh `feat/sync-profile` (đã merge vào `main`, **chưa tag release**). Bối cảnh: Library tab đang lớn thành "Spine Hub" — quản lý source spine dùng chung; animator làm xen kẽ công ty/nhà qua Google Drive. Plan 3 tầng A/B/C, đợt này làm Tier A.
+
+- [x] **Sync Tier A (file-based)** — mirror project/session/config vào `spineforge-profile.json` trong gốc Google Drive chung; token `${SPINE_ROOT}` + rebase per-máy. `src/sync.ts` (logic thuần) + `src/useSync.ts` (reconcile newer-wins, debounce, auto-detect) wire trong `useAppController`. Backend `system::read_text_file` + `detect_drive_root`. Chi tiết: [sync.md](sync.md).
+- [x] **Gộp folder + Spine root thành một gốc Drive**, toggle **mặc định ON**, **tự dò** `<ổ>:\Shared drives` (cảnh báo nếu fail). Setting cũ migrate sang `root` mới.
+- [x] **Status dot** global (titlebar) xám/vàng/xanh/đỏ + Settings ▸ Sync (layout riêng). Guard chống máy mới đè dữ liệu rỗng + fix dot kẹt "pending" (ổn định identity callback).
+- [x] **Base preset mặc định binary+pack** (`defaultExportPreset`).
+- [x] **Fix Library header bị dòng cuộn đè** (`border-collapse: separate`); group-row sticky tầng dưới header.
+- [x] Verify: `tsc` + `npm test` (47) + `cargo check` + `npm run build` xanh.
+- [ ] **Tier B — Google Drive API** (owner email / lịch sử / version): cần OAuth + reqwest + secure token + CSP. **3 quyết định chốt trước**: OAuth client embedded vs user-nhập · token keyring vs stronghold · read-only vs restore-version.
+- [ ] **Tier C — Spine Hub roadmap**: tags/ownership, used-by-projects, search anim/skin, version-mix panel, preview thumbnail.
+- [ ] (Tạm hoãn) **Multi-root mapping** — khi source trải nhiều mount khác hẳn nhau; hiện dùng cha chung `G:\Shared drives` là đủ.
+
 ## v0.3.6 — Chuyển CI/CD GitLab → GitHub Actions ✅ Done
 
 > Bump `0.3.5 → 0.3.6`; tag `v0.3.6`.
