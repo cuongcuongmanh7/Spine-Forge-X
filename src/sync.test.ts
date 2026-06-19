@@ -1,6 +1,21 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { defaultAppConfig, defaultSessionConfig, type Library, type Project, type Session } from './config';
-import { applyProfile, buildProfile, resolvePath, sameProfileBody, tokenizePath, type SyncData } from './sync';
+import { applyProfile, buildProfile, deriveAnchor, resolvePath, sameProfileBody, tokenizePath, type SyncData } from './sync';
+
+describe('deriveAnchor', () => {
+  it('anchors at the Shared drives mount when the folder is inside one', () => {
+    expect(deriveAnchor('G:\\Shared drives\\FD')).toBe('G:\\Shared drives');
+    expect(deriveAnchor('G:\\Shared drives\\FD\\[FD] Animation')).toBe('G:\\Shared drives');
+  });
+
+  it('returns the mount itself unchanged', () => {
+    expect(deriveAnchor('G:\\Shared drives')).toBe('G:\\Shared drives');
+  });
+
+  it('falls back to the folder when not under a Shared drives mount', () => {
+    expect(deriveAnchor('D:\\Local\\Spine')).toBe('D:\\Local\\Spine');
+  });
+});
 
 describe('tokenizePath / resolvePath', () => {
   const root = 'G:\\GDrive\\Spine';

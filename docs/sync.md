@@ -10,16 +10,17 @@
 
 | Khái niệm | Ý nghĩa |
 |-----------|---------|
-| **Google Drive root (gốc chung)** | Một thư mục duy nhất, VỪA là nơi lưu file profile, VỪA là gốc quy đổi đường dẫn. Chọn **cha chung** chứa mọi project — vd `G:\Shared drives` — chứ không phải folder của một project. |
-| **Profile file** | `spineforge-profile.json` nằm trong gốc chung; chứa appConfig (trừ `spinePath`), projects, sessions, libraries. Có bản backup `spineforge-profile.bak.json`. |
-| **`${SPINE_ROOT}` token** | Mọi path nằm dưới gốc chung được lưu dạng `${SPINE_ROOT}/...`; khi load ở máy khác, token được thay bằng gốc chung của máy đó. |
+| **Google Drive folder** | Thư mục **ghi được** để đặt file profile — chọn **bên trong một shared drive** (vd `G:\Shared drives\FD`). ⚠️ KHÔNG chọn cấp ảo `G:\Shared drives` vì Google Drive for desktop **không cho ghi file** ở cấp đó (chỉ ghi được bên trong từng shared drive). |
+| **Rebase anchor (tự suy ra)** | Gốc quy đổi đường dẫn, **tự suy** từ folder đã chọn: nếu folder nằm dưới một mount `…\Shared drives` thì anchor = chính mount đó (`G:\Shared drives`) — nhờ vậy project ở các drive khác (FD/DH) đều portable; ngược lại anchor = folder đã chọn. |
+| **Profile file** | `spineforge-profile.json` nằm trong folder đã chọn; chứa appConfig (trừ `spinePath`), projects, sessions, libraries. Có bản backup `spineforge-profile.bak.json`. |
+| **`${SPINE_ROOT}` token** | Mọi path nằm dưới rebase anchor được lưu dạng `${SPINE_ROOT}/...`; khi load ở máy khác, token được thay bằng anchor của máy đó. |
 
 **Không bao giờ đồng bộ** (machine-local, lưu riêng mỗi máy): đường dẫn Spine.exe (`spinePath`), bản thân vị trí gốc Drive, theme/ngôn ngữ.
 
 ## 2. Cách dùng
 
 1. Settings ▸ **Sync (Google Drive)**. Toggle **mặc định bật**.
-2. **Google Drive root**: lần đầu app **tự dò** `<ổ>:\Shared drives` (Google Drive for desktop mount mọi Shared drive ở đây). Dò được → tự điền; không được → cảnh báo, chọn thủ công.
+2. **Google Drive folder**: lần đầu app **tự dò** shared drive **ghi được** đầu tiên (vd `G:\Shared drives\FD`) và điền sẵn. Không dò được → cảnh báo, chọn thủ công một folder bên trong shared drive.
 3. Tạo/sửa project, session… → app **debounce ~1.5s** rồi ghi vào profile. Status dot trên titlebar: **xám** = tắt/chưa cấu hình · **vàng** = chưa lưu/đang ghi · **xanh** = đã đồng bộ · **đỏ** = lỗi.
 4. Máy thứ hai: bật sync + đặt gốc Drive = `<ổ>:\Shared drives` của máy đó → app đọc profile, rebase path, **reload một lần** để hiện đủ workspace.
 
