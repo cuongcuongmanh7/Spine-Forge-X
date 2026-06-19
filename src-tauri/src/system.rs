@@ -24,6 +24,18 @@ pub(crate) fn write_text_file(path: String, content: String) -> Result<(), Strin
     fs::write(&target, content).str_err()
 }
 
+/// Read a UTF-8 text file, returning `None` when it doesn't exist (vs `Err` on a real
+/// read failure). Used by the sync layer to load the profile file from a Google Drive
+/// folder without treating "not synced yet" as an error.
+#[tauri::command]
+pub(crate) fn read_text_file(path: String) -> Result<Option<String>, String> {
+    let target = parse_quoted_path(&path);
+    if !target.exists() {
+        return Ok(None);
+    }
+    fs::read_to_string(&target).map(Some).str_err()
+}
+
 /// Read an image file and return it as a base64 data URL, for thumbnail display
 /// in the webview (used by the Clean Source Folder detail view). Size-capped so
 /// a stray huge file can't blow up the UI.

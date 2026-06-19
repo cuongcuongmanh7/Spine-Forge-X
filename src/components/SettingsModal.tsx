@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { AlertTriangle, RotateCw, Search, X } from 'lucide-react';
+import { AlertTriangle, FolderOpen, RotateCw, Search, X } from 'lucide-react';
 import { Section, FieldStatus, Hint } from './common';
 import { useApp } from '../useAppController';
 
@@ -16,8 +16,29 @@ export function SettingsModal() {
     maxMemoryValid,
     isAutoDetecting,
     autoDetectSpine,
-    setSettingsOpen
+    setSettingsOpen,
+    syncEnabled,
+    syncFolder,
+    syncSpineRoot,
+    syncLastSyncedAt,
+    syncStatus,
+    syncNeedsSpineRoot,
+    setSyncEnabled,
+    chooseSyncFolder,
+    chooseSpineRoot,
+    syncNow
   } = useApp();
+
+  const syncStatusLabel =
+    syncStatus === 'synced'
+      ? t.syncStatusSynced
+      : syncStatus === 'pending'
+        ? t.syncStatusPending
+        : syncStatus === 'syncing'
+          ? t.syncStatusSyncing
+          : syncStatus === 'error'
+            ? t.syncStatusError
+            : t.syncStatusIdle;
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -66,6 +87,55 @@ export function SettingsModal() {
               {t.runInBackground}
               <Hint text={t.runInBackgroundHelp} />
             </label>
+          </Section>
+
+          <Section title={t.syncTitle} defaultOpen={false}>
+            <label className="checkbox-line">
+              <input type="checkbox" checked={syncEnabled} onChange={(event) => setSyncEnabled(event.target.checked)} />
+              {t.syncEnable}
+              <Hint text={t.syncEnableHelp} />
+            </label>
+            {syncEnabled && (
+              <>
+                <div className="form-row">
+                  <label>{t.syncFolder}</label>
+                  <input value={syncFolder} readOnly placeholder={t.syncFolderPlaceholder} />
+                  <button className="icon-button" title={t.syncChooseFolder} aria-label={t.syncChooseFolder} onClick={() => void chooseSyncFolder()}>
+                    <FolderOpen size={18} />
+                  </button>
+                </div>
+                <div className="form-row">
+                  <label>
+                    {t.syncSpineRoot}
+                    <Hint text={t.syncSpineRootHelp} />
+                  </label>
+                  <input value={syncSpineRoot} readOnly placeholder={t.syncSpineRootPlaceholder} />
+                  <button className="icon-button" title={t.syncChooseSpineRoot} aria-label={t.syncChooseSpineRoot} onClick={() => void chooseSpineRoot()}>
+                    <FolderOpen size={18} />
+                  </button>
+                </div>
+                {syncNeedsSpineRoot && (
+                  <div className="notice warning">
+                    <AlertTriangle size={18} />
+                    <span>{t.syncNeedsSpineRoot}</span>
+                  </div>
+                )}
+                <div className="header-controls settings-controls">
+                  <span className={`muted sync-status-text status-${syncStatus}`}>
+                    {syncStatusLabel}
+                    {syncLastSyncedAt && syncStatus !== 'error' ? ` · ${t.syncLastSynced}: ${new Date(syncLastSyncedAt).toLocaleString()}` : ''}
+                  </span>
+                  <button
+                    className="secondary-button small"
+                    disabled={!syncFolder || !syncSpineRoot || syncStatus === 'syncing'}
+                    onClick={() => syncNow()}
+                  >
+                    <RotateCw className={syncStatus === 'syncing' ? 'spin' : undefined} size={15} />
+                    {t.syncNow}
+                  </button>
+                </div>
+              </>
+            )}
           </Section>
 
           <Section title={t.executable}>
