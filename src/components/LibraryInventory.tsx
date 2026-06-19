@@ -10,13 +10,15 @@ import {
   ChevronsUpDown,
   FolderOpen,
   FolderPlus,
+  History,
   Images,
   Layers,
   ListChecks,
   Circle,
   RotateCw,
   Search,
-  Tag
+  Tag,
+  User
 } from 'lucide-react';
 import { useApp } from '../useAppController';
 import { SpineFileIcon } from './SpineFileIcon';
@@ -24,6 +26,7 @@ import { StatCard } from './StatCard';
 import { basename } from '../sessions';
 import { formatBytes } from '../time';
 import type { LibraryEntry } from '../config';
+import { fetchDriveFileMetadata, toDriveRelPath, type DriveFileInfo } from '../drive';
 import {
   entryMatchesFilter,
   entryWarnings,
@@ -71,12 +74,20 @@ export function LibraryInventory({
     createSessionFromLibrary,
     createProjectFromLibrary,
     setViewMode,
-    pushToast
+    pushToast,
+    driveAccount,
+    syncRoot,
+    setSettingsOpen
   } = useApp();
 
   const { facet, selectedCats, selectedVersions, query } = filter;
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [expandedAnims, setExpandedAnims] = useState<Set<string>>(new Set());
+  const [expandedInfo, setExpandedInfo] = useState<Set<string>>(new Set());
+  // Lazily-fetched Drive metadata, keyed by `.spine` path; held here (not persisted, not on scan).
+  const [driveInfo, setDriveInfo] = useState<
+    Record<string, { loading?: boolean; error?: string; notOnDrive?: boolean; data?: DriveFileInfo }>
+  >({});
   const [sort, setSort] = useState<SortState>({ key: 'entry', direction: 'asc' });
 
   const thresholds: LibraryThresholds = {
@@ -173,6 +184,29 @@ export function LibraryInventory({
     } catch (error) {
       pushToast(`${t.libraryOpenFolderFailed}: ${String(error)}`, 'error');
     }
+  }
+
+  // Toggle the Drive metadata panel for a row, fetching owner/history on first open.
+  function toggleDriveInfo(entry: LibraryEntry) {
+    const key = entry.spineFile;
+    const willOpen = !expandedInfo.has(key);
+    toggleSet(setExpandedInfo, key);
+    if (!willOpen || driveInfo[key]?.data || driveInfo[key]?.loading) return;
+
+    if (!driveAccount) {
+      pushToast(t.driveSignInPrompt, 'warning');
+      setSettingsOpen(true);
+      return;
+    }
+    const relPath = toDriveRelPath(entry.spineFile, syncRoot);
+    if (!relPath) {
+      setDriveInfo((prev) => ({ ...prev, [key]: { notOnDrive: true } }));
+      return;
+    }
+    setDriveInfo((prev) => ({ ...prev, [key]: { loading: true } }));
+    fetchDriveFileMetadata(relPath)
+      .then((data) => setDriveInfo((prev) => ({ ...prev, [key]: { data } })))
+      .catch((e) => setDriveInfo((prev) => ({ ...prev, [key]: { error: String(e) } })));
   }
 
   function createSessionForEntry(entry: LibraryEntry) {
@@ -450,6 +484,8 @@ export function LibraryInventory({
                   section.entries.map((entry) => {
                     const w = entryWarnings(entry, thresholds);
                     const animOpen = expandedAnims.has(entry.spineFile);
+                    const infoOpen = expandedInfo.has(entry.spineFile);
+                    const info = driveInfo[entry.spineFile];
                     return (
                       <Fragment key={entry.spineFile}>
                         <tr>
@@ -477,6 +513,14 @@ export function LibraryInventory({
                             )}
                           </td>
                           <td className="library-actions">
+                            <button
+                              className={`icon-button ${infoOpen ? 'active' : ''}`}
+                              title={t.driveInfoTitle}
+                              aria-label={t.driveInfoTitle}
+                              onClick={() => toggleDriveInfo(entry)}
+                            >
+                              <History size={15} />
+                            </button>
                             <button className="icon-button" title={t.libraryPrepareCleanScan} aria-label={t.libraryPrepareCleanScan} onClick={() => onPrepareCleanScan([entry.spineFile])}>
                               <ListChecks size={15} />
                             </button>
@@ -516,6 +560,56 @@ export function LibraryInventory({
                                   ))
                                 )}
                               </div>
+                            </td>
+                          </tr>
+                        )}
+                        {infoOpen && (
+                          <tr className="library-anim-list library-drive-row">
+                            <td colSpan={6}>
+                              {info?.loading && (
+                                <span className="muted">
+                                  <RotateCw size={13} className="spin" /> {t.driveLoading}
+                                </span>
+                              )}
+                              {info?.notOnDrive && <span className="muted">{t.driveNotOnDrive}</span>}
+                              {info?.error && <span className="library-drive-error">{info.error}</span>}
+                              {info?.data && (
+                                <div className="library-drive-info">
+                                  <div className="library-drive-meta">
+                                    <span>
+                                      <User size={13} /> <strong>{t.driveOwner}:</strong>{' '}
+                                      {info.data.ownerName ?? info.data.ownerEmail ?? '—'}
+                                      {info.data.ownerEmail ? <span className="muted"> ({info.data.ownerEmail})</span> : null}
+                                    </span>
+                                    {info.data.modifiedTime && (
+                                      <span>
+                                        <strong>{t.driveModified}:</strong> {new Date(info.data.modifiedTime).toLocaleString()}
+                                        {info.data.lastEditorName ? (
+                                          <span className="muted"> · {info.data.lastEditorName}</span>
+                                        ) : null}
+                                      </span>
+                                    )}
+                                  </div>
+                                  <div className="library-drive-revs">
+                                    <strong>
+                                      <History size={13} /> {t.driveRevisions} ({info.data.revisions.length}):
+                                    </strong>
+                                    {info.data.revisions.length === 0 ? (
+                                      <span className="muted"> —</span>
+                                    ) : (
+                                      <ul>
+                                        {info.data.revisions.slice(0, 20).map((rev) => (
+                                          <li key={rev.id}>
+                                            <span>{rev.modifiedTime ? new Date(rev.modifiedTime).toLocaleString() : '—'}</span>
+                                            <span className="muted">{rev.editorName ?? rev.editorEmail ?? ''}</span>
+                                            {rev.size ? <span className="muted">{formatBytes(Number(rev.size))}</span> : null}
+                                          </li>
+                                        ))}
+                                      </ul>
+                                    )}
+                                  </div>
+                                </div>
+                              )}
                             </td>
                           </tr>
                         )}

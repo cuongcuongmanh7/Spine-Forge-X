@@ -696,6 +696,89 @@ body.col-resizing {
   background: var(--sidebar-hover);
 }
 
+/* Google Drive account chip in the sidebar footer (VS Code style). */
+.account-badge {
+  font-weight: 500;
+}
+.account-badge .account-email {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+.account-avatar {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  object-fit: cover;
+  flex: 0 0 auto;
+}
+
+/* Settings ▸ Sync — Google Drive account block. */
+.drive-account {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+}
+.drive-account-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.drive-account-row .account-avatar {
+  width: 28px;
+  height: 28px;
+}
+.drive-account-id {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  margin-right: auto;
+}
+.drive-account-id span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Library row — Drive metadata panel. */
+.library-drive-info {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.library-drive-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 20px;
+}
+.library-drive-meta > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.library-drive-error {
+  color: var(--danger, #d6453d);
+}
+.library-drive-revs ul {
+  margin: 4px 0 0;
+  padding: 0;
+  list-style: none;
+  max-height: 180px;
+  overflow-y: auto;
+}
+.library-drive-revs li {
+  display: flex;
+  gap: 16px;
+  padding: 2px 0;
+}
+.library-drive-revs li > span:first-child {
+  min-width: 150px;
+}
+
 .session-main {
   display: flex;
   flex-direction: column;

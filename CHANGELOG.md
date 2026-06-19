@@ -1,5 +1,8 @@
 # Changelog
 
+## Unreleased
+- **Thư viện: xem chủ sở hữu & lịch sử sửa file spine từ Google Drive**: đăng nhập Google ở Settings ▸ Sync (hiện ở góc dưới trái), rồi bấm nút lịch sử trên mỗi dòng để xem ai là chủ file, sửa lần cuối khi nào và các phiên bản trước. Chỉ đọc, không đụng tới file trên Drive.
+
 ## v0.3.9
 - **Sửa lỗi đồng bộ Google Drive không chạy**: chọn nhầm cấp `G:\Shared drives` (thư mục ảo, không ghi được) làm sync báo lỗi. Giờ app tự chọn một shared drive ghi được; đường dẫn vẫn khớp đúng giữa các máy. Bản cũ đã lỡ chọn cấp ảo sẽ tự sửa khi mở lại.
 

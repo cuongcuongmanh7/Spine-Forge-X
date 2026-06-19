@@ -17,6 +17,9 @@ builds/
 .env.*
 !.env.example
 
+# Local Google Drive (Tier B) OAuth credentials baked in at build time — contains a secret.
+src-tauri/.cargo/config.toml
+
 # Logs and temporary files
 *.log
 npm-debug.log*

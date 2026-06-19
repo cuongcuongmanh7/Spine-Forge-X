@@ -8,6 +8,7 @@ use std::{collections::HashMap, path::PathBuf, sync::atomic::AtomicBool};
 use tokio::sync::Mutex;
 
 use crate::cleaner;
+use crate::drive::DriveToken;
 use crate::path_to_string;
 
 /// Identifies a unit's scan inputs. A cached scan is reused only when all of
@@ -31,6 +32,10 @@ pub(crate) struct AppState {
     /// Per-session cache of clean-source scans, keyed by `.spine` path. Lets a
     /// re-scan skip the expensive Spine CLI export for units that haven't changed.
     pub(crate) scan_cache: Mutex<HashMap<PathBuf, (ScanSig, FolderScan)>>,
+    /// Tier B Google Drive: cached short-lived access token (refresh token is in the keyring).
+    pub(crate) drive_token: Mutex<Option<DriveToken>>,
+    /// Tier B: cache of `relPath → Drive file ID` so each `.spine` is traversed only once/session.
+    pub(crate) drive_file_ids: Mutex<HashMap<String, String>>,
 }
 
 impl Default for AppState {
@@ -42,6 +47,8 @@ impl Default for AppState {
             run_in_background: AtomicBool::new(true),
             quitting: AtomicBool::new(false),
             scan_cache: Mutex::new(HashMap::new()),
+            drive_token: Mutex::new(None),
+            drive_file_ids: Mutex::new(HashMap::new()),
         }
     }
 }

@@ -1,0 +1,7 @@
+# Template for Google Drive (Tier B) OAuth credentials.
+# Copy this file to `config.toml` (same folder) and fill in the two values from your GCP
+# "Desktop app" OAuth client. `config.toml` is gitignored because it holds a secret.
+# These are read at build time by option_env! in src/drive.rs. See docs/sync.md §7.
+[env]
+SPINEFORGE_GOOGLE_CLIENT_ID = "PASTE_CLIENT_ID.apps.googleusercontent.com"
+SPINEFORGE_GOOGLE_CLIENT_SECRET = "PASTE_CLIENT_SECRET"

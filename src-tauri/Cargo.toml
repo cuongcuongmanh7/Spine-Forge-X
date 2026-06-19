@@ -19,10 +19,16 @@ serde_json = "1.0"
 tauri = { version = "2.5.0", features = ["tray-icon"] }
 tauri-plugin-dialog = "2.4.0"
 chrono = { version = "0.4", default-features = false, features = ["clock"] }
-tokio = { version = "1.43.0", features = ["process", "io-util", "time", "macros", "rt-multi-thread", "sync"] }
+tokio = { version = "1.43.0", features = ["process", "io-util", "net", "time", "macros", "rt-multi-thread", "sync"] }
 walkdir = "2.5.0"
 flate2 = "1"
 base64 = "0.22"
+# Tier B (Google Drive API): native HTTP + OAuth (loopback + PKCE) + secure token storage.
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+keyring = "3"
+sha2 = "0.10"
+rand = "0.8"
+urlencoding = "2"
 tauri-plugin-updater = "2.10.1"
 tauri-plugin-process = "2.3.1"
 tauri-plugin-single-instance = "2.3.4"

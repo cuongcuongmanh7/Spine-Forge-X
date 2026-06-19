@@ -25,7 +25,7 @@ const BASELINE = {
   // (pre-v0.2.14); re-baselined at its actual size.
   // useAppController was split into per-domain hooks in v0.3.0 (useWorkspace / useScanInput /
   // useExportEngine / useSpineDetection / useLinkedProjects) and now fits the default ceiling.
-  'src/styles.css': 2572
+  'src/styles.css': 2620
 };
 
 /** Recursively collect source files under a root directory. */

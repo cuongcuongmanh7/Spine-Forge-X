@@ -31,6 +31,7 @@ import { useLinkedProjects } from './useLinkedProjects';
 import { useWorkspace } from './useWorkspace';
 import { useLibrary } from './useLibrary';
 import { useSync } from './useSync';
+import { useDrive } from './useDrive';
 import type { SyncData } from './sync';
 import { useScanInput } from './useScanInput';
 import { useExportEngine } from './useExportEngine';
@@ -202,6 +203,9 @@ export function useAppControllerValue() {
     chooseRoot,
     syncNow
   } = useSync({ data: syncData, t, pushToast });
+
+  // App-data sync (Tier B): Google Drive account for owner/history metadata of `.spine` files.
+  const { driveAccount, driveBusy, driveSignIn, driveSignOut } = useDrive({ t, pushToast });
 
   const merged = useMemo<MergedConfig>(() => ({ ...appConfig, ...sessionConfig }), [appConfig, sessionConfig]);
 
@@ -574,6 +578,12 @@ export function useAppControllerValue() {
     setSyncEnabled,
     chooseRoot,
     syncNow,
+
+    // Google Drive (Tier B)
+    driveAccount,
+    driveBusy,
+    driveSignIn,
+    driveSignOut,
 
     // Clean source folder
     cleanSourceFolderOpen,

@@ -58,6 +58,9 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          # Tier B Google Drive OAuth — baked in at build time via option_env! (src-tauri/src/drive.rs).
+          SPINEFORGE_GOOGLE_CLIENT_ID: ${{ secrets.SPINEFORGE_GOOGLE_CLIENT_ID }}
+          SPINEFORGE_GOOGLE_CLIENT_SECRET: ${{ secrets.SPINEFORGE_GOOGLE_CLIENT_SECRET }}
         with:
           tagName: ${{ github.ref_name }}
           releaseName: SpineForge X ${{ github.ref_name }}

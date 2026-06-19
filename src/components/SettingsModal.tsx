@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { AlertTriangle, FolderOpen, RotateCw, Search, X } from 'lucide-react';
+import { AlertTriangle, FolderOpen, LogOut, RotateCw, Search, UserCircle2, X } from 'lucide-react';
 import { Section, FieldStatus, Hint } from './common';
 import { useApp } from '../useAppController';
 
@@ -24,7 +24,11 @@ export function SettingsModal() {
     syncNeedsRoot,
     setSyncEnabled,
     chooseRoot,
-    syncNow
+    syncNow,
+    driveAccount,
+    driveBusy,
+    driveSignIn,
+    driveSignOut
   } = useApp();
 
   const syncStatusLabel =
@@ -129,6 +133,36 @@ export function SettingsModal() {
                     </button>
                   </div>
                 </>
+              )}
+            </div>
+
+            <div className="drive-account">
+              <span className="sync-field-label">
+                {t.driveAccountTitle}
+                <Hint text={t.driveAccountHelp} />
+              </span>
+              {driveAccount ? (
+                <div className="drive-account-row">
+                  {driveAccount.photoLink ? (
+                    <img className="account-avatar" src={driveAccount.photoLink} alt="" />
+                  ) : (
+                    <UserCircle2 size={28} />
+                  )}
+                  <div className="drive-account-id">
+                    <strong>{driveAccount.displayName}</strong>
+                    <span className="muted">{driveAccount.email}</span>
+                  </div>
+                  <button className="secondary-button small" onClick={() => void driveSignOut()}>
+                    <LogOut size={15} /> {t.driveSignOut}
+                  </button>
+                </div>
+              ) : (
+                <div className="drive-account-row">
+                  <span className="muted">{t.driveSignedOut}</span>
+                  <button className="secondary-button small" disabled={driveBusy} onClick={() => void driveSignIn()}>
+                    {driveBusy ? <RotateCw className="spin" size={15} /> : <UserCircle2 size={15} />} {t.driveSignIn}
+                  </button>
+                </div>
               )}
             </div>
           </Section>

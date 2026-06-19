@@ -3,6 +3,7 @@
 mod clean;
 mod cleaner;
 mod concurrent;
+mod drive;
 mod error;
 mod export;
 mod library;
@@ -446,6 +447,10 @@ pub fn run() {
             library::scan_library_unused,
             system::open_in_spine,
             system::list_subdirectories,
+            drive::drive_account,
+            drive::drive_sign_in,
+            drive::drive_sign_out,
+            drive::drive_file_metadata,
             start_batch_export,
             stop_batch_export,
             set_run_in_background
