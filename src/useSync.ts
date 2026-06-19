@@ -42,6 +42,13 @@ export function useSync({ data, t, pushToast }: Args) {
   dataRef.current = data;
   const settingsRef = useRef({ enabled, folder, spineRoot, lastSyncedAt });
   settingsRef.current = { enabled, folder, spineRoot, lastSyncedAt };
+  // t and pushToast are recreated every render by the controller; read them through refs so
+  // pushLocal/reconcile keep a STABLE identity. Otherwise the debounce effect re-subscribes every
+  // render and its cleanup cancels the pending timer before it can fire → stuck on "pending".
+  const tRef = useRef(t);
+  tRef.current = t;
+  const pushToastRef = useRef(pushToast);
+  pushToastRef.current = pushToast;
   // Body of the profile we last read/wrote — lets the debounced writer skip no-op pushes.
   const lastBodyRef = useRef<string | null>(null);
   const debounceRef = useRef<number | null>(null);
@@ -87,9 +94,9 @@ export function useSync({ data, t, pushToast }: Args) {
     } catch (e) {
       setError(String(e));
       setStatus('error');
-      pushToast(t.syncErrorWrite, 'error');
+      pushToastRef.current(tRef.current.syncErrorWrite, 'error');
     }
-  }, [markSynced, pushToast, t]);
+  }, [markSynced]);
 
   // Startup / manual reconcile: newer of (local edits, remote profile) wins.
   const reconcile = useCallback(async () => {
@@ -134,13 +141,13 @@ export function useSync({ data, t, pushToast }: Args) {
     } catch (e) {
       setError(String(e));
       setStatus('error');
-      pushToast(t.syncErrorRead, 'error');
+      pushToastRef.current(tRef.current.syncErrorRead, 'error');
     } finally {
       // Safe to clear on the reload path too: syncedOnce is still false there, so pushLocal
       // stays guarded in the brief window before the page actually navigates away.
       reconcilingRef.current = false;
     }
-  }, [markSynced, pushToast, t]);
+  }, [markSynced]);
 
   // Reconcile once on mount when sync is already configured.
   const didMountRef = useRef(false);
