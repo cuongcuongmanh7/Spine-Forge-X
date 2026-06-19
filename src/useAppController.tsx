@@ -13,7 +13,15 @@ import { computeCanStart, statusFromValidation } from './validation';
 import { resolveLinkedTarget } from './exportRequest';
 import { computeSessionStatuses, type SharedInputMap } from './sessionStatus';
 import { idToken } from './controllerHelpers';
-import { loadPersistedState, persistAppConfig, persistLanguage, persistTheme } from './sessions';
+import {
+  loadPersistedState,
+  loadViewMode,
+  persistAppConfig,
+  persistLanguage,
+  persistTheme,
+  persistViewMode,
+  type ViewMode
+} from './sessions';
 import { useAppUpdater } from './useAppUpdater';
 import { useDragDrop } from './useDragDrop';
 import { useCleanSource } from './useCleanSource';
@@ -21,6 +29,7 @@ import { usePresets } from './usePresets';
 import { useSpineDetection } from './useSpineDetection';
 import { useLinkedProjects } from './useLinkedProjects';
 import { useWorkspace } from './useWorkspace';
+import { useLibrary } from './useLibrary';
 import { useScanInput } from './useScanInput';
 import { useExportEngine } from './useExportEngine';
 import type { Language, ThemeMode, Toast, ToastKind, ValidateResult } from './types';
@@ -34,6 +43,12 @@ export function useAppControllerValue() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [linkedModalOpen, setLinkedModalOpen] = useState(false);
   const [dashboardOpen, setDashboardOpen] = useState(false);
+  // Top-level mode shown in the left nav rail: export Workspace vs asset Library.
+  const [viewMode, setViewModeState] = useState<ViewMode>(() => loadViewMode());
+  function setViewMode(mode: ViewMode) {
+    setViewModeState(mode);
+    persistViewMode(mode);
+  }
   const [sessionStatuses, setSessionStatuses] = useState<Record<string, SessionStatus>>({});
   const [sessionOverlaps, setSessionOverlaps] = useState<Record<string, SessionOverlap>>({});
   const [sharedInputFiles, setSharedInputFiles] = useState<SharedInputMap>({});
@@ -131,6 +146,8 @@ export function useAppControllerValue() {
     newProject,
     renameProject,
     addSessionToProject,
+    createSessionFromLibrary,
+    createProjectFromLibrary,
     toggleProjectCollapsed,
     deleteProject
   } = useWorkspace({
@@ -148,6 +165,22 @@ export function useAppControllerValue() {
     runningIdRef,
     setSettingsOpen
   });
+
+  // Asset Library: import a master folder, scan into an inventory, browse stats/warnings.
+  const {
+    libraries,
+    activeLibrary,
+    activeLibraryId,
+    libraryScan,
+    libraryCleanState,
+    isScanningLibrary,
+    importLibrary,
+    rescanLibrary,
+    markLibraryEntriesClean,
+    markLibraryEntriesScanned,
+    selectLibrary,
+    deleteLibrary
+  } = useLibrary({ t, pushToast });
 
   const merged = useMemo<MergedConfig>(() => ({ ...appConfig, ...sessionConfig }), [appConfig, sessionConfig]);
 
@@ -474,6 +507,8 @@ export function useAppControllerValue() {
     renameProject,
     deleteProject,
     addSessionToProject,
+    createSessionFromLibrary,
+    createProjectFromLibrary,
     renamingProjectId,
     setRenamingProjectId,
     projectMenuOpenId,
@@ -512,6 +547,23 @@ export function useAppControllerValue() {
     setCleanSourceFolderOpen,
     dashboardOpen,
     setDashboardOpen,
+
+    // Asset Library
+    viewMode,
+    setViewMode,
+    libraries,
+    activeLibrary,
+    activeLibraryId,
+    libraryScan,
+    libraryCleanState,
+    isScanningLibrary,
+    importLibrary,
+    rescanLibrary,
+    markLibraryEntriesClean,
+    markLibraryEntriesScanned,
+    selectLibrary,
+    deleteLibrary,
+
     isDragOver,
     dragPosition,
     outputDropEnabled,

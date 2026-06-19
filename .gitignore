@@ -42,3 +42,10 @@ desktop.ini
 *.app
 *.deb
 *.rpm
+
+# JVM crash dumps from Spine editor launches
+hs_err_pid*.log
+src-tauri/hs_err_pid*.log
+
+# Self-hosted CI runner system id (machine-specific)
+.runner_system_id

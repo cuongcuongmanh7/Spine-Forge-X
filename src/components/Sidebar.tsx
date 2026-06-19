@@ -7,31 +7,17 @@ import {
   Folder,
   MoreHorizontal,
   Pencil,
-  Eraser,
-  LayoutDashboard,
   Play,
   Plus,
-  Settings,
   Trash2
 } from 'lucide-react';
 import { basename } from '../sessions';
 import type { Project, Session } from '../config';
 import { useApp } from '../useAppController';
+import { ModeToggle } from './ModeToggle';
+import { SidebarFooter } from './SidebarFooter';
+import { useSidebarWidth, SIDEBAR_MIN, SIDEBAR_MAX, SIDEBAR_DEFAULT, clampWidth } from '../useSidebarWidth';
 import './Sidebar.css';
-
-const SIDEBAR_MIN = 200;
-const SIDEBAR_MAX = 420;
-const SIDEBAR_DEFAULT = 240;
-const SIDEBAR_KEY = 'spineforge.sidebarWidth';
-
-function clampWidth(value: number): number {
-  return Math.min(SIDEBAR_MAX, Math.max(SIDEBAR_MIN, value));
-}
-
-function readSidebarWidth(): number {
-  const raw = Number(localStorage.getItem(SIDEBAR_KEY));
-  return Number.isFinite(raw) && raw > 0 ? clampWidth(raw) : SIDEBAR_DEFAULT;
-}
 
 function sessionSubtitle(session: Session): string {
   const path = session.config.inputPath.trim();
@@ -336,31 +322,12 @@ function ProjectGroup({ project }: { project: Project }) {
 }
 
 export function Sidebar() {
-  const { t, projects, setProjectDialogOpen, setSettingsOpen, setCleanSourceFolderOpen, setDashboardOpen } = useApp();
-  const [width, setWidth] = useState(readSidebarWidth);
-
-  useEffect(() => {
-    localStorage.setItem(SIDEBAR_KEY, String(width));
-  }, [width]);
-
-  // Drag the right-edge handle to resize; width is clamped to [MIN, MAX] and persisted.
-  function startResize(event: React.PointerEvent) {
-    event.preventDefault();
-    const startX = event.clientX;
-    const startW = width;
-    document.body.classList.add('col-resizing');
-    const onMove = (e: PointerEvent) => setWidth(clampWidth(startW + (e.clientX - startX)));
-    const onUp = () => {
-      document.body.classList.remove('col-resizing');
-      window.removeEventListener('pointermove', onMove);
-      window.removeEventListener('pointerup', onUp);
-    };
-    window.addEventListener('pointermove', onMove);
-    window.addEventListener('pointerup', onUp);
-  }
+  const { t, projects, setProjectDialogOpen } = useApp();
+  const { width, setWidth, startResize } = useSidebarWidth();
 
   return (
     <aside className="sidebar" style={{ width }}>
+      <ModeToggle />
       <div className="sidebar-header">
         <span className="sidebar-title">{t.projects}</span>
         <button className="sidebar-new" title={t.newProject} aria-label={t.newProject} onClick={() => setProjectDialogOpen(true)}>
@@ -374,20 +341,7 @@ export function Sidebar() {
           projects.map((project) => <ProjectGroup key={project.id} project={project} />)
         )}
       </div>
-      <div className="sidebar-footer">
-        <button className="sidebar-settings" onClick={() => setDashboardOpen(true)}>
-          <LayoutDashboard size={16} />
-          <span>{t.dashboardFolder}</span>
-        </button>
-        <button className="sidebar-settings" onClick={() => setCleanSourceFolderOpen(true)}>
-          <Eraser size={16} />
-          <span>{t.cleanSourceFolder}</span>
-        </button>
-        <button className="sidebar-settings" onClick={() => setSettingsOpen(true)}>
-          <Settings size={16} />
-          <span>{t.settings}</span>
-        </button>
-      </div>
+      <SidebarFooter />
       <div
         className="sidebar-resizer"
         role="separator"

@@ -122,6 +122,53 @@ pub(crate) async fn open_path(path: String) -> Result<(), String> {
     Ok(())
 }
 
+/// Open a `.spine` project in the Spine editor. Prefers the user's configured
+/// editor path; on Windows that's usually `Spine.com` (the CLI launcher), so we
+/// swap to the sibling `Spine.exe` to bring up the GUI. Falls back to the OS
+/// default handler for `.spine` when no valid editor path is configured.
+#[tauri::command]
+pub(crate) async fn open_in_spine(spine_path: String, file: String) -> Result<(), String> {
+    let target = parse_quoted_path(&file);
+    if !target.exists() {
+        return Err("File .spine không tồn tại.".to_string());
+    }
+
+    let editor = parse_quoted_path(&spine_path);
+    if !spine_path.trim().is_empty() && editor.exists() {
+        #[cfg(windows)]
+        let editor = {
+            let is_com = editor
+                .extension()
+                .and_then(|e| e.to_str())
+                .map(|e| e.eq_ignore_ascii_case("com"))
+                .unwrap_or(false);
+            if is_com {
+                let exe = editor.with_extension("exe");
+                if exe.exists() {
+                    exe
+                } else {
+                    editor
+                }
+            } else {
+                editor
+            }
+        };
+        // Launch with the working directory set to Spine's install folder (like a normal
+        // double-click). The old 3.8.x editor's bundled JRE resolves resources relative to
+        // CWD; spawning from the app's dir can make it crash on startup.
+        let mut cmd = Command::new(&editor);
+        cmd.arg(&target);
+        if let Some(dir) = editor.parent() {
+            cmd.current_dir(dir);
+        }
+        cmd.spawn().str_err()?;
+        return Ok(());
+    }
+
+    // No editor configured — let the OS open it with the default `.spine` app.
+    open_path(file).await
+}
+
 /// List immediate subdirectory names of `path` (sorted). Used by the Linked Project modal's
 /// "Auto-fill from Unity root" — each subfolder becomes a candidate destination type.
 #[tauri::command]

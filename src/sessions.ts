@@ -2,6 +2,9 @@ import {
   defaultAppConfig,
   defaultSessionConfig,
   type AppConfig,
+  type Library,
+  type LibraryCleanState,
+  type LibraryScan,
   type Project,
   type Session,
   type SessionConfig
@@ -18,8 +21,23 @@ const KEYS = {
   collapsedProjects: 'spineforge.collapsedProjects',
   language: 'spineforge.language',
   theme: 'spineforge.theme',
-  legacySettings: 'spineforge.settings'
+  legacySettings: 'spineforge.settings',
+  libraries: 'spineforge.libraries',
+  activeLibraryId: 'spineforge.activeLibraryId',
+  libraryScanPrefix: 'spineforge.libraryScan.',
+  libraryCleanPrefix: 'spineforge.libraryClean.',
+  viewMode: 'spineforge.viewMode'
 } as const;
+
+export type ViewMode = 'workspace' | 'library';
+
+export function loadViewMode(): ViewMode {
+  return localStorage.getItem(KEYS.viewMode) === 'library' ? 'library' : 'workspace';
+}
+
+export function persistViewMode(mode: ViewMode) {
+  localStorage.setItem(KEYS.viewMode, mode);
+}
 
 export type PersistedState = {
   appConfig: AppConfig;
@@ -437,4 +455,80 @@ export function cloneSession(source: Session, t: Translations, existing: Session
 
 export function touch(session: Session, patch: Partial<SessionConfig>): Session {
   return { ...session, config: { ...session.config, ...patch }, updatedAt: now() };
+}
+
+// ---- Asset Library persistence --------------------------------------------
+
+export function loadLibraries(): Library[] {
+  const stored = localStorage.getItem(KEYS.libraries);
+  if (!stored) return [];
+  try {
+    const parsed = JSON.parse(stored);
+    if (!Array.isArray(parsed)) return [];
+    return parsed
+      .map((raw): Library | null => {
+        if (!raw || typeof raw !== 'object') return null;
+        const s = raw as Record<string, unknown>;
+        if (typeof s.rootPath !== 'string' || !s.rootPath) return null;
+        return {
+          id: typeof s.id === 'string' && s.id ? s.id : makeId(),
+          name: typeof s.name === 'string' ? s.name : basename(s.rootPath),
+          rootPath: s.rootPath,
+          createdAt: typeof s.createdAt === 'number' ? s.createdAt : now(),
+          lastScanAt: typeof s.lastScanAt === 'number' ? s.lastScanAt : null
+        };
+      })
+      .filter((l): l is Library => l !== null);
+  } catch {
+    return [];
+  }
+}
+
+export function persistLibraries(libraries: Library[]) {
+  localStorage.setItem(KEYS.libraries, JSON.stringify(libraries));
+}
+
+export function loadActiveLibraryId(): string | null {
+  return localStorage.getItem(KEYS.activeLibraryId);
+}
+
+export function persistActiveLibraryId(id: string | null) {
+  if (id) localStorage.setItem(KEYS.activeLibraryId, id);
+  else localStorage.removeItem(KEYS.activeLibraryId);
+}
+
+/** Cached scan result per library — keyed so only the active library's scan is read at a time. */
+export function loadLibraryScan(id: string): LibraryScan | null {
+  const stored = localStorage.getItem(KEYS.libraryScanPrefix + id);
+  if (!stored) return null;
+  try {
+    return JSON.parse(stored) as LibraryScan;
+  } catch {
+    return null;
+  }
+}
+
+export function persistLibraryScan(id: string, scan: LibraryScan) {
+  localStorage.setItem(KEYS.libraryScanPrefix + id, JSON.stringify(scan));
+}
+
+export function loadLibraryCleanState(id: string): LibraryCleanState {
+  const stored = localStorage.getItem(KEYS.libraryCleanPrefix + id);
+  if (!stored) return {};
+  try {
+    const parsed = JSON.parse(stored) as unknown;
+    if (!parsed || typeof parsed !== 'object') return {};
+    return parsed as LibraryCleanState;
+  } catch {
+    return {};
+  }
+}
+
+export function persistLibraryCleanState(id: string, state: LibraryCleanState) {
+  localStorage.setItem(KEYS.libraryCleanPrefix + id, JSON.stringify(state));
+}
+
+export function clearLibraryScan(id: string) {
+  localStorage.removeItem(KEYS.libraryScanPrefix + id);
+  localStorage.removeItem(KEYS.libraryCleanPrefix + id);
 }

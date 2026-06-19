@@ -143,6 +143,29 @@ export function SettingsModal() {
               </label>
             </div>
           </Section>
+
+          <Section title={t.libraryThresholdsTitle} defaultOpen={false}>
+            <div className="form-grid">
+              <label>
+                {t.libraryImageFolderWarn}
+                <input
+                  type="number"
+                  min={1}
+                  value={merged.libraryImageFolderWarnMB}
+                  onChange={(event) => updateAppConfig('libraryImageFolderWarnMB', Number(event.target.value))}
+                />
+              </label>
+              <label>
+                {t.librarySpineFileWarn}
+                <input
+                  type="number"
+                  min={1}
+                  value={merged.librarySpineFileWarnMB}
+                  onChange={(event) => updateAppConfig('librarySpineFileWarnMB', Number(event.target.value))}
+                />
+              </label>
+            </div>
+          </Section>
         </div>
       </div>
     </div>

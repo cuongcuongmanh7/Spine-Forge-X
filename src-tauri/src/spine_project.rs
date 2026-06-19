@@ -116,6 +116,17 @@ pub fn read_export_settings(path: &Path) -> Result<DecodedSettings, String> {
     })
 }
 
+/// Read the editor version of a `.spine` project offline (no Spine CLI): inflate
+/// the deflate stream and read the version string stamped near the start. Returns
+/// `None` on any failure (unreadable file, not a deflate stream, no version found)
+/// so a library scan can classify the entry as "unknown" rather than abort. Works
+/// for both 3.8.x and 4.x files — only the stamped string is read, not the layout.
+pub fn read_editor_version(path: &Path) -> Option<String> {
+    let bytes = std::fs::read(path).ok()?;
+    let data = inflate_project(&bytes).ok()?;
+    detect_editor_version(&data)
+}
+
 /// Editor version stamped as a hibit string near the start of the payload
 /// (observed on real files: "3.8.99", "4.3.17"). Used only to make
 /// scan-failure errors actionable — a 4.x file is a different binary layout,

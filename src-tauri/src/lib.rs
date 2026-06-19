@@ -5,6 +5,7 @@ mod cleaner;
 mod concurrent;
 mod error;
 mod export;
+mod library;
 mod model;
 mod paths;
 mod presets;
@@ -439,6 +440,9 @@ pub fn run() {
             clean::scan_source_folders,
             clean::clean_source_folders,
             clean::move_unused_images,
+            library::scan_library,
+            library::scan_library_unused,
+            system::open_in_spine,
             system::list_subdirectories,
             start_batch_export,
             stop_batch_export,

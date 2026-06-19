@@ -589,3 +589,47 @@ proptest! {
         let _ = fs::remove_dir_all(&base);
     }
 }
+
+/// Build a raw-deflate `.spine`-like payload whose inflated bytes start with the
+/// editor version stamped as a hibit string (last byte OR'd with 0x80), then read
+/// it back through the offline version reader.
+#[test]
+fn read_editor_version_parses_stamped_version() {
+    use std::io::Write;
+
+    fn hibit_payload(version: &str) -> Vec<u8> {
+        let bytes = version.as_bytes();
+        let mut out = bytes.to_vec();
+        // Terminate the run by OR-ing the final byte's high bit (the format's marker).
+        if let Some(last) = out.last_mut() {
+            *last |= 0x80;
+        }
+        out
+    }
+
+    fn deflate_raw(data: &[u8]) -> Vec<u8> {
+        let mut enc =
+            flate2::write::DeflateEncoder::new(Vec::new(), flate2::Compression::default());
+        enc.write_all(data).unwrap();
+        enc.finish().unwrap()
+    }
+
+    for version in ["3.8.99", "4.3.17"] {
+        let dir = test_dir("editor-version");
+        let file = dir.join("project.spine");
+        fs::write(&file, deflate_raw(&hibit_payload(version))).unwrap();
+        assert_eq!(
+            crate::spine_project::read_editor_version(&file).as_deref(),
+            Some(version),
+            "should parse {version}"
+        );
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    // A non-deflate / unreadable file yields None rather than panicking.
+    let dir = test_dir("editor-version-bad");
+    let bad = dir.join("not-a-project.spine");
+    fs::write(&bad, b"plain text, not deflate").unwrap();
+    assert_eq!(crate::spine_project::read_editor_version(&bad), None);
+    let _ = fs::remove_dir_all(&dir);
+}
