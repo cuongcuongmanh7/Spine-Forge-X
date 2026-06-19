@@ -174,6 +174,13 @@ export type LibraryEntry = {
   imageCount: number;
   /** Editor version (e.g. "3.8.99"); null when it couldn't be parsed. */
   version: string | null;
+  /** True when an exported `.json` skeleton was found (in an export/ex subfolder). */
+  exported: boolean;
+  /** Animation clip names read from the exported skeleton(s). */
+  animations: string[];
+  /** Skin names read from the exported skeleton(s). */
+  skins: string[];
+  animationCount: number;
   error: string | null;
 };
 

@@ -153,7 +153,15 @@ pub(crate) async fn open_in_spine(spine_path: String, file: String) -> Result<()
                 editor
             }
         };
-        Command::new(editor).arg(&target).spawn().str_err()?;
+        // Launch with the working directory set to Spine's install folder (like a normal
+        // double-click). The old 3.8.x editor's bundled JRE resolves resources relative to
+        // CWD; spawning from the app's dir can make it crash on startup.
+        let mut cmd = Command::new(&editor);
+        cmd.arg(&target);
+        if let Some(dir) = editor.parent() {
+            cmd.current_dir(dir);
+        }
+        cmd.spawn().str_err()?;
         return Ok(());
     }
 

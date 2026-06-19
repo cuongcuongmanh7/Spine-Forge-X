@@ -125,6 +125,41 @@ export function versionLabel(major: string): string {
   return major === 'unknown' ? 'unknown' : `${major}.x`;
 }
 
+/** The shared chip/search selection that scopes both the Inventory view and the Clean scan. */
+export type LibrarySelection = {
+  facet: 'folder' | 'id';
+  selectedCats: Set<string>;
+  selectedVersions: Set<string>;
+  query: string;
+};
+
+/** True when an entry passes the current category-chip, version-chip, and search filters. */
+export function entryMatchesFilter(entry: LibraryEntry, sel: LibrarySelection): boolean {
+  const catKey = sel.facet === 'id' ? idBand(entry) : topFolder(entry);
+  if (sel.selectedCats.size > 0 && !sel.selectedCats.has(catKey)) return false;
+  if (sel.selectedVersions.size > 0 && !sel.selectedVersions.has(entry.version ?? '')) return false;
+  const q = sel.query.trim().toLowerCase();
+  if (q) {
+    const hit =
+      entry.relPath.toLowerCase().includes(q) ||
+      entry.animations.some((a) => a.toLowerCase().includes(q)) ||
+      entry.skins.some((s) => s.toLowerCase().includes(q));
+    if (!hit) return false;
+  }
+  return true;
+}
+
+/** Short human summary of the active selection, e.g. "Hero, NPC · 3.8.99" or "" when none. */
+export function selectionSummary(sel: LibrarySelection): string {
+  const parts: string[] = [];
+  if (sel.selectedCats.size > 0) parts.push([...sel.selectedCats].join(', '));
+  if (sel.selectedVersions.size > 0) {
+    parts.push([...sel.selectedVersions].map((v) => v || 'unknown').join(', '));
+  }
+  if (sel.query.trim()) parts.push(`"${sel.query.trim()}"`);
+  return parts.join(' · ');
+}
+
 export type VersionTag = { version: string | null; count: number };
 
 /** Distinct full editor versions with counts (e.g. 3.8.99, 4.3.11), unknown last — for filter chips. */

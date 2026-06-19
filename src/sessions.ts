@@ -23,8 +23,19 @@ const KEYS = {
   legacySettings: 'spineforge.settings',
   libraries: 'spineforge.libraries',
   activeLibraryId: 'spineforge.activeLibraryId',
-  libraryScanPrefix: 'spineforge.libraryScan.'
+  libraryScanPrefix: 'spineforge.libraryScan.',
+  viewMode: 'spineforge.viewMode'
 } as const;
+
+export type ViewMode = 'workspace' | 'library';
+
+export function loadViewMode(): ViewMode {
+  return localStorage.getItem(KEYS.viewMode) === 'library' ? 'library' : 'workspace';
+}
+
+export function persistViewMode(mode: ViewMode) {
+  localStorage.setItem(KEYS.viewMode, mode);
+}
 
 export type PersistedState = {
   appConfig: AppConfig;

@@ -293,6 +293,13 @@ pub(crate) struct LibraryEntry {
     pub(crate) image_count: usize,
     /// Editor version (e.g. "3.8.99", "4.3.17"); `None` when it can't be parsed.
     pub(crate) version: Option<String>,
+    /// True when an exported `.json` skeleton was found (in an `export`/`ex` subfolder).
+    pub(crate) exported: bool,
+    /// Animation clip names read from the exported skeleton(s), unioned + sorted.
+    pub(crate) animations: Vec<String>,
+    /// Skin names read from the exported skeleton(s), unioned + sorted.
+    pub(crate) skins: Vec<String>,
+    pub(crate) animation_count: usize,
     pub(crate) error: Option<String>,
 }
 

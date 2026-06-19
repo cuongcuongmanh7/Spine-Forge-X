@@ -27,7 +27,6 @@ type Options = {
  * lives in `library.ts`; this hook only owns state, persistence, and the Tauri scan call.
  */
 export function useLibrary({ t, pushToast }: Options) {
-  const [libraryOpen, setLibraryOpen] = useState(false);
   const [libraries, setLibraries] = useState<Library[]>(() => loadLibraries());
   const [activeLibraryId, setActiveLibraryId] = useState<string | null>(() => {
     const stored = loadActiveLibraryId();
@@ -121,8 +120,6 @@ export function useLibrary({ t, pushToast }: Options) {
   }
 
   return {
-    libraryOpen,
-    setLibraryOpen,
     libraries,
     activeLibrary,
     activeLibraryId,

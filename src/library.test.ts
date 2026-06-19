@@ -24,6 +24,10 @@ function entry(partial: Partial<LibraryEntry>): LibraryEntry {
     imageBytes: 0,
     imageCount: 0,
     version: null,
+    exported: false,
+    animations: [],
+    skins: [],
+    animationCount: 0,
     error: null,
     ...partial
   };

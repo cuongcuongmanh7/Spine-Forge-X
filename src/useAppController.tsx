@@ -13,7 +13,15 @@ import { computeCanStart, statusFromValidation } from './validation';
 import { resolveLinkedTarget } from './exportRequest';
 import { computeSessionStatuses, type SharedInputMap } from './sessionStatus';
 import { idToken } from './controllerHelpers';
-import { loadPersistedState, persistAppConfig, persistLanguage, persistTheme } from './sessions';
+import {
+  loadPersistedState,
+  loadViewMode,
+  persistAppConfig,
+  persistLanguage,
+  persistTheme,
+  persistViewMode,
+  type ViewMode
+} from './sessions';
 import { useAppUpdater } from './useAppUpdater';
 import { useDragDrop } from './useDragDrop';
 import { useCleanSource } from './useCleanSource';
@@ -35,6 +43,12 @@ export function useAppControllerValue() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [linkedModalOpen, setLinkedModalOpen] = useState(false);
   const [dashboardOpen, setDashboardOpen] = useState(false);
+  // Top-level mode shown in the left nav rail: export Workspace vs asset Library.
+  const [viewMode, setViewModeState] = useState<ViewMode>(() => loadViewMode());
+  function setViewMode(mode: ViewMode) {
+    setViewModeState(mode);
+    persistViewMode(mode);
+  }
   const [sessionStatuses, setSessionStatuses] = useState<Record<string, SessionStatus>>({});
   const [sessionOverlaps, setSessionOverlaps] = useState<Record<string, SessionOverlap>>({});
   const [sharedInputFiles, setSharedInputFiles] = useState<SharedInputMap>({});
@@ -154,8 +168,6 @@ export function useAppControllerValue() {
 
   // Asset Library: import a master folder, scan into an inventory, browse stats/warnings.
   const {
-    libraryOpen,
-    setLibraryOpen,
     libraries,
     activeLibrary,
     activeLibraryId,
@@ -534,8 +546,8 @@ export function useAppControllerValue() {
     setDashboardOpen,
 
     // Asset Library
-    libraryOpen,
-    setLibraryOpen,
+    viewMode,
+    setViewMode,
     libraries,
     activeLibrary,
     activeLibraryId,
