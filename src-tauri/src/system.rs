@@ -24,6 +24,35 @@ pub(crate) fn write_text_file(path: String, content: String) -> Result<(), Strin
     fs::write(&target, content).str_err()
 }
 
+/// Probe for a Google Drive "Shared drives" mount and return its path (e.g. `G:\Shared drives`),
+/// so the sync setup can pre-fill the shared root. Returns `None` when none is found — the UI
+/// then warns and asks the user to pick it manually. Windows-only; other platforms return `None`.
+#[tauri::command]
+pub(crate) fn detect_drive_root() -> Option<String> {
+    #[cfg(windows)]
+    {
+        for letter in b'A'..=b'Z' {
+            let candidate = format!("{}:\\Shared drives", letter as char);
+            if std::path::Path::new(&candidate).is_dir() {
+                return Some(candidate);
+            }
+        }
+    }
+    None
+}
+
+/// Read a UTF-8 text file, returning `None` when it doesn't exist (vs `Err` on a real
+/// read failure). Used by the sync layer to load the profile file from a Google Drive
+/// folder without treating "not synced yet" as an error.
+#[tauri::command]
+pub(crate) fn read_text_file(path: String) -> Result<Option<String>, String> {
+    let target = parse_quoted_path(&path);
+    if !target.exists() {
+        return Ok(None);
+    }
+    fs::read_to_string(&target).map(Some).str_err()
+}
+
 /// Read an image file and return it as a base64 data URL, for thumbnail display
 /// in the webview (used by the Clean Source Folder detail view). Size-capped so
 /// a stray huge file can't blow up the UI.

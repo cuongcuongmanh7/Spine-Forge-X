@@ -30,6 +30,8 @@ import { useSpineDetection } from './useSpineDetection';
 import { useLinkedProjects } from './useLinkedProjects';
 import { useWorkspace } from './useWorkspace';
 import { useLibrary } from './useLibrary';
+import { useSync } from './useSync';
+import type { SyncData } from './sync';
 import { useScanInput } from './useScanInput';
 import { useExportEngine } from './useExportEngine';
 import type { Language, ThemeMode, Toast, ToastKind, ValidateResult } from './types';
@@ -181,6 +183,25 @@ export function useAppControllerValue() {
     selectLibrary,
     deleteLibrary
   } = useLibrary({ t, pushToast });
+
+  // App-data sync (Tier A): mirror workspace to a profile file in a Google Drive folder so the
+  // same projects/sessions appear on another machine, with `${SPINE_ROOT}` path rebasing.
+  const syncData = useMemo<SyncData>(
+    () => ({ appConfig, projects, sessions, libraries }),
+    [appConfig, projects, sessions, libraries]
+  );
+  const {
+    syncEnabled,
+    syncRoot,
+    syncLastSyncedAt,
+    syncStatus,
+    syncError,
+    syncConnected,
+    syncNeedsRoot,
+    setSyncEnabled,
+    chooseRoot,
+    syncNow
+  } = useSync({ data: syncData, t, pushToast });
 
   const merged = useMemo<MergedConfig>(() => ({ ...appConfig, ...sessionConfig }), [appConfig, sessionConfig]);
 
@@ -541,6 +562,18 @@ export function useAppControllerValue() {
 
     settingsOpen,
     setSettingsOpen,
+
+    // App-data sync (Tier A)
+    syncEnabled,
+    syncRoot,
+    syncLastSyncedAt,
+    syncStatus,
+    syncError,
+    syncConnected,
+    syncNeedsRoot,
+    setSyncEnabled,
+    chooseRoot,
+    syncNow,
 
     // Clean source folder
     cleanSourceFolderOpen,
