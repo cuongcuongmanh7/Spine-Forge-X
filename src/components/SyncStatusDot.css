@@ -37,7 +37,51 @@
   background: var(--danger-fill);
 }
 
+/* Settings ▸ Sync section layout. The shared .form-row crams the long "Google Drive root"
+   label into a 130px column; here the label sits on its own line so the field can breathe. */
+.sync-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.sync-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.sync-field-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 650;
+}
+.sync-field-input {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.sync-field-input input {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.sync-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.sync-foot .secondary-button {
+  flex: 0 0 auto;
+}
+
 /* Status line inside the Settings ▸ Sync section. */
+.sync-status-text {
+  font-size: 13px;
+  color: var(--text-muted);
+}
 .sync-status-text.status-synced {
   color: var(--success);
 }

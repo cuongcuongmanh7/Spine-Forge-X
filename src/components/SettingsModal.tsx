@@ -88,45 +88,49 @@ export function SettingsModal() {
           </Section>
 
           <Section title={t.syncTitle} defaultOpen={false}>
-            <label className="checkbox-line">
-              <input type="checkbox" checked={syncEnabled} onChange={(event) => setSyncEnabled(event.target.checked)} />
-              {t.syncEnable}
-              <Hint text={t.syncEnableHelp} />
-            </label>
-            {syncEnabled && (
-              <>
-                <div className="form-row">
-                  <label>
-                    {t.syncRoot}
-                    <Hint text={t.syncRootHelp} />
-                  </label>
-                  <input value={syncRoot} readOnly placeholder={t.syncRootPlaceholder} />
-                  <button className="icon-button" title={t.syncChooseRoot} aria-label={t.syncChooseRoot} onClick={() => void chooseRoot()}>
-                    <FolderOpen size={18} />
-                  </button>
-                </div>
-                {syncNeedsRoot && (
-                  <div className="notice warning">
-                    <AlertTriangle size={18} />
-                    <span>{t.syncRootMissing}</span>
+            <div className="sync-fields">
+              <label className="checkbox-line">
+                <input type="checkbox" checked={syncEnabled} onChange={(event) => setSyncEnabled(event.target.checked)} />
+                {t.syncEnable}
+                <Hint text={t.syncEnableHelp} />
+              </label>
+              {syncEnabled && (
+                <>
+                  <div className="sync-field">
+                    <span className="sync-field-label">
+                      {t.syncRoot}
+                      <Hint text={t.syncRootHelp} />
+                    </span>
+                    <div className="sync-field-input">
+                      <input value={syncRoot} readOnly placeholder={t.syncRootPlaceholder} />
+                      <button className="icon-button" title={t.syncChooseRoot} aria-label={t.syncChooseRoot} onClick={() => void chooseRoot()}>
+                        <FolderOpen size={18} />
+                      </button>
+                    </div>
                   </div>
-                )}
-                <div className="header-controls settings-controls">
-                  <span className={`muted sync-status-text status-${syncStatus}`}>
-                    {syncStatusLabel}
-                    {syncLastSyncedAt && syncStatus !== 'error' ? ` · ${t.syncLastSynced}: ${new Date(syncLastSyncedAt).toLocaleString()}` : ''}
-                  </span>
-                  <button
-                    className="secondary-button small"
-                    disabled={!syncRoot || syncStatus === 'syncing'}
-                    onClick={() => syncNow()}
-                  >
-                    <RotateCw className={syncStatus === 'syncing' ? 'spin' : undefined} size={15} />
-                    {t.syncNow}
-                  </button>
-                </div>
-              </>
-            )}
+                  {syncNeedsRoot && (
+                    <div className="notice warning">
+                      <AlertTriangle size={18} />
+                      <span>{t.syncRootMissing}</span>
+                    </div>
+                  )}
+                  <div className="sync-foot">
+                    <span className={`sync-status-text status-${syncStatus}`}>
+                      {syncStatusLabel}
+                      {syncLastSyncedAt && syncStatus !== 'error' ? ` · ${t.syncLastSynced}: ${new Date(syncLastSyncedAt).toLocaleString()}` : ''}
+                    </span>
+                    <button
+                      className="secondary-button small"
+                      disabled={!syncRoot || syncStatus === 'syncing'}
+                      onClick={() => syncNow()}
+                    >
+                      <RotateCw className={syncStatus === 'syncing' ? 'spin' : undefined} size={15} />
+                      {t.syncNow}
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
           </Section>
 
           <Section title={t.executable}>
