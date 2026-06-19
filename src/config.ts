@@ -256,11 +256,11 @@ export function emptyRuntime(): SessionRuntime {
 // A concrete version detected from `--version` is added to the dropdown on top of these.
 export const targetVersionPresets = ['4.3.XX', '3.8.XX', 'lateststable'];
 
-/** Starting point for a brand-new global preset in the editor (JSON skeleton + packed atlas). */
+/** Starting point for a brand-new global preset in the editor (binary skeleton + packed atlas). */
 export const defaultExportPreset = {
-  class: 'export-json',
-  extension: '.json',
-  format: 'JSON',
+  class: 'export-binary',
+  extension: '.skel',
+  format: 'Binary',
   prettyPrint: true,
   nonessential: true,
   cleanUp: false,
