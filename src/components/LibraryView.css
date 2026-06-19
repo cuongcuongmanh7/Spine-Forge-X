@@ -517,7 +517,13 @@
 .library-table {
   table-layout: fixed;
   width: 100%;
-  border-collapse: collapse;
+  /* `separate` (not `collapse`): with collapsed borders Chromium ignores the
+     sticky thead's z-index, so opaque body rows (e.g. .library-group-row) paint
+     over the pinned header while scrolling. `separate` makes z-index reliable.
+     --lib-thead-h is the sticky-header height, reused by the group-row offset. */
+  border-collapse: separate;
+  border-spacing: 0;
+  --lib-thead-h: 33px;
   font-size: 13px;
 }
 .library-table th,
@@ -536,9 +542,10 @@
 .library-table thead th {
   position: sticky;
   top: 0;
-  z-index: 2;
+  z-index: 3;
   background: var(--bg);
-  /* border-collapse can drop a stuck th's border in Chromium — back it with a shadow. */
+  /* Bottom border via shadow so it rides along while stuck (the cell border-bottom
+     can render under later rows once unstuck). */
   box-shadow: inset 0 -1px 0 var(--border);
 }
 .library-table .muted {
@@ -588,8 +595,14 @@
   opacity: 0.75;
 }
 .library-table .library-group-row td {
+  /* Pin the folder/ID band just under the column header on long lists. z-index
+     stays below the thead (3) so the header always wins; opaque bg covers rows. */
+  position: sticky;
+  top: var(--lib-thead-h);
+  z-index: 1;
   background: var(--surface-soft);
   font-weight: 600;
+  box-shadow: inset 0 -1px 0 var(--border);
 }
 /* Expandable unused-image thumbnails under a Clean-tab row. */
 .library-path.expandable {
