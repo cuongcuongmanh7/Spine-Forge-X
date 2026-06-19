@@ -1,4 +1,4 @@
-import { AlertTriangle, FolderOpen, Info, Play, RotateCw, Trash2, XCircle } from 'lucide-react';
+import { FolderOpen, Info, Play, RotateCw, Trash2 } from 'lucide-react';
 import { useApp } from '../../useAppController';
 
 /** True when any string contains a non-ASCII character (matches backend has_non_ascii). */
@@ -12,7 +12,6 @@ export function RunDock() {
     t,
     merged,
     files,
-    validation,
     canStart,
     isRunning,
     isOpeningOutput,
@@ -36,23 +35,8 @@ export function RunDock() {
             <span>{t.unicodeWarning}</span>
           </div>
         )}
-        {validation.errors.length > 0 && (
-          <div className="notice danger" role="alert">
-            <XCircle size={18} />
-            <span>{validation.errors.join(' ')}</span>
-          </div>
-        )}
-        {validation.warnings.length > 0 && (
-          <div className="notice warning" role="status" aria-live="polite">
-            <AlertTriangle size={18} />
-            <span>{validation.warnings.join(' ')}</span>
-          </div>
-        )}
+        {/* Actions sit at the right (Start outermost) to match the Library footer's primary action. */}
         <div className="run-actions">
-          <button className="primary-button" disabled={!canStart || isRunning} onClick={startExport}>
-            {isRunning ? <RotateCw className="spin" size={18} /> : <Play size={18} />}
-            {isRunning ? t.running : t.start}
-          </button>
           <button className="secondary-button" disabled={!resolveOpenOutputTarget() || isOpeningOutput} onClick={openOutputFolder}>
             {isOpeningOutput ? <RotateCw className="spin" size={18} /> : <FolderOpen size={18} />}
             {t.openOutput}
@@ -65,6 +49,10 @@ export function RunDock() {
               {t.cleanTimestamp}
             </button>
           )}
+          <button className="primary-button" disabled={!canStart || isRunning} onClick={startExport}>
+            {isRunning ? <RotateCw className="spin" size={18} /> : <Play size={18} />}
+            {isRunning ? t.running : t.start}
+          </button>
         </div>
       </div>
     </div>

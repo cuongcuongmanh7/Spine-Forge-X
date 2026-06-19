@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Plus, RotateCw, Trash2 } from 'lucide-react';
+import { FolderSearch, Plus, RotateCw, Trash2 } from 'lucide-react';
 import { useApp } from '../useAppController';
 import { useSidebarWidth, SIDEBAR_MIN, SIDEBAR_MAX, SIDEBAR_DEFAULT, clampWidth } from '../useSidebarWidth';
 import { useLibraryFilter } from '../useLibraryFilter';
@@ -22,7 +22,6 @@ export function LibraryView() {
     libraryScan,
     isScanningLibrary,
     importLibrary,
-    rescanLibrary,
     selectLibrary,
     deleteLibrary
   } = useApp();
@@ -43,9 +42,9 @@ export function LibraryView() {
       <aside className="library-sidebar" style={{ width }}>
         <ModeToggle />
         <div className="library-sidebar-head">
-          <span>{t.libraryFolder}</span>
+          <span className="sidebar-title">{t.libraryFolder}</span>
           <button
-            className="icon-button"
+            className="sidebar-new"
             onClick={() => void importLibrary()}
             disabled={isScanningLibrary}
             title={t.libraryImport}
@@ -56,7 +55,7 @@ export function LibraryView() {
         </div>
         <div className="library-sidebar-list">
           {libraries.length === 0 ? (
-            <p className="helper-text">{t.libraryEmpty}</p>
+            <p className="session-list-empty">{t.libraryEmpty}</p>
           ) : (
             libraries.map((l) => (
               <div
@@ -68,6 +67,9 @@ export function LibraryView() {
                 title={l.rootPath}
               >
                 <span className="library-lib-name">{l.name}</span>
+                {isScanningLibrary && l.id === activeLibraryId && (
+                  <RotateCw size={13} className="spin library-lib-scan" aria-hidden="true" />
+                )}
                 <button
                   className="icon-button library-lib-del"
                   title={t.libraryDeleteLib}
@@ -115,7 +117,22 @@ export function LibraryView() {
           </div>
         ) : isScanningLibrary && entries.length === 0 ? (
           <div className="library-empty">
-            <p className="helper-text">{t.libraryScanning}</p>
+            <div className="library-scanning" role="status" aria-live="polite">
+              <span className="library-scanning-icon">
+                <FolderSearch size={28} />
+              </span>
+              <div className="library-scanning-text">
+                <span className="library-scanning-title">{t.libraryScanning}</span>
+                {activeLibrary && (
+                  <span className="library-scanning-path" title={activeLibrary.rootPath}>
+                    {activeLibrary.rootPath}
+                  </span>
+                )}
+              </div>
+              <div className="library-scanning-bar" aria-hidden="true">
+                <span />
+              </div>
+            </div>
           </div>
         ) : (
           <>
@@ -129,15 +146,6 @@ export function LibraryView() {
                 </button>
                 <button className="library-tab" disabled title={t.libraryTabCoverageSoon}>
                   {t.libraryTabCoverage}
-                </button>
-              </div>
-              <div className="library-tabbar-actions">
-                <span className="muted">
-                  {t.libraryLastScan}:{' '}
-                  {activeLibrary.lastScanAt ? new Date(activeLibrary.lastScanAt).toLocaleDateString() : t.libraryNeverScanned}
-                </span>
-                <button className="secondary-button small" onClick={() => void rescanLibrary()} disabled={isScanningLibrary}>
-                  <RotateCw size={14} className={isScanningLibrary ? 'spin' : undefined} /> {t.libraryRescan}
                 </button>
               </div>
             </div>

@@ -1,0 +1,91 @@
+/* Dashboard metric cards — shared across the app's stat sections. */
+.stat-cards {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.stat-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  /* Size to content (min floor) so values/labels never truncate — an auto-fill grid
+     left narrow tracks at fullscreen that clipped "SPINE FILES" / "18.2 MB". */
+  flex: 0 0 auto;
+  min-width: 132px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  box-shadow: 0 1px 2px var(--shadow);
+  transition: border-color 0.15s var(--ease), box-shadow 0.15s var(--ease);
+}
+
+.stat-card:hover {
+  border-color: var(--border-strong);
+  box-shadow: 0 8px 20px var(--shadow);
+}
+
+.stat-card-icon {
+  display: inline-grid;
+  place-items: center;
+  flex: 0 0 auto;
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--primary), transparent 88%);
+  color: var(--primary);
+}
+
+.stat-card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.stat-card-value {
+  white-space: nowrap;
+  font-size: 22px;
+  font-weight: 700;
+  line-height: 1.15;
+  letter-spacing: -0.01em;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-strong);
+}
+
+.stat-card-label {
+  white-space: nowrap;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.stat-card.warn {
+  border-color: color-mix(in srgb, var(--warning), transparent 55%);
+  background: color-mix(in srgb, var(--warning), transparent 92%);
+}
+
+.stat-card.warn .stat-card-icon {
+  background: color-mix(in srgb, var(--warning), transparent 84%);
+  color: var(--warning);
+}
+
+.stat-card.warn .stat-card-value {
+  color: var(--warning);
+}
+
+.stat-card.ok {
+  border-color: color-mix(in srgb, var(--success), transparent 55%);
+  background: color-mix(in srgb, var(--success), transparent 92%);
+}
+
+.stat-card.ok .stat-card-icon {
+  background: color-mix(in srgb, var(--success), transparent 84%);
+  color: var(--success);
+}
+
+.stat-card.ok .stat-card-value {
+  color: var(--success);
+}
