@@ -1,7 +1,8 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
-import { ChevronDown, ChevronRight, Eraser, RotateCw } from 'lucide-react';
+import { ChevronDown, ChevronRight, Eraser, HardDrive, RotateCw, Trash2 } from 'lucide-react';
 import { useApp } from '../useAppController';
+import { StatCard } from './StatCard';
 import { formatBytes } from '../time';
 import { entryMatchesFilter, groupByFolder, groupByIdBand, selectionSummary } from '../library';
 import type { LibraryFilterApi } from '../useLibraryFilter';
@@ -323,15 +324,14 @@ export function LibraryClean({ filter, scopeRequest }: { filter: LibraryFilterAp
           </div>
         )}
         {cleanScanSummary && (
-          <div className="library-stats">
-            <div className={`library-stat ${cleanScanSummary.totalUnused > 0 ? 'warn' : ''}`}>
-              <span className="library-stat-value">{cleanScanSummary.totalUnused}</span>
-              <span className="library-stat-label">{t.cleanSourceColUnused}</span>
-            </div>
-            <div className="library-stat">
-              <span className="library-stat-value">{formatBytes(cleanScanSummary.totalUnusedBytes)}</span>
-              <span className="library-stat-label">{t.libraryTotalImages}</span>
-            </div>
+          <div className="stat-cards">
+            <StatCard
+              icon={<Trash2 size={18} />}
+              label={t.cleanSourceColUnused}
+              value={cleanScanSummary.totalUnused}
+              tone={cleanScanSummary.totalUnused > 0 ? 'warn' : 'default'}
+            />
+            <StatCard icon={<HardDrive size={18} />} label={t.libraryTotalImages} value={formatBytes(cleanScanSummary.totalUnusedBytes)} />
           </div>
         )}
       </div>

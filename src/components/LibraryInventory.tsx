@@ -2,6 +2,7 @@ import { Fragment, useMemo, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import {
   AlertTriangle,
+  Boxes,
   CheckCircle2,
   ChevronDown,
   ChevronRight,
@@ -9,13 +10,17 @@ import {
   ChevronsUpDown,
   FolderOpen,
   FolderPlus,
+  Images,
   Layers,
   ListChecks,
   Circle,
-  Search
+  RotateCw,
+  Search,
+  Tag
 } from 'lucide-react';
 import { useApp } from '../useAppController';
 import { SpineFileIcon } from './SpineFileIcon';
+import { StatCard } from './StatCard';
 import { basename } from '../sessions';
 import { formatBytes } from '../time';
 import type { LibraryEntry } from '../config';
@@ -26,7 +31,6 @@ import {
   groupByIdBand,
   cleanStatusForEntry,
   type LibraryCleanStatus,
-  hasAnyWarning,
   versionLabel,
   versionSummary,
   versionTags,
@@ -62,6 +66,8 @@ export function LibraryInventory({
     activeLibrary,
     libraryScan,
     libraryCleanState,
+    isScanningLibrary,
+    rescanLibrary,
     createSessionFromLibrary,
     createProjectFromLibrary,
     setViewMode,
@@ -116,10 +122,19 @@ export function LibraryInventory({
     return [...filtered].sort(compareEntry);
   }, [filtered, sort]);
 
-  const warningCount = useMemo(
-    () => filtered.filter((e) => hasAnyWarning(e, thresholds)).length,
-    [filtered, thresholds]
-  );
+  // Clean-scan coverage across the whole library: never-scanned vs. clean vs. needs-review.
+  const scanCounts = useMemo(() => {
+    let clean = 0;
+    let warning = 0;
+    let unknown = 0;
+    for (const e of entries) {
+      const status = cleanStatusForEntry(e, libraryCleanState[e.spineFile]);
+      if (status === 'clean') clean += 1;
+      else if (status === 'warning') warning += 1;
+      else unknown += 1;
+    }
+    return { clean, warning, unknown };
+  }, [entries, libraryCleanState]);
 
   const sections = useMemo<Section[]>(() => {
     const groups = facet === 'id' ? groupByIdBand(sorted) : groupByFolder(sorted);
@@ -254,25 +269,20 @@ export function LibraryInventory({
   return (
     <div className="library-pane">
       <div className="library-pane-head">
-      <div className="library-stats">
-        <div className="library-stat">
-          <span className="library-stat-value">{entries.length}</span>
-          <span className="library-stat-label">{t.libraryTotalEntries}</span>
-        </div>
+      <div className="stat-cards">
+        <StatCard icon={<Boxes size={18} />} label={t.libraryTotalEntries} value={entries.length} />
         {buckets.map((b) => (
-          <div className="library-stat" key={b.major}>
-            <span className="library-stat-value">{b.count}</span>
-            <span className="library-stat-label">{versionLabel(b.major)}</span>
-          </div>
+          <StatCard key={b.major} icon={<Tag size={18} />} label={versionLabel(b.major)} value={b.count} />
         ))}
-        <div className="library-stat">
-          <span className="library-stat-value">{formatBytes(libraryScan?.totalImageBytes ?? 0)}</span>
-          <span className="library-stat-label">{t.libraryTotalImages}</span>
-        </div>
-        <div className={`library-stat ${warningCount > 0 ? 'warn' : ''}`}>
-          <span className="library-stat-value">{warningCount}</span>
-          <span className="library-stat-label">{t.libraryWarnings}</span>
-        </div>
+        <StatCard icon={<Images size={18} />} label={t.libraryTotalImages} value={formatBytes(libraryScan?.totalImageBytes ?? 0)} />
+        <StatCard icon={<Circle size={18} />} label={t.libraryStatNotScanned} value={scanCounts.unknown} />
+        <StatCard icon={<CheckCircle2 size={18} />} label={t.libraryStatClean} value={scanCounts.clean} tone={scanCounts.clean > 0 ? 'ok' : 'default'} />
+        <StatCard
+          icon={<AlertTriangle size={18} />}
+          label={t.libraryStatNeedsReview}
+          value={scanCounts.warning}
+          tone={scanCounts.warning > 0 ? 'warn' : 'default'}
+        />
       </div>
 
       <div className="library-search-row">
@@ -284,6 +294,13 @@ export function LibraryInventory({
           placeholder={t.librarySearchPlaceholder}
           onChange={(e) => filter.setQuery(e.target.value)}
         />
+        <span className="muted library-lastscan">
+          {t.libraryLastScan}:{' '}
+          {activeLibrary?.lastScanAt ? new Date(activeLibrary.lastScanAt).toLocaleDateString() : t.libraryNeverScanned}
+        </span>
+        <button className="secondary-button small" onClick={() => void rescanLibrary()} disabled={isScanningLibrary}>
+          <RotateCw size={14} className={isScanningLibrary ? 'spin' : undefined} /> {t.libraryRescan}
+        </button>
       </div>
 
       <div className="library-chip-row">

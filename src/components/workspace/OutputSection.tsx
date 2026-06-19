@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { AlertTriangle, FolderOpen, RotateCw, Link2, Wand2, Info } from 'lucide-react';
+import { AlertTriangle, FolderOpen, RotateCw, Link2, Wand2, Info, XCircle } from 'lucide-react';
 import { Section, FieldStatus, Hint } from '../common';
 import { useApp } from '../../useAppController';
 import { basename } from '../../sessions';
@@ -98,6 +98,18 @@ export function OutputSection() {
           </button>
         </div>
       )}
+      {/* Readiness reason (e.g. "...requires an output root") shown right under the output bar. */}
+      {validation.errors.length > 0 ? (
+        <div className="notice danger" role="alert">
+          <XCircle size={18} />
+          <span>{validation.errors.join(' ')}</span>
+        </div>
+      ) : validation.warnings.length > 0 ? (
+        <div className="notice warning" role="status" aria-live="polite">
+          <AlertTriangle size={18} />
+          <span>{validation.warnings.join(' ')}</span>
+        </div>
+      ) : null}
       <div className="form-row">
         <label>{t.outputPolicy}</label>
         <div className="mode-grid output-policy-grid">
