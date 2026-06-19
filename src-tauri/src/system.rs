@@ -6,7 +6,7 @@ use tokio::process::Command;
 
 use crate::{
     error::ResultExt,
-    paths::{parse_quoted_path, unquote},
+    paths::{parse_quoted_path, path_to_string, unquote},
 };
 
 #[tauri::command]
@@ -24,17 +24,34 @@ pub(crate) fn write_text_file(path: String, content: String) -> Result<(), Strin
     fs::write(&target, content).str_err()
 }
 
-/// Probe for a Google Drive "Shared drives" mount and return its path (e.g. `G:\Shared drives`),
-/// so the sync setup can pre-fill the shared root. Returns `None` when none is found — the UI
-/// then warns and asks the user to pick it manually. Windows-only; other platforms return `None`.
+/// Pre-fill the sync folder by probing for a Google Drive "Shared drives" mount. The mount root
+/// (`G:\Shared drives`) is a virtual listing you CAN'T write files into — only the individual
+/// shared drives under it are writable. So return the first **writable** shared drive
+/// (e.g. `G:\Shared drives\FD`); the frontend then anchors path-rebasing at the parent mount.
+/// Returns `None` when none is writable. Windows-only; other platforms return `None`.
 #[tauri::command]
 pub(crate) fn detect_drive_root() -> Option<String> {
     #[cfg(windows)]
     {
         for letter in b'A'..=b'Z' {
-            let candidate = format!("{}:\\Shared drives", letter as char);
-            if std::path::Path::new(&candidate).is_dir() {
-                return Some(candidate);
+            let mount = format!("{}:\\Shared drives", letter as char);
+            if !std::path::Path::new(&mount).is_dir() {
+                continue;
+            }
+            let Ok(entries) = fs::read_dir(&mount) else { continue };
+            let mut dirs: Vec<std::path::PathBuf> = entries
+                .filter_map(Result::ok)
+                .map(|e| e.path())
+                .filter(|p| p.is_dir())
+                .collect();
+            dirs.sort();
+            for dir in dirs {
+                // Confirm writability with a throwaway probe file (deleted right after).
+                let probe = dir.join(".__spineforge_write_test");
+                if fs::write(&probe, b"x").is_ok() {
+                    let _ = fs::remove_file(&probe);
+                    return Some(path_to_string(&dir));
+                }
             }
         }
     }

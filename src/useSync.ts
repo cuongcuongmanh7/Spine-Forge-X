@@ -6,6 +6,8 @@ import type { ToastKind } from './types';
 import {
   buildProfile,
   applyProfile,
+  deriveAnchor,
+  isVirtualMount,
   loadSyncSettings,
   persistSyncSettings,
   readProfileFile,
@@ -61,7 +63,8 @@ export function useSync({ data, t, pushToast }: Args) {
   const reconcilingRef = useRef(false);
   const syncedOnceRef = useRef(false);
 
-  const connected = enabled && Boolean(root);
+  // A bare `G:\Shared drives` mount can't hold files → not a usable root.
+  const connected = enabled && Boolean(root) && !isVirtualMount(root);
 
   // Update state + storage + the ref synchronously, so a reconcile fired right after sees it.
   const applySetting = useCallback((patch: Partial<{ enabled: boolean; root: string }>) => {
@@ -87,7 +90,8 @@ export function useSync({ data, t, pushToast }: Args) {
     if (!r) return;
     // Never write before the first reconcile set a baseline, nor while one is running.
     if (reconcilingRef.current || !syncedOnceRef.current) return;
-    const profile = buildProfile(dataRef.current, r, Date.now());
+    // File lives in `r` (writable folder); paths rebase against the wider Drive mount (anchor).
+    const profile = buildProfile(dataRef.current, deriveAnchor(r), Date.now());
     const body = JSON.stringify({
       appConfig: profile.appConfig,
       projects: profile.projects,
@@ -118,9 +122,10 @@ export function useSync({ data, t, pushToast }: Args) {
     }
     reconcilingRef.current = true;
     setStatus('syncing');
+    const anchor = deriveAnchor(r);
     try {
       const remote = await readProfileFile(r);
-      const local = buildProfile(dataRef.current, r, Date.now());
+      const local = buildProfile(dataRef.current, anchor, Date.now());
       const localBody = JSON.stringify({
         appConfig: local.appConfig,
         projects: local.projects,
@@ -142,7 +147,7 @@ export function useSync({ data, t, pushToast }: Args) {
         // Remote changed since we last synced → it wins. Apply and reload to re-hydrate.
         // Keep reconcilingRef set: the reload tears everything down, no push should slip in.
         persistSyncSettings({ lastSyncedAt: remote.updatedAt });
-        applyProfile(remote, r, dataRef.current.appConfig.spinePath);
+        applyProfile(remote, anchor, dataRef.current.appConfig.spinePath);
         window.location.reload();
         return;
       }
@@ -162,26 +167,31 @@ export function useSync({ data, t, pushToast }: Args) {
 
   // On mount: reconcile if a root is set, otherwise try to auto-detect a Shared drives mount.
   const didMountRef = useRef(false);
-  useEffect(() => {
-    if (didMountRef.current) return;
-    didMountRef.current = true;
-    if (!enabled) {
-      setStatus('idle');
-      return;
-    }
-    if (root) {
+  // Reconcile if we have a usable root; otherwise (no root, or a non-writable virtual mount)
+  // auto-detect a writable shared drive and use that. Shared between mount + enabling the toggle.
+  const ensureRootAndSync = useCallback(async () => {
+    const r = settingsRef.current.root;
+    if (r && !isVirtualMount(r)) {
       void reconcile();
       return;
     }
     setStatus('idle');
-    void (async () => {
-      const detected = await invoke<string | null>('detect_drive_root').catch(() => null);
-      if (detected) {
-        applySetting({ root: detected });
-        pushToastRef.current(`${tRef.current.syncAutoDetected}: ${detected}`);
-        void reconcile();
-      }
-    })();
+    const detected = await invoke<string | null>('detect_drive_root').catch(() => null);
+    if (detected) {
+      applySetting({ root: detected });
+      pushToastRef.current(`${tRef.current.syncAutoDetected}: ${detected}`);
+      void reconcile();
+    } else if (isVirtualMount(r)) {
+      // Drop the unusable virtual mount so the "pick a writable folder" banner shows.
+      applySetting({ root: '' });
+    }
+  }, [applySetting, reconcile]);
+
+  useEffect(() => {
+    if (didMountRef.current) return;
+    didMountRef.current = true;
+    if (!enabled) setStatus('idle');
+    else void ensureRootAndSync();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -204,15 +214,20 @@ export function useSync({ data, t, pushToast }: Args) {
   const setSyncEnabled = useCallback(
     (value: boolean) => {
       applySetting({ enabled: value });
-      if (value && settingsRef.current.root) void reconcile();
+      if (value) void ensureRootAndSync();
       else setStatus('idle');
     },
-    [applySetting, reconcile]
+    [applySetting, ensureRootAndSync]
   );
 
   const chooseRoot = useCallback(async () => {
     const picked = await open({ directory: true, multiple: false, defaultPath: root || undefined });
     if (typeof picked !== 'string') return;
+    if (isVirtualMount(picked)) {
+      // The bare Shared drives mount isn't writable — make the user pick inside a drive.
+      pushToastRef.current(tRef.current.syncRootMissing, 'warning');
+      return;
+    }
     applySetting({ root: picked });
     if (settingsRef.current.enabled) void reconcile();
   }, [root, applySetting, reconcile]);
@@ -226,8 +241,8 @@ export function useSync({ data, t, pushToast }: Args) {
     syncStatus: status,
     syncError: error,
     syncConnected: connected,
-    /** Enabled but no root resolved (auto-detect failed / not picked) — UI shows a banner. */
-    syncNeedsRoot: enabled && !root,
+    /** Enabled but no usable root (none picked, auto-detect failed, or a non-writable mount). */
+    syncNeedsRoot: enabled && (!root || isVirtualMount(root)),
     setSyncEnabled,
     chooseRoot,
     syncNow

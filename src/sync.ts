@@ -116,6 +116,27 @@ export function tokenizePath(abs: string, spineRoot: string): string {
   return abs;
 }
 
+/**
+ * The rebasing anchor derived from the chosen sync folder. The Google Drive "Shared drives" mount
+ * (`G:\Shared drives`) is a virtual listing — you can't write files at that level, only inside a
+ * specific shared drive. So the user points the sync FILE at a writable folder (e.g.
+ * `G:\Shared drives\FD`), while paths must still rebase against the whole mount so projects in
+ * sibling drives (FD, DH) stay portable. When `root` sits under a `Shared drives` mount, anchor at
+ * that mount; otherwise the folder itself is the anchor.
+ */
+/** True for the bare `G:\Shared drives` mount — a virtual listing you can't write files into,
+ *  so it must not be used as the sync folder (treated as "unconfigured"). */
+export function isVirtualMount(root: string): boolean {
+  return /^[A-Za-z]:[\\/]Shared drives[\\/]*$/i.test(root.trim());
+}
+
+export function deriveAnchor(root: string): string {
+  if (!root) return root;
+  const match = normSlashes(root).match(/^(.*?\/Shared drives)(?:\/.*)?$/i);
+  if (!match) return root;
+  return looksWindows(root) ? match[1].replace(/\//g, '\\') : match[1];
+}
+
 /** Reverse of tokenizePath against the local machine's Spine root. */
 export function resolvePath(token: string, spineRoot: string): string {
   if (!token || !token.startsWith(TOKEN)) return token;
