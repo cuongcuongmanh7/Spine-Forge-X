@@ -1,5 +1,8 @@
 # Changelog
 
+## v0.3.9
+- **Sửa lỗi đồng bộ Google Drive không chạy**: chọn nhầm cấp `G:\Shared drives` (thư mục ảo, không ghi được) làm sync báo lỗi. Giờ app tự chọn một shared drive ghi được; đường dẫn vẫn khớp đúng giữa các máy. Bản cũ đã lỡ chọn cấp ảo sẽ tự sửa khi mở lại.
+
 ## v0.3.8
 - **Đồng bộ qua Google Drive**: làm ở công ty rồi về nhà mở app là có sẵn toàn bộ project/session/cấu hình, không phải set-up lại. Bật trong Settings ▸ Sync — app tự dò thư mục Shared drives, trạng thái hiện ở góc trên (xanh = đã đồng bộ). Đường dẫn tự khớp đúng dù ổ đĩa khác nhau giữa các máy.
 - **Preset mặc định giờ là binary + pack** (thay cho JSON).
