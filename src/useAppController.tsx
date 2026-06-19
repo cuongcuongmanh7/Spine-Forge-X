@@ -192,16 +192,14 @@ export function useAppControllerValue() {
   );
   const {
     syncEnabled,
-    syncFolder,
-    syncSpineRoot,
+    syncRoot,
     syncLastSyncedAt,
     syncStatus,
     syncError,
     syncConnected,
-    syncNeedsSpineRoot,
+    syncNeedsRoot,
     setSyncEnabled,
-    chooseSyncFolder,
-    chooseSpineRoot,
+    chooseRoot,
     syncNow
   } = useSync({ data: syncData, t, pushToast });
 
@@ -567,16 +565,14 @@ export function useAppControllerValue() {
 
     // App-data sync (Tier A)
     syncEnabled,
-    syncFolder,
-    syncSpineRoot,
+    syncRoot,
     syncLastSyncedAt,
     syncStatus,
     syncError,
     syncConnected,
-    syncNeedsSpineRoot,
+    syncNeedsRoot,
     setSyncEnabled,
-    chooseSyncFolder,
-    chooseSpineRoot,
+    chooseRoot,
     syncNow,
 
     // Clean source folder

@@ -18,14 +18,12 @@ export function SettingsModal() {
     autoDetectSpine,
     setSettingsOpen,
     syncEnabled,
-    syncFolder,
-    syncSpineRoot,
+    syncRoot,
     syncLastSyncedAt,
     syncStatus,
-    syncNeedsSpineRoot,
+    syncNeedsRoot,
     setSyncEnabled,
-    chooseSyncFolder,
-    chooseSpineRoot,
+    chooseRoot,
     syncNow
   } = useApp();
 
@@ -98,26 +96,19 @@ export function SettingsModal() {
             {syncEnabled && (
               <>
                 <div className="form-row">
-                  <label>{t.syncFolder}</label>
-                  <input value={syncFolder} readOnly placeholder={t.syncFolderPlaceholder} />
-                  <button className="icon-button" title={t.syncChooseFolder} aria-label={t.syncChooseFolder} onClick={() => void chooseSyncFolder()}>
-                    <FolderOpen size={18} />
-                  </button>
-                </div>
-                <div className="form-row">
                   <label>
-                    {t.syncSpineRoot}
-                    <Hint text={t.syncSpineRootHelp} />
+                    {t.syncRoot}
+                    <Hint text={t.syncRootHelp} />
                   </label>
-                  <input value={syncSpineRoot} readOnly placeholder={t.syncSpineRootPlaceholder} />
-                  <button className="icon-button" title={t.syncChooseSpineRoot} aria-label={t.syncChooseSpineRoot} onClick={() => void chooseSpineRoot()}>
+                  <input value={syncRoot} readOnly placeholder={t.syncRootPlaceholder} />
+                  <button className="icon-button" title={t.syncChooseRoot} aria-label={t.syncChooseRoot} onClick={() => void chooseRoot()}>
                     <FolderOpen size={18} />
                   </button>
                 </div>
-                {syncNeedsSpineRoot && (
+                {syncNeedsRoot && (
                   <div className="notice warning">
                     <AlertTriangle size={18} />
-                    <span>{t.syncNeedsSpineRoot}</span>
+                    <span>{t.syncRootMissing}</span>
                   </div>
                 )}
                 <div className="header-controls settings-controls">
@@ -127,7 +118,7 @@ export function SettingsModal() {
                   </span>
                   <button
                     className="secondary-button small"
-                    disabled={!syncFolder || !syncSpineRoot || syncStatus === 'syncing'}
+                    disabled={!syncRoot || syncStatus === 'syncing'}
                     onClick={() => syncNow()}
                   >
                     <RotateCw className={syncStatus === 'syncing' ? 'spin' : undefined} size={15} />

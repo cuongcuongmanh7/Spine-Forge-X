@@ -431,6 +431,7 @@ pub fn run() {
             presets::delete_user_export_preset,
             system::write_text_file,
             system::read_text_file,
+            system::detect_drive_root,
             clean_timestamp_exports,
             system::open_path,
             system::open_url,

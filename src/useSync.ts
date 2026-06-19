@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { invoke } from '@tauri-apps/api/core';
 import { open } from '@tauri-apps/plugin-dialog';
 import type { Translations } from './i18n';
 import type { ToastKind } from './types';
@@ -24,15 +25,16 @@ type Args = {
 };
 
 /**
- * Orchestrates Tier-A app-data sync: reconciles with the profile file on the Drive folder at
- * startup (newer-wins) and debounce-writes local edits back. Reconciliation that adopts a newer
- * remote profile reloads the window so the module-scope `loadPersistedState` re-runs with it.
+ * Orchestrates Tier-A app-data sync. A single `root` (a shared Google Drive folder like
+ * `G:\Shared drives`) is BOTH where the profile file lives AND the `${SPINE_ROOT}` rebasing
+ * anchor. Sync defaults ON and auto-detects a "Shared drives" mount on first run. Reconciles
+ * with the remote profile at startup (newer-wins) and debounce-writes local edits back; adopting
+ * a newer remote reloads the window so module-scope `loadPersistedState` re-runs with it.
  */
 export function useSync({ data, t, pushToast }: Args) {
   const initial = loadSyncSettings();
   const [enabled, setEnabled] = useState(initial.enabled);
-  const [folder, setFolder] = useState(initial.folder);
-  const [spineRoot, setSpineRoot] = useState(initial.spineRoot);
+  const [root, setRoot] = useState(initial.root);
   const [lastSyncedAt, setLastSyncedAt] = useState<number | null>(initial.lastSyncedAt);
   const [status, setStatus] = useState<SyncStatus>('idle');
   const [error, setError] = useState<string | null>(null);
@@ -40,8 +42,8 @@ export function useSync({ data, t, pushToast }: Args) {
   // Async callbacks read live values through refs so they never close over stale state.
   const dataRef = useRef(data);
   dataRef.current = data;
-  const settingsRef = useRef({ enabled, folder, spineRoot, lastSyncedAt });
-  settingsRef.current = { enabled, folder, spineRoot, lastSyncedAt };
+  const settingsRef = useRef({ enabled, root, lastSyncedAt });
+  settingsRef.current = { enabled, root, lastSyncedAt };
   // t and pushToast are recreated every render by the controller; read them through refs so
   // pushLocal/reconcile keep a STABLE identity. Otherwise the debounce effect re-subscribes every
   // render and its cleanup cancels the pending timer before it can fire → stuck on "pending".
@@ -59,11 +61,20 @@ export function useSync({ data, t, pushToast }: Args) {
   const reconcilingRef = useRef(false);
   const syncedOnceRef = useRef(false);
 
-  const connected = enabled && Boolean(folder) && Boolean(spineRoot);
+  const connected = enabled && Boolean(root);
+
+  // Update state + storage + the ref synchronously, so a reconcile fired right after sees it.
+  const applySetting = useCallback((patch: Partial<{ enabled: boolean; root: string }>) => {
+    if (patch.enabled !== undefined) setEnabled(patch.enabled);
+    if (patch.root !== undefined) setRoot(patch.root);
+    persistSyncSettings(patch);
+    settingsRef.current = { ...settingsRef.current, ...patch };
+  }, []);
 
   const markSynced = useCallback((at: number, body: string | null) => {
     persistSyncSettings({ lastSyncedAt: at });
     setLastSyncedAt(at);
+    settingsRef.current = { ...settingsRef.current, lastSyncedAt: at };
     if (body !== null) lastBodyRef.current = body;
     syncedOnceRef.current = true;
     setError(null);
@@ -72,11 +83,11 @@ export function useSync({ data, t, pushToast }: Args) {
 
   // Push the local workspace up to the profile file (no reload). Skips identical content.
   const pushLocal = useCallback(async () => {
-    const { folder: f, spineRoot: root } = settingsRef.current;
-    if (!f || !root) return;
+    const { root: r } = settingsRef.current;
+    if (!r) return;
     // Never write before the first reconcile set a baseline, nor while one is running.
     if (reconcilingRef.current || !syncedOnceRef.current) return;
-    const profile = buildProfile(dataRef.current, root, Date.now());
+    const profile = buildProfile(dataRef.current, r, Date.now());
     const body = JSON.stringify({
       appConfig: profile.appConfig,
       projects: profile.projects,
@@ -89,7 +100,7 @@ export function useSync({ data, t, pushToast }: Args) {
     }
     setStatus('syncing');
     try {
-      await writeProfileFile(f, profile);
+      await writeProfileFile(r, profile);
       markSynced(profile.updatedAt, body);
     } catch (e) {
       setError(String(e));
@@ -100,16 +111,16 @@ export function useSync({ data, t, pushToast }: Args) {
 
   // Startup / manual reconcile: newer of (local edits, remote profile) wins.
   const reconcile = useCallback(async () => {
-    const { folder: f, spineRoot: root, lastSyncedAt: last } = settingsRef.current;
-    if (!settingsRef.current.enabled || !f || !root) {
+    const { enabled: on, root: r, lastSyncedAt: last } = settingsRef.current;
+    if (!on || !r) {
       setStatus('idle');
       return;
     }
     reconcilingRef.current = true;
     setStatus('syncing');
     try {
-      const remote = await readProfileFile(f);
-      const local = buildProfile(dataRef.current, root, Date.now());
+      const remote = await readProfileFile(r);
+      const local = buildProfile(dataRef.current, r, Date.now());
       const localBody = JSON.stringify({
         appConfig: local.appConfig,
         projects: local.projects,
@@ -118,7 +129,7 @@ export function useSync({ data, t, pushToast }: Args) {
       });
       if (!remote) {
         // First time: seed the Drive folder with our local workspace.
-        await writeProfileFile(f, local);
+        await writeProfileFile(r, local);
         markSynced(local.updatedAt, localBody);
         return;
       }
@@ -131,12 +142,12 @@ export function useSync({ data, t, pushToast }: Args) {
         // Remote changed since we last synced → it wins. Apply and reload to re-hydrate.
         // Keep reconcilingRef set: the reload tears everything down, no push should slip in.
         persistSyncSettings({ lastSyncedAt: remote.updatedAt });
-        applyProfile(remote, root, dataRef.current.appConfig.spinePath);
+        applyProfile(remote, r, dataRef.current.appConfig.spinePath);
         window.location.reload();
         return;
       }
       // Local is ahead of the last sync → push it up.
-      await writeProfileFile(f, local);
+      await writeProfileFile(r, local);
       markSynced(local.updatedAt, localBody);
     } catch (e) {
       setError(String(e));
@@ -149,13 +160,28 @@ export function useSync({ data, t, pushToast }: Args) {
     }
   }, [markSynced]);
 
-  // Reconcile once on mount when sync is already configured.
+  // On mount: reconcile if a root is set, otherwise try to auto-detect a Shared drives mount.
   const didMountRef = useRef(false);
   useEffect(() => {
     if (didMountRef.current) return;
     didMountRef.current = true;
-    if (connected) void reconcile();
-    else setStatus('idle');
+    if (!enabled) {
+      setStatus('idle');
+      return;
+    }
+    if (root) {
+      void reconcile();
+      return;
+    }
+    setStatus('idle');
+    void (async () => {
+      const detected = await invoke<string | null>('detect_drive_root').catch(() => null);
+      if (detected) {
+        applySetting({ root: detected });
+        pushToastRef.current(`${tRef.current.syncAutoDetected}: ${detected}`);
+        void reconcile();
+      }
+    })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -177,45 +203,33 @@ export function useSync({ data, t, pushToast }: Args) {
 
   const setSyncEnabled = useCallback(
     (value: boolean) => {
-      setEnabled(value);
-      persistSyncSettings({ enabled: value });
-      if (value && folder && spineRoot) void reconcile();
+      applySetting({ enabled: value });
+      if (value && settingsRef.current.root) void reconcile();
       else setStatus('idle');
     },
-    [folder, spineRoot, reconcile]
+    [applySetting, reconcile]
   );
 
-  const chooseSyncFolder = useCallback(async () => {
-    const picked = await open({ directory: true, multiple: false, defaultPath: folder || undefined });
+  const chooseRoot = useCallback(async () => {
+    const picked = await open({ directory: true, multiple: false, defaultPath: root || undefined });
     if (typeof picked !== 'string') return;
-    setFolder(picked);
-    persistSyncSettings({ folder: picked });
-    if (enabled && spineRoot) void reconcile();
-  }, [folder, enabled, spineRoot, reconcile]);
-
-  const chooseSpineRoot = useCallback(async () => {
-    const picked = await open({ directory: true, multiple: false, defaultPath: spineRoot || undefined });
-    if (typeof picked !== 'string') return;
-    setSpineRoot(picked);
-    persistSyncSettings({ spineRoot: picked });
-    if (enabled && folder) void reconcile();
-  }, [spineRoot, enabled, folder, reconcile]);
+    applySetting({ root: picked });
+    if (settingsRef.current.enabled) void reconcile();
+  }, [root, applySetting, reconcile]);
 
   const syncNow = useCallback(() => void reconcile(), [reconcile]);
 
   return {
     syncEnabled: enabled,
-    syncFolder: folder,
-    syncSpineRoot: spineRoot,
+    syncRoot: root,
     syncLastSyncedAt: lastSyncedAt,
     syncStatus: status,
     syncError: error,
     syncConnected: connected,
-    /** Configured but missing the Spine root anchor — UI shows a banner. */
-    syncNeedsSpineRoot: enabled && Boolean(folder) && !spineRoot,
+    /** Enabled but no root resolved (auto-detect failed / not picked) — UI shows a banner. */
+    syncNeedsRoot: enabled && !root,
     setSyncEnabled,
-    chooseSyncFolder,
-    chooseSpineRoot,
+    chooseRoot,
     syncNow
   };
 }

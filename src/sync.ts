@@ -25,17 +25,19 @@ const TOKEN = '${SPINE_ROOT}';
 
 const SYNC_KEYS = {
   enabled: 'spineforge.sync.enabled',
-  folder: 'spineforge.sync.folder',
-  spineRoot: 'spineforge.sync.spineRoot',
-  lastSyncedAt: 'spineforge.sync.lastSyncedAt'
+  root: 'spineforge.sync.root',
+  lastSyncedAt: 'spineforge.sync.lastSyncedAt',
+  // Legacy keys (pre-merge) read once for migration into `root`.
+  legacyFolder: 'spineforge.sync.folder',
+  legacySpineRoot: 'spineforge.sync.spineRoot'
 } as const;
 
 export type SyncSettings = {
   enabled: boolean;
-  /** Folder (inside Google Drive) the profile file is read from / written to. */
-  folder: string;
-  /** Local mount path of the shared source tree — the anchor for `${SPINE_ROOT}` rebasing. */
-  spineRoot: string;
+  /** The shared Google Drive root: BOTH where the profile file lives AND the `${SPINE_ROOT}`
+   *  rebasing anchor. A common parent like `G:\Shared drives` so every project's source sits
+   *  under it. */
+  root: string;
   /** updatedAt of the profile we last read or wrote; drives newer-wins reconciliation. */
   lastSyncedAt: number | null;
 };
@@ -63,18 +65,24 @@ export type SyncProfile = {
 export function loadSyncSettings(): SyncSettings {
   const lastRaw = localStorage.getItem(SYNC_KEYS.lastSyncedAt);
   const last = lastRaw ? Number(lastRaw) : NaN;
+  // Default ON: the team works off a shared Drive, so sync is the expected mode.
+  const enabledRaw = localStorage.getItem(SYNC_KEYS.enabled);
+  // Merged `root` falls back to the legacy spineRoot (the rebasing anchor mattered most), then folder.
+  const root =
+    localStorage.getItem(SYNC_KEYS.root) ??
+    localStorage.getItem(SYNC_KEYS.legacySpineRoot) ??
+    localStorage.getItem(SYNC_KEYS.legacyFolder) ??
+    '';
   return {
-    enabled: localStorage.getItem(SYNC_KEYS.enabled) === 'true',
-    folder: localStorage.getItem(SYNC_KEYS.folder) ?? '',
-    spineRoot: localStorage.getItem(SYNC_KEYS.spineRoot) ?? '',
+    enabled: enabledRaw === null ? true : enabledRaw === 'true',
+    root,
     lastSyncedAt: Number.isFinite(last) ? last : null
   };
 }
 
 export function persistSyncSettings(patch: Partial<SyncSettings>): void {
   if (patch.enabled !== undefined) localStorage.setItem(SYNC_KEYS.enabled, String(patch.enabled));
-  if (patch.folder !== undefined) localStorage.setItem(SYNC_KEYS.folder, patch.folder);
-  if (patch.spineRoot !== undefined) localStorage.setItem(SYNC_KEYS.spineRoot, patch.spineRoot);
+  if (patch.root !== undefined) localStorage.setItem(SYNC_KEYS.root, patch.root);
   if (patch.lastSyncedAt !== undefined) {
     if (patch.lastSyncedAt === null) localStorage.removeItem(SYNC_KEYS.lastSyncedAt);
     else localStorage.setItem(SYNC_KEYS.lastSyncedAt, String(patch.lastSyncedAt));
