@@ -29,15 +29,7 @@ import { StatCard } from './StatCard';
 import { basename } from '../sessions';
 import { formatBytes, formatDate, formatDateTime } from '../time';
 import type { LibraryEntry } from '../config';
-import {
-  downloadDriveRevision,
-  fetchDriveBasics,
-  fetchDriveFileMetadata,
-  toDriveRelPath,
-  type DriveBasic,
-  type DriveFileInfo,
-  type DriveRevision
-} from '../drive';
+import { useLibraryDrive } from '../useLibraryDrive';
 import {
   entryMatchesFilter,
   entryWarnings,
@@ -90,23 +82,29 @@ export function LibraryInventory({
     pushToast,
     driveAccount,
     syncRoot,
+    syncConnected,
     setSettingsOpen
   } = useApp();
 
   const { facet, selectedCats, selectedVersions, query } = filter;
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [expandedAnims, setExpandedAnims] = useState<Set<string>>(new Set());
-  const [expandedInfo, setExpandedInfo] = useState<Set<string>>(new Set());
-  // Lazily-fetched Drive metadata, keyed by `.spine` path; held here (not persisted, not on scan).
-  const [driveInfo, setDriveInfo] = useState<
-    Record<string, { loading?: boolean; error?: string; notOnDrive?: boolean; data?: DriveFileInfo }>
-  >({});
-  // Bulk owner/last-modified for the dashboard columns, keyed by `.spine` path.
-  const [driveBasics, setDriveBasics] = useState<Record<string, DriveBasic>>({});
-  const [loadingBasics, setLoadingBasics] = useState(false);
   // Which row's "⋯" action menu is open (keyed by `.spine` path); null = none.
   const [menuOpen, setMenuOpen] = useState<string | null>(null);
   const [sort, setSort] = useState<SortState>({ key: 'entry', direction: 'asc' });
+
+  // Drive metadata (per-row owner/history panel, dashboard columns, open-revision) lives in its own
+  // hook to keep this component thin — see useLibraryDrive.
+  const { driveInfo, expandedInfo, loadingBasics, basicFor, toggleDriveInfo, loadDriveBasics, openRevisionInSpine } =
+    useLibraryDrive({
+      t,
+      pushToast,
+      driveAccount,
+      syncRoot,
+      syncConnected,
+      spinePath: merged.spinePath,
+      openSettings: () => setSettingsOpen(true)
+    });
 
   const thresholds: LibraryThresholds = {
     imageFolderWarnMB: appConfig.libraryImageFolderWarnMB,
@@ -144,10 +142,10 @@ export function LibraryInventory({
       return compareString(a, b);
     }
     const ownerOf = (e: LibraryEntry) => {
-      const d = driveBasics[e.spineFile];
+      const d = basicFor(e);
       return d?.ownerName || d?.ownerEmail || d?.lastEditorName || d?.lastEditorEmail || '';
     };
-    const modifiedOf = (e: LibraryEntry) => driveBasics[e.spineFile]?.modifiedTime || '';
+    const modifiedOf = (e: LibraryEntry) => basicFor(e)?.modifiedTime || '';
 
     function compareEntry(a: LibraryEntry, b: LibraryEntry) {
       let result = 0;
@@ -164,7 +162,7 @@ export function LibraryInventory({
     }
 
     return [...filtered].sort(compareEntry);
-  }, [filtered, sort, driveBasics]);
+  }, [filtered, sort, basicFor]);
 
   // Clean-scan coverage across the whole library: never-scanned vs. clean vs. needs-review.
   const scanCounts = useMemo(() => {
@@ -216,74 +214,6 @@ export function LibraryInventory({
       await invoke('open_path', { path: entry.folder });
     } catch (error) {
       pushToast(`${t.libraryOpenFolderFailed}: ${String(error)}`, 'error');
-    }
-  }
-
-  // Toggle the Drive metadata panel for a row, fetching owner/history on first open.
-  function toggleDriveInfo(entry: LibraryEntry) {
-    const key = entry.spineFile;
-    const willOpen = !expandedInfo.has(key);
-    toggleSet(setExpandedInfo, key);
-    if (!willOpen || driveInfo[key]?.data || driveInfo[key]?.loading) return;
-
-    if (!driveAccount) {
-      pushToast(t.driveSignInPrompt, 'warning');
-      setSettingsOpen(true);
-      return;
-    }
-    const relPath = toDriveRelPath(entry.spineFile, syncRoot);
-    if (!relPath) {
-      setDriveInfo((prev) => ({ ...prev, [key]: { notOnDrive: true } }));
-      return;
-    }
-    setDriveInfo((prev) => ({ ...prev, [key]: { loading: true } }));
-    fetchDriveFileMetadata(relPath)
-      .then((data) => setDriveInfo((prev) => ({ ...prev, [key]: { data } })))
-      .catch((e) => setDriveInfo((prev) => ({ ...prev, [key]: { error: String(e) } })));
-  }
-
-  // Dashboard: batch-fetch owner + last-modified for the currently filtered rows.
-  async function loadDriveBasics() {
-    if (!driveAccount) {
-      pushToast(t.driveSignInPrompt, 'warning');
-      setSettingsOpen(true);
-      return;
-    }
-    const pairs = filtered
-      .map((e) => ({ spineFile: e.spineFile, relPath: toDriveRelPath(e.spineFile, syncRoot) }))
-      .filter((p): p is { spineFile: string; relPath: string } => Boolean(p.relPath));
-    if (pairs.length === 0) {
-      pushToast(t.driveNotOnDrive, 'warning');
-      return;
-    }
-    setLoadingBasics(true);
-    try {
-      const results = await fetchDriveBasics(pairs.map((p) => p.relPath));
-      const byRel = new Map(pairs.map((p) => [p.relPath, p.spineFile]));
-      setDriveBasics((prev) => {
-        const next = { ...prev };
-        for (const r of results) {
-          const sf = byRel.get(r.relPath);
-          if (sf) next[sf] = r;
-        }
-        return next;
-      });
-    } catch (e) {
-      pushToast(String(e), 'error');
-    } finally {
-      setLoadingBasics(false);
-    }
-  }
-
-  // Download a past revision to temp and open it in Spine (regression review).
-  async function openRevisionInSpine(entry: LibraryEntry, rev: DriveRevision) {
-    const relPath = toDriveRelPath(entry.spineFile, syncRoot);
-    if (!relPath) return;
-    try {
-      const localPath = await downloadDriveRevision(relPath, rev.id);
-      await invoke('open_in_spine', { spinePath: merged.spinePath, file: localPath });
-    } catch (e) {
-      pushToast(`${t.libraryOpenFailed}: ${String(e)}`, 'error');
     }
   }
 
@@ -415,7 +345,7 @@ export function LibraryInventory({
         </button>
         <button
           className="secondary-button small"
-          onClick={() => void loadDriveBasics()}
+          onClick={() => void loadDriveBasics(filtered)}
           disabled={loadingBasics}
           title={t.driveLoadDataHelp}
         >
@@ -586,7 +516,7 @@ export function LibraryInventory({
                     const animOpen = expandedAnims.has(entry.spineFile);
                     const infoOpen = expandedInfo.has(entry.spineFile);
                     const info = driveInfo[entry.spineFile];
-                    const basic = driveBasics[entry.spineFile];
+                    const basic = basicFor(entry);
                     const modifiedMs = basic?.modifiedTime ? Date.parse(basic.modifiedTime) : NaN;
                     const recent = Number.isFinite(modifiedMs) && Date.now() - modifiedMs < 7 * DAY_MS;
                     return (

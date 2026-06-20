@@ -1,5 +1,8 @@
 # Changelog
 
+## v0.4.2
+- **Thư viện: dữ liệu "Tải dữ liệu Drive" (Người sửa / Sửa lần cuối) giờ được lưu lại và đồng bộ qua Google Drive** — mở lại app, hay mở ở máy khác cùng Shared drive, đều thấy ngay mà không phải tải lại; bấm "Tải dữ liệu Drive" để cập nhật.
+
 ## v0.4.1
 - **Sửa: đăng nhập Google Drive bị mất sau khi thoát app** — giờ token được lưu vào Windows Credential Manager nên mở lại app vẫn còn đăng nhập, không phải đăng nhập lại.
 
