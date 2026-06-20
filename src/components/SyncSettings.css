@@ -1,41 +1,5 @@
-/* Global sync indicator (titlebar): icon + a small colored pip tracking the sync state.
-   Lives in its own file (co-located with the component) to keep styles.css under its size cap. */
-.sync-status-dot {
-  display: inline-flex;
-  align-items: center;
-  gap: 3px;
-  height: 24px;
-  margin-right: 6px;
-  padding: 0 6px;
-  border: 0;
-  border-radius: 6px;
-  background: transparent;
-  color: var(--text-muted);
-  cursor: pointer;
-}
-.sync-status-dot:hover {
-  background: color-mix(in srgb, var(--text), transparent 90%);
-  color: var(--text-strong);
-}
-.sync-status-pip {
-  width: 7px;
-  height: 7px;
-  border-radius: 999px;
-  background: var(--text-muted);
-}
-.sync-status-dot.status-synced .sync-status-pip {
-  background: var(--success-fill);
-}
-.sync-status-dot.status-pending .sync-status-pip,
-.sync-status-dot.status-syncing .sync-status-pip {
-  background: var(--warning-fill);
-}
-.sync-status-dot.status-error {
-  color: var(--danger);
-}
-.sync-status-dot.status-error .sync-status-pip {
-  background: var(--danger-fill);
-}
+/* Settings ▸ Sync section styles. (The global sync indicator now lives inside the sidebar
+   account badge — see AccountBadge + .account-sync-pip in styles.css.) */
 
 /* Settings ▸ Sync section layout. The shared .form-row crams the long "Google Drive root"
    label into a 130px column; here the label sits on its own line so the field can breathe. */

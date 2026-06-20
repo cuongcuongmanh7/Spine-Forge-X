@@ -2,7 +2,6 @@ import { Minus, RotateCw, Square, X } from 'lucide-react';
 import appIconUrl from '../../src-tauri/icons/icon.ico';
 import { appVersionLabel } from '../config';
 import { useApp } from '../useAppController';
-import { SyncStatusDot } from './SyncStatusDot';
 
 export function Titlebar() {
   const { updateUi, getAppWindow, checkForAppUpdate, installPendingUpdate, openReleasesPage } = useApp();
@@ -79,7 +78,6 @@ export function Titlebar() {
           )}
         </div>
       </div>
-      <SyncStatusDot />
       <div className="titlebar-controls">
         <button title="Minimize" aria-label="Minimize" onClick={() => void getAppWindow()?.minimize()}>
           <Minus size={15} />

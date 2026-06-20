@@ -1,0 +1,38 @@
+/* Sync status pip merged into the sidebar account badge: grey = idle, amber = pending/syncing,
+   green = synced, red = error. Pushed to the trailing edge so the account + sync state read as
+   one control (the old standalone titlebar dot is gone). */
+.account-sync-pip {
+  flex: 0 0 auto;
+  width: 8px;
+  height: 8px;
+  margin-left: auto;
+  border-radius: 999px;
+  background: var(--text-muted);
+}
+.account-sync-pip.status-synced {
+  background: var(--success-fill);
+}
+.account-sync-pip.status-pending,
+.account-sync-pip.status-syncing {
+  background: var(--warning-fill);
+}
+.account-sync-pip.status-syncing {
+  animation: account-sync-pulse 1.1s var(--ease) infinite;
+}
+.account-sync-pip.status-error {
+  background: var(--danger-fill);
+}
+@keyframes account-sync-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .account-sync-pip.status-syncing {
+    animation: none;
+  }
+}

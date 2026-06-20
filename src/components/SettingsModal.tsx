@@ -3,6 +3,7 @@ import { AlertTriangle, FolderOpen, LogOut, RotateCw, Search, UserCircle2, X } f
 import { Section, FieldStatus, Hint } from './common';
 import { useApp } from '../useAppController';
 import { formatDateTime } from '../time';
+import './SyncSettings.css';
 
 export function SettingsModal() {
   const {
