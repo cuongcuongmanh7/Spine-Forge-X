@@ -1,6 +1,31 @@
 /* Spine Hub Tier C #3/#4: used-by-projects badge, tag chips, and the manual-owner cell.
    Split out of LibraryView.css to keep that file under the line-size guard. */
 
+/* Inventory view toggle (table/grid) + grid sort controls — right side of the GROUP chip row. */
+.library-view-controls {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.library-sort-control {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.library-sort-control select {
+  height: 28px;
+  border-radius: 7px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  padding: 0 6px;
+}
+.library-sort-control .icon-button {
+  width: 28px;
+  height: 28px;
+}
+
 /* Spine Hub Tier C #5: dedicated Preview column (icon button per row). */
 .library-preview-cell {
   text-align: center;

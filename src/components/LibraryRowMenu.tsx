@@ -5,18 +5,7 @@ import { SpineFileIcon } from './SpineFileIcon';
 
 /** The per-row "⋯" action menu cell (Drive history / clean scan / open / create session). Split out
  *  of LibraryInventory to keep that component under the line-size guard. */
-export function LibraryRowMenu({
-  entry,
-  open,
-  onToggle,
-  onClose,
-  onDriveInfo,
-  onCleanScan,
-  onOpenFolder,
-  onOpenInSpine,
-  onCreateSession,
-  t
-}: {
+type Props = {
   entry: LibraryEntry;
   open: boolean;
   onToggle: () => void;
@@ -27,13 +16,27 @@ export function LibraryRowMenu({
   onOpenInSpine: (entry: LibraryEntry) => void;
   onCreateSession: (entry: LibraryEntry) => void;
   t: Translations;
-}) {
+};
+
+/** Just the "⋯" trigger + dropdown (no cell wrapper) — reused by the table cell and the grid card. */
+export function LibraryRowMenuButton({
+  entry,
+  open,
+  onToggle,
+  onClose,
+  onDriveInfo,
+  onCleanScan,
+  onOpenFolder,
+  onOpenInSpine,
+  onCreateSession,
+  t
+}: Props) {
   const act = (fn: (entry: LibraryEntry) => void) => {
     onClose();
     fn(entry);
   };
   return (
-    <td className="library-menu-cell">
+    <>
       <button
         className={`session-menu-trigger ${open ? 'open' : ''}`}
         title={t.options}
@@ -73,6 +76,14 @@ export function LibraryRowMenu({
           </div>
         </>
       )}
+    </>
+  );
+}
+
+export function LibraryRowMenu(props: Props) {
+  return (
+    <td className="library-menu-cell">
+      <LibraryRowMenuButton {...props} />
     </td>
   );
 }

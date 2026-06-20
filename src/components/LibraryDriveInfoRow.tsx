@@ -8,23 +8,19 @@ type DriveInfo = { loading?: boolean; error?: string; notOnDrive?: boolean; data
 
 /** The expandable per-row Google Drive panel (owner / last-modified / revision history). Split out
  *  of LibraryInventory to keep that component thin. */
-export function LibraryDriveInfoRow({
-  entry,
-  info,
-  t,
-  onOpenRevision,
-  onClose
-}: {
+type Props = {
   entry: LibraryEntry;
   info: DriveInfo | undefined;
   t: Translations;
   onOpenRevision: (entry: LibraryEntry, rev: DriveRevision) => void;
   onClose: () => void;
-}) {
+};
+
+/** The Drive panel content (no row/cell wrapper) — reused by the table row and the grid card. */
+export function LibraryDriveInfoPanel({ entry, info, t, onOpenRevision, onClose }: Props) {
   return (
-    <tr className="library-anim-list library-drive-row">
-      <td colSpan={10}>
-        <button className="library-drive-close" title={t.libraryCollapse} aria-label={t.libraryCollapse} onClick={onClose}>
+    <>
+      <button className="library-drive-close" title={t.libraryCollapse} aria-label={t.libraryCollapse} onClick={onClose}>
           <X size={14} />
         </button>
         {info?.loading && (
@@ -77,6 +73,15 @@ export function LibraryDriveInfoRow({
             </div>
           </div>
         )}
+    </>
+  );
+}
+
+export function LibraryDriveInfoRow(props: Props) {
+  return (
+    <tr className="library-anim-list library-drive-row">
+      <td colSpan={10}>
+        <LibraryDriveInfoPanel {...props} />
       </td>
     </tr>
   );

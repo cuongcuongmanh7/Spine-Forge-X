@@ -35,7 +35,9 @@ export const defaultAppConfig = {
   linkedProjects: [] as LinkedProject[],
   // Asset Library warnings: an image folder or a .spine larger than these (in MB) is flagged.
   libraryImageFolderWarnMB: 50,
-  librarySpineFileWarnMB: 10
+  librarySpineFileWarnMB: 10,
+  // Inventory layout: table rows vs. a card grid. Persisted so it survives restarts.
+  libraryViewMode: 'table' as 'table' | 'grid'
 };
 
 export type AppConfig = typeof defaultAppConfig;

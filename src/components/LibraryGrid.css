@@ -1,0 +1,120 @@
+/* B4 phase 1: Inventory card/grid view. Reuses shared badge/chip/menu classes from
+   LibraryView.css + styles.css; only the card layout lives here. */
+
+.library-grid-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding-bottom: 8px;
+}
+
+.library-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.library-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  transition: border-color 0.15s var(--ease), box-shadow 0.15s var(--ease);
+}
+.library-card:hover {
+  border-color: color-mix(in srgb, var(--primary), transparent 55%);
+}
+
+.library-card-thumb {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 60px;
+  border-radius: 8px;
+  background: var(--surface-soft);
+  color: var(--text-muted);
+}
+
+.library-card-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.library-card-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  font-weight: 600;
+}
+.library-card-menu {
+  position: relative;
+  flex: 0 0 auto;
+}
+
+.library-card-dir {
+  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.library-card-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.library-badge {
+  font-size: 11px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--surface-soft);
+  color: var(--text-muted);
+}
+
+.library-card-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+.library-card-stats > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.library-card-anims {
+  font-size: 11px;
+  line-height: 1.7;
+}
+
+.library-card-foot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: auto;
+  padding-top: 4px;
+}
+.library-card-modified {
+  margin-left: auto;
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.library-card-drive {
+  position: relative;
+  border-top: 1px solid var(--border);
+  margin-top: 4px;
+  padding-top: 8px;
+  font-size: 12px;
+}
