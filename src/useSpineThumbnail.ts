@@ -49,6 +49,17 @@ function enqueue<T>(task: () => Promise<T>): Promise<T> {
   return run as Promise<T>;
 }
 
+/** Yield to the browser before the next queued render so scrolling stays smooth — the heavy
+ *  WebGL work waits for an idle slot instead of running back-to-back on the main thread. */
+function idle(): Promise<void> {
+  return new Promise((resolve) => {
+    const ric = (window as unknown as { requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => void })
+      .requestIdleCallback;
+    if (ric) ric(() => resolve(), { timeout: 500 });
+    else setTimeout(resolve, 32);
+  });
+}
+
 /** Mount the player off-screen, capture its canvas to a PNG data URL, then tear it down. */
 async function renderThumbnail(assets: ExportAssets, rawDataURIs: Record<string, string>): Promise<string> {
   const host = document.createElement('div');
@@ -151,7 +162,10 @@ export function useSpineThumbnail(entry: LibraryEntry | null, enabled: boolean) 
       setStatus('ready');
     };
 
+    const folder = entry.folder;
+
     (async () => {
+      // Cache hit is cheap and shouldn't wait behind the render queue — check it first.
       try {
         const cached = await invoke<string | null>('thumb_cache_get', { key });
         if (cancelled) return;
@@ -162,28 +176,23 @@ export function useSpineThumbnail(entry: LibraryEntry | null, enabled: boolean) 
       } catch {
         /* cache miss path below */
       }
-
-      let assets: ExportAssets;
-      try {
-        assets = await invoke<ExportAssets>('list_export_assets', { folder: entry.folder });
-      } catch {
-        fail();
-        return;
-      }
       if (cancelled) return;
 
-      let raw: Record<string, string>;
+      // Everything expensive (asset reads + WebGL render) runs INSIDE the single-slot queue and
+      // bails the moment the card has scrolled out of view — so fast scrolling past dozens of
+      // cards doesn't flood IPC with base64 reads or churn through renders nobody is looking at.
       try {
-        raw = await buildRawDataURIs(assets);
-      } catch {
-        fail();
-        return;
-      }
-      if (cancelled) return;
-
-      try {
-        const url = await enqueue(() => renderThumbnail(assets, raw));
-        if (cancelled) return;
+        const url = await enqueue(async () => {
+          if (cancelled) return null;
+          await idle();
+          if (cancelled) return null;
+          const assets = await invoke<ExportAssets>('list_export_assets', { folder });
+          if (cancelled) return null;
+          const raw = await buildRawDataURIs(assets);
+          if (cancelled) return null;
+          return renderThumbnail(assets, raw);
+        });
+        if (cancelled || url == null) return;
         done(url);
         // Persist for next time; failures here are non-fatal (we already showed the image).
         void invoke('thumb_cache_put', { key, data: url }).catch(() => undefined);

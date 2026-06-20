@@ -11,26 +11,38 @@ import { SpineFileIcon } from './SpineFileIcon';
  */
 export function LibraryCardThumb({ entry }: { entry: LibraryEntry }) {
   const ref = useRef<HTMLDivElement>(null);
-  const [inView, setInView] = useState(false);
+  const [enabled, setEnabled] = useState(false);
 
   useEffect(() => {
-    if (inView) return; // latch: once seen, keep rendering
+    if (enabled) return; // latch: once triggered, keep rendering
     const el = ref.current;
     if (!el) return;
+    let timer: ReturnType<typeof setTimeout> | undefined;
     const obs = new IntersectionObserver(
       (entries) => {
-        if (entries.some((e) => e.isIntersecting)) {
-          setInView(true);
-          obs.disconnect();
+        const visible = entries.some((e) => e.isIntersecting);
+        if (visible) {
+          // Only trigger once the card has lingered in view — scrolling straight past it
+          // never starts a render.
+          timer = setTimeout(() => {
+            setEnabled(true);
+            obs.disconnect();
+          }, 150);
+        } else if (timer) {
+          clearTimeout(timer);
+          timer = undefined;
         }
       },
-      { rootMargin: '200px' }
+      { rootMargin: '120px' }
     );
     obs.observe(el);
-    return () => obs.disconnect();
-  }, [inView]);
+    return () => {
+      if (timer) clearTimeout(timer);
+      obs.disconnect();
+    };
+  }, [enabled]);
 
-  const { status, dataUrl } = useSpineThumbnail(entry, inView);
+  const { status, dataUrl } = useSpineThumbnail(entry, enabled);
 
   const cls =
     status === 'ready' ? ' has-image' : status === 'loading' ? ' is-loading' : '';
