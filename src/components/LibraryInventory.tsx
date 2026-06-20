@@ -8,12 +8,15 @@ import {
   ChevronRight,
   ChevronsDownUp,
   ChevronsUpDown,
+  CloudDownload,
+  FileClock,
   FolderOpen,
   FolderPlus,
   History,
   Images,
   Layers,
   ListChecks,
+  MoreHorizontal,
   Circle,
   RotateCw,
   Search,
@@ -24,9 +27,17 @@ import { useApp } from '../useAppController';
 import { SpineFileIcon } from './SpineFileIcon';
 import { StatCard } from './StatCard';
 import { basename } from '../sessions';
-import { formatBytes } from '../time';
+import { formatBytes, formatDate, formatDateTime } from '../time';
 import type { LibraryEntry } from '../config';
-import { fetchDriveFileMetadata, toDriveRelPath, type DriveFileInfo } from '../drive';
+import {
+  downloadDriveRevision,
+  fetchDriveBasics,
+  fetchDriveFileMetadata,
+  toDriveRelPath,
+  type DriveBasic,
+  type DriveFileInfo,
+  type DriveRevision
+} from '../drive';
 import {
   entryMatchesFilter,
   entryWarnings,
@@ -41,8 +52,10 @@ import {
 } from '../library';
 import type { LibraryFilterApi } from '../useLibraryFilter';
 
+const DAY_MS = 24 * 60 * 60 * 1000;
+
 type Section = { key: string; label: string; entries: LibraryEntry[]; mixedVersion: boolean };
-type SortKey = 'entry' | 'version' | 'spine' | 'images' | 'anims';
+type SortKey = 'entry' | 'version' | 'spine' | 'images' | 'anims' | 'owner' | 'modified';
 type SortDirection = 'asc' | 'desc';
 type SortState = { key: SortKey; direction: SortDirection };
 
@@ -88,6 +101,11 @@ export function LibraryInventory({
   const [driveInfo, setDriveInfo] = useState<
     Record<string, { loading?: boolean; error?: string; notOnDrive?: boolean; data?: DriveFileInfo }>
   >({});
+  // Bulk owner/last-modified for the dashboard columns, keyed by `.spine` path.
+  const [driveBasics, setDriveBasics] = useState<Record<string, DriveBasic>>({});
+  const [loadingBasics, setLoadingBasics] = useState(false);
+  // Which row's "⋯" action menu is open (keyed by `.spine` path); null = none.
+  const [menuOpen, setMenuOpen] = useState<string | null>(null);
   const [sort, setSort] = useState<SortState>({ key: 'entry', direction: 'asc' });
 
   const thresholds: LibraryThresholds = {
@@ -118,12 +136,27 @@ export function LibraryInventory({
       return compareString(a, b);
     }
 
+    // Drive-backed values sort missing entries last (regardless of direction handled by caller).
+    function compareMaybeEmpty(a: string, b: string) {
+      if (a === b) return 0;
+      if (!a) return 1;
+      if (!b) return -1;
+      return compareString(a, b);
+    }
+    const ownerOf = (e: LibraryEntry) => {
+      const d = driveBasics[e.spineFile];
+      return d?.ownerName || d?.ownerEmail || d?.lastEditorName || d?.lastEditorEmail || '';
+    };
+    const modifiedOf = (e: LibraryEntry) => driveBasics[e.spineFile]?.modifiedTime || '';
+
     function compareEntry(a: LibraryEntry, b: LibraryEntry) {
       let result = 0;
       if (sort.key === 'entry') result = compareString(a.relPath, b.relPath);
       else if (sort.key === 'version') result = compareVersion(a.version, b.version);
       else if (sort.key === 'spine') result = a.spineBytes - b.spineBytes;
       else if (sort.key === 'images') result = a.imageBytes - b.imageBytes;
+      else if (sort.key === 'owner') result = compareMaybeEmpty(ownerOf(a), ownerOf(b));
+      else if (sort.key === 'modified') result = compareMaybeEmpty(modifiedOf(a), modifiedOf(b));
       else result = a.animationCount - b.animationCount;
 
       if (result === 0) result = compareString(a.relPath, b.relPath);
@@ -131,7 +164,7 @@ export function LibraryInventory({
     }
 
     return [...filtered].sort(compareEntry);
-  }, [filtered, sort]);
+  }, [filtered, sort, driveBasics]);
 
   // Clean-scan coverage across the whole library: never-scanned vs. clean vs. needs-review.
   const scanCounts = useMemo(() => {
@@ -207,6 +240,51 @@ export function LibraryInventory({
     fetchDriveFileMetadata(relPath)
       .then((data) => setDriveInfo((prev) => ({ ...prev, [key]: { data } })))
       .catch((e) => setDriveInfo((prev) => ({ ...prev, [key]: { error: String(e) } })));
+  }
+
+  // Dashboard: batch-fetch owner + last-modified for the currently filtered rows.
+  async function loadDriveBasics() {
+    if (!driveAccount) {
+      pushToast(t.driveSignInPrompt, 'warning');
+      setSettingsOpen(true);
+      return;
+    }
+    const pairs = filtered
+      .map((e) => ({ spineFile: e.spineFile, relPath: toDriveRelPath(e.spineFile, syncRoot) }))
+      .filter((p): p is { spineFile: string; relPath: string } => Boolean(p.relPath));
+    if (pairs.length === 0) {
+      pushToast(t.driveNotOnDrive, 'warning');
+      return;
+    }
+    setLoadingBasics(true);
+    try {
+      const results = await fetchDriveBasics(pairs.map((p) => p.relPath));
+      const byRel = new Map(pairs.map((p) => [p.relPath, p.spineFile]));
+      setDriveBasics((prev) => {
+        const next = { ...prev };
+        for (const r of results) {
+          const sf = byRel.get(r.relPath);
+          if (sf) next[sf] = r;
+        }
+        return next;
+      });
+    } catch (e) {
+      pushToast(String(e), 'error');
+    } finally {
+      setLoadingBasics(false);
+    }
+  }
+
+  // Download a past revision to temp and open it in Spine (regression review).
+  async function openRevisionInSpine(entry: LibraryEntry, rev: DriveRevision) {
+    const relPath = toDriveRelPath(entry.spineFile, syncRoot);
+    if (!relPath) return;
+    try {
+      const localPath = await downloadDriveRevision(relPath, rev.id);
+      await invoke('open_in_spine', { spinePath: merged.spinePath, file: localPath });
+    } catch (e) {
+      pushToast(`${t.libraryOpenFailed}: ${String(e)}`, 'error');
+    }
   }
 
   function createSessionForEntry(entry: LibraryEntry) {
@@ -330,10 +408,18 @@ export function LibraryInventory({
         />
         <span className="muted library-lastscan">
           {t.libraryLastScan}:{' '}
-          {activeLibrary?.lastScanAt ? new Date(activeLibrary.lastScanAt).toLocaleDateString() : t.libraryNeverScanned}
+          {activeLibrary?.lastScanAt ? formatDate(activeLibrary.lastScanAt) : t.libraryNeverScanned}
         </span>
         <button className="secondary-button small" onClick={() => void rescanLibrary()} disabled={isScanningLibrary}>
           <RotateCw size={14} className={isScanningLibrary ? 'spin' : undefined} /> {t.libraryRescan}
+        </button>
+        <button
+          className="secondary-button small"
+          onClick={() => void loadDriveBasics()}
+          disabled={loadingBasics}
+          title={t.driveLoadDataHelp}
+        >
+          {loadingBasics ? <RotateCw size={14} className="spin" /> : <CloudDownload size={14} />} {t.driveLoadData}
         </button>
       </div>
 
@@ -399,6 +485,8 @@ export function LibraryInventory({
             <col className="lib-col-size" />
             <col className="lib-col-images" />
             <col className="lib-col-anims" />
+            <col className="lib-col-owner" />
+            <col className="lib-col-modified" />
             <col className="lib-col-actions" />
           </colgroup>
           <thead>
@@ -444,6 +532,18 @@ export function LibraryInventory({
                   {sortMark('anims')}
                 </button>
               </th>
+              <th aria-sort={ariaSort('owner')}>
+                <button className="library-th-sort" onClick={() => toggleSort('owner')}>
+                  {t.driveColOwner}
+                  {sortMark('owner')}
+                </button>
+              </th>
+              <th aria-sort={ariaSort('modified')}>
+                <button className="library-th-sort" onClick={() => toggleSort('modified')}>
+                  {t.driveColModified}
+                  {sortMark('modified')}
+                </button>
+              </th>
               <th />
             </tr>
           </thead>
@@ -452,7 +552,7 @@ export function LibraryInventory({
             return (
               <tbody key={section.key}>
                 <tr className="library-group-row">
-                  <td colSpan={5}>
+                  <td colSpan={7}>
                     <button className="library-group-toggle" onClick={() => toggleSet(setCollapsed, section.key)} aria-expanded={!isCollapsed}>
                       {isCollapsed ? <ChevronRight size={15} /> : <ChevronDown size={15} />}
                       {isSectionClean(section) && cleanStatusIcon('clean')}
@@ -486,6 +586,9 @@ export function LibraryInventory({
                     const animOpen = expandedAnims.has(entry.spineFile);
                     const infoOpen = expandedInfo.has(entry.spineFile);
                     const info = driveInfo[entry.spineFile];
+                    const basic = driveBasics[entry.spineFile];
+                    const modifiedMs = basic?.modifiedTime ? Date.parse(basic.modifiedTime) : NaN;
+                    const recent = Number.isFinite(modifiedMs) && Date.now() - modifiedMs < 7 * DAY_MS;
                     return (
                       <Fragment key={entry.spineFile}>
                         <tr>
@@ -512,32 +615,66 @@ export function LibraryInventory({
                               <span className="muted" title={t.libraryBinExport}>—</span>
                             )}
                           </td>
-                          <td className="library-actions">
+                          <td
+                            className="library-owner"
+                            title={basic?.ownerEmail ?? basic?.lastEditorEmail ?? undefined}
+                          >
+                            {basic?.ownerName || basic?.ownerEmail || basic?.lastEditorName || basic?.lastEditorEmail || (
+                              <span className="muted">—</span>
+                            )}
+                          </td>
+                          <td className={`library-modified ${recent ? 'library-modified-recent' : ''}`}>
+                            {basic?.modifiedTime ? (
+                              formatDate(basic.modifiedTime)
+                            ) : (
+                              <span className="muted">—</span>
+                            )}
+                          </td>
+                          <td className="library-actions library-menu-cell">
                             <button
-                              className={`icon-button ${infoOpen ? 'active' : ''}`}
-                              title={t.driveInfoTitle}
-                              aria-label={t.driveInfoTitle}
-                              onClick={() => toggleDriveInfo(entry)}
+                              className={`session-menu-trigger ${menuOpen === entry.spineFile ? 'open' : ''}`}
+                              title={t.options}
+                              aria-label={t.options}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setMenuOpen(menuOpen === entry.spineFile ? null : entry.spineFile);
+                              }}
                             >
-                              <History size={15} />
+                              <MoreHorizontal size={16} />
                             </button>
-                            <button className="icon-button" title={t.libraryPrepareCleanScan} aria-label={t.libraryPrepareCleanScan} onClick={() => onPrepareCleanScan([entry.spineFile])}>
-                              <ListChecks size={15} />
-                            </button>
-                            <button className="icon-button" title={t.libraryOpenFolder} aria-label={t.libraryOpenFolder} onClick={() => void openFolder(entry)}>
-                              <FolderOpen size={15} />
-                            </button>
-                            <button className="icon-button" title={t.libraryOpenInSpine} aria-label={t.libraryOpenInSpine} onClick={() => void openInSpine(entry)}>
-                              <SpineFileIcon size={15} />
-                            </button>
-                            <button className="icon-button" title={t.libraryCreateSession} aria-label={t.libraryCreateSession} onClick={() => createSessionForEntry(entry)}>
-                              <FolderPlus size={15} />
-                            </button>
+                            {menuOpen === entry.spineFile && (
+                              <>
+                                <div
+                                  className="menu-backdrop"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setMenuOpen(null);
+                                  }}
+                                />
+                                <div className="session-menu library-row-menu" onClick={(e) => e.stopPropagation()}>
+                                  <button onClick={() => { setMenuOpen(null); toggleDriveInfo(entry); }}>
+                                    <History size={14} /> {t.driveInfoTitle}
+                                  </button>
+                                  <button onClick={() => { setMenuOpen(null); onPrepareCleanScan([entry.spineFile]); }}>
+                                    <ListChecks size={14} /> {t.libraryPrepareCleanScan}
+                                  </button>
+                                  <button onClick={() => { setMenuOpen(null); void openFolder(entry); }}>
+                                    <FolderOpen size={14} /> {t.libraryOpenFolder}
+                                  </button>
+                                  <button onClick={() => { setMenuOpen(null); void openInSpine(entry); }}>
+                                    <SpineFileIcon size={14} /> {t.libraryOpenInSpine}
+                                  </button>
+                                  <button onClick={() => { setMenuOpen(null); createSessionForEntry(entry); }}>
+                                    <FolderPlus size={14} /> {t.libraryCreateSession}
+                                  </button>
+                                </div>
+                              </>
+                            )}
                           </td>
                         </tr>
                         {animOpen && entry.exported && (
                           <tr className="library-anim-list">
-                            <td colSpan={6}>
+                            <td colSpan={8}>
                               {entry.skins.length > 0 && (
                                 <div>
                                   <strong>{t.librarySkins}:</strong>{' '}
@@ -565,7 +702,7 @@ export function LibraryInventory({
                         )}
                         {infoOpen && (
                           <tr className="library-anim-list library-drive-row">
-                            <td colSpan={6}>
+                            <td colSpan={8}>
                               {info?.loading && (
                                 <span className="muted">
                                   <RotateCw size={13} className="spin" /> {t.driveLoading}
@@ -583,7 +720,7 @@ export function LibraryInventory({
                                     </span>
                                     {info.data.modifiedTime && (
                                       <span>
-                                        <strong>{t.driveModified}:</strong> {new Date(info.data.modifiedTime).toLocaleString()}
+                                        <strong>{t.driveModified}:</strong> {formatDateTime(info.data.modifiedTime)}
                                         {info.data.lastEditorName ? (
                                           <span className="muted"> · {info.data.lastEditorName}</span>
                                         ) : null}
@@ -600,9 +737,17 @@ export function LibraryInventory({
                                       <ul>
                                         {info.data.revisions.slice(0, 20).map((rev) => (
                                           <li key={rev.id}>
-                                            <span>{rev.modifiedTime ? new Date(rev.modifiedTime).toLocaleString() : '—'}</span>
+                                            <span>{rev.modifiedTime ? formatDateTime(rev.modifiedTime) : '—'}</span>
                                             <span className="muted">{rev.editorName ?? rev.editorEmail ?? ''}</span>
                                             {rev.size ? <span className="muted">{formatBytes(Number(rev.size))}</span> : null}
+                                            <button
+                                              className="icon-button"
+                                              title={t.driveOpenRevision}
+                                              aria-label={t.driveOpenRevision}
+                                              onClick={() => void openRevisionInSpine(entry, rev)}
+                                            >
+                                              <FileClock size={14} />
+                                            </button>
                                           </li>
                                         ))}
                                       </ul>

@@ -7,8 +7,10 @@
 //! All HTTP runs here in Rust (reqwest, native) — the webview never calls googleapis, so no
 //! CSP change is needed and the OAuth redirect lands on a localhost socket, not the app.
 //!
-//! Scope is read-only metadata (`drive.metadata.readonly`): enough for owner, modified time,
-//! and the revision list; never write/restore.
+//! Scope is read-only (`drive.readonly`): enough for owner, modified time, and the revision
+//! list; never write/restore. (We need `drive.readonly` rather than the narrower
+//! `drive.metadata.readonly` because `drives.list` — used to map a shared-drive name to its ID —
+//! only accepts `drive` or `drive.readonly`, not the metadata-only scope.)
 
 use std::{
     collections::HashMap,
@@ -38,7 +40,7 @@ const GOOGLE_CLIENT_SECRET: &str = match option_env!("SPINEFORGE_GOOGLE_CLIENT_S
     Some(v) => v,
     None => "PASTE_CLIENT_SECRET",
 };
-const SCOPE: &str = "https://www.googleapis.com/auth/drive.metadata.readonly";
+const SCOPE: &str = "https://www.googleapis.com/auth/drive.readonly";
 
 // Keyring location for the long-lived refresh token.
 const KEYRING_SERVICE: &str = "spineforge-x";
@@ -68,6 +70,22 @@ pub(crate) struct DriveRevision {
     editor_name: Option<String>,
     editor_email: Option<String>,
     size: Option<String>,
+}
+
+/// Lightweight per-file metadata for the Library dashboard (owner + modified only, no revisions),
+/// returned in bulk so columns can sort across the whole inventory.
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct DriveBasic {
+    rel_path: String,
+    owner_email: Option<String>,
+    owner_name: Option<String>,
+    // Shared-drive files have no per-file owner (the drive owns them), so the dashboard falls back
+    // to the last editor — which IS populated — to keep the "Owner" column useful.
+    last_editor_email: Option<String>,
+    last_editor_name: Option<String>,
+    modified_time: Option<String>,
+    error: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -220,6 +238,7 @@ pub(crate) async fn drive_sign_out(state: State<'_, Arc<AppState>>) -> Result<()
     clear_refresh_token()?;
     *state.drive_token.lock().await = None;
     state.drive_file_ids.lock().await.clear();
+    *state.drive_roots.lock().await = None;
     Ok(())
 }
 
@@ -308,6 +327,108 @@ pub(crate) async fn drive_file_metadata(
     })
 }
 
+/// Bulk owner + last-modified for many files (the Library dashboard columns). Resolves each path
+/// reusing the folder/drive caches; per-file errors are returned inline so one bad path doesn't
+/// fail the batch. Skips the revision call (lighter than `drive_file_metadata`).
+#[tauri::command]
+pub(crate) async fn drive_files_basic(
+    state: State<'_, Arc<AppState>>,
+    rel_paths: Vec<String>,
+) -> Result<Vec<DriveBasic>, String> {
+    let token = access_token(&state).await?;
+    let client = reqwest::Client::new();
+    let mut out = Vec::with_capacity(rel_paths.len());
+    for rel in rel_paths {
+        match basic_for(&state, &client, &token, &rel).await {
+            Ok(meta) => {
+                let (owner_name, owner_email) = split_user(meta.owners.into_iter().next());
+                let (last_editor_name, last_editor_email) = split_user(meta.last_modifying_user);
+                out.push(DriveBasic {
+                    rel_path: rel,
+                    owner_email,
+                    owner_name,
+                    last_editor_email,
+                    last_editor_name,
+                    modified_time: meta.modified_time,
+                    error: None,
+                });
+            }
+            Err(e) => out.push(DriveBasic {
+                rel_path: rel,
+                owner_email: None,
+                owner_name: None,
+                last_editor_email: None,
+                last_editor_name: None,
+                modified_time: None,
+                error: Some(e),
+            }),
+        }
+    }
+    Ok(out)
+}
+
+async fn basic_for(
+    state: &AppState,
+    client: &reqwest::Client,
+    token: &str,
+    rel: &str,
+) -> Result<FileMeta, String> {
+    let file_id = resolve_file_id(state, rel).await?;
+    let resp = client
+        .get(format!("https://www.googleapis.com/drive/v3/files/{file_id}"))
+        .query(&[
+            ("supportsAllDrives", "true"),
+            (
+                "fields",
+                "owners(displayName,emailAddress),lastModifyingUser(displayName,emailAddress),modifiedTime",
+            ),
+        ])
+        .bearer_auth(token)
+        .send()
+        .await
+        .str_err()?;
+    if !resp.status().is_success() {
+        return Err(map_status(resp).await);
+    }
+    resp.json::<FileMeta>().await.str_err()
+}
+
+/// Download one past revision of a `.spine` to a temp file and return its local path (caller opens
+/// it in Spine). Read-only: never writes back to Drive. Note: linked images may not resolve since
+/// the temp copy sits outside the original folder — enough to inspect the skeleton/animations.
+#[tauri::command]
+pub(crate) async fn drive_open_revision(
+    state: State<'_, Arc<AppState>>,
+    rel_path: String,
+    revision_id: String,
+) -> Result<String, String> {
+    let file_id = resolve_file_id(&state, &rel_path).await?;
+    let token = access_token(&state).await?;
+    let resp = reqwest::Client::new()
+        .get(format!(
+            "https://www.googleapis.com/drive/v3/files/{file_id}/revisions/{revision_id}"
+        ))
+        .query(&[("alt", "media"), ("supportsAllDrives", "true")])
+        .bearer_auth(&token)
+        .send()
+        .await
+        .str_err()?;
+    if !resp.status().is_success() {
+        return Err(map_status(resp).await);
+    }
+    let bytes = resp.bytes().await.str_err()?;
+
+    let stem = normalize_rel(&rel_path);
+    let name = stem.rsplit('/').next().unwrap_or("file.spine");
+    let base = name.strip_suffix(".spine").unwrap_or(name);
+    let safe_rev: String = revision_id.chars().filter(|c| c.is_alphanumeric()).collect();
+    let dir = std::env::temp_dir().join("spineforge-revisions");
+    std::fs::create_dir_all(&dir).str_err()?;
+    let path = dir.join(format!("{base}__rev{safe_rev}.spine"));
+    std::fs::write(&path, &bytes).str_err()?;
+    Ok(crate::path_to_string(&path))
+}
+
 // ---- file-id resolution -----------------------------------------------------
 
 async fn resolve_file_id(state: &AppState, rel_path: &str) -> Result<String, String> {
@@ -323,22 +444,40 @@ async fn resolve_file_id(state: &AppState, rel_path: &str) -> Result<String, Str
 
     let token = access_token(state).await?;
     let client = reqwest::Client::new();
-    let drive_id = find_shared_drive(&client, &token, segments[0]).await?;
+    let drive_id = shared_drive_id(state, &client, &token, segments[0]).await?;
 
+    // Walk the folder chain, caching every prefix so sibling files reuse resolved folder IDs.
     let mut parent = drive_id.clone();
+    let mut prefix = segments[0].to_string();
     for seg in &segments[1..] {
+        prefix.push('/');
+        prefix.push_str(seg);
+        if let Some(id) = state.drive_file_ids.lock().await.get(&prefix).cloned() {
+            parent = id;
+            continue;
+        }
         parent = find_child(&client, &token, &drive_id, &parent, seg).await?;
+        state.drive_file_ids.lock().await.insert(prefix.clone(), parent.clone());
     }
-
-    state.drive_file_ids.lock().await.insert(key, parent.clone());
     Ok(parent)
 }
 
-async fn find_shared_drive(
+/// Map a shared-drive name to its ID, caching the full `drives.list` once per session.
+async fn shared_drive_id(
+    state: &AppState,
     client: &reqwest::Client,
     token: &str,
     name: &str,
 ) -> Result<String, String> {
+    {
+        let guard = state.drive_roots.lock().await;
+        if let Some(map) = guard.as_ref() {
+            return map
+                .get(name)
+                .cloned()
+                .ok_or_else(|| format!("Không tìm thấy shared drive '{name}' trên tài khoản này."));
+        }
+    }
     let resp = client
         .get("https://www.googleapis.com/drive/v3/drives")
         .query(&[("pageSize", "100"), ("fields", "drives(id,name)")])
@@ -350,11 +489,10 @@ async fn find_shared_drive(
         return Err(map_status(resp).await);
     }
     let list: DriveList = resp.json().await.str_err()?;
-    list.drives
-        .into_iter()
-        .find(|d| d.name == name)
-        .map(|d| d.id)
-        .ok_or_else(|| format!("Không tìm thấy shared drive '{name}' trên tài khoản này."))
+    let map: HashMap<String, String> = list.drives.into_iter().map(|d| (d.name, d.id)).collect();
+    let found = map.get(name).cloned();
+    *state.drive_roots.lock().await = Some(map);
+    found.ok_or_else(|| format!("Không tìm thấy shared drive '{name}' trên tài khoản này."))
 }
 
 async fn find_child(
@@ -512,7 +650,9 @@ fn clear_refresh_token() -> Result<(), String> {
 /// Wait for Google to redirect back to the loopback server and return the auth `code`.
 /// Tolerates stray requests (favicon, etc.) and verifies the `state` to block CSRF.
 async fn accept_code(listener: TcpListener, expected_state: &str) -> Result<String, String> {
-    let deadline = Duration::from_secs(300);
+    // Cap how long an abandoned attempt (e.g. browser closed before consent) keeps the loopback
+    // listener + command alive. The frontend can cancel sooner; this just bounds the orphan.
+    let deadline = Duration::from_secs(180);
     loop {
         let (mut stream, _) = tokio::time::timeout(deadline, listener.accept())
             .await
@@ -617,9 +757,15 @@ fn pkce_challenge(verifier: &str) -> String {
 async fn map_status(resp: reqwest::Response) -> String {
     let status = resp.status();
     let body = resp.text().await.unwrap_or_default();
+    // Pull Google's `error.message` when present; it's the most useful diagnostic.
+    let reason = serde_json::from_str::<serde_json::Value>(&body)
+        .ok()
+        .and_then(|v| v["error"]["message"].as_str().map(str::to_string))
+        .unwrap_or(body);
     match status.as_u16() {
-        401 | 403 => "Phiên Google Drive đã hết hạn — hãy đăng nhập lại.".to_string(),
+        401 => "Phiên Google Drive đã hết hạn — hãy đăng nhập lại.".to_string(),
+        403 => format!("Google Drive từ chối (403): {reason}"),
         404 => "Không tìm thấy file trên Google Drive.".to_string(),
-        _ => format!("Lỗi Google Drive ({status}): {body}"),
+        _ => format!("Lỗi Google Drive ({status}): {reason}"),
     }
 }

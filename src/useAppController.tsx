@@ -205,7 +205,7 @@ export function useAppControllerValue() {
   } = useSync({ data: syncData, t, pushToast });
 
   // App-data sync (Tier B): Google Drive account for owner/history metadata of `.spine` files.
-  const { driveAccount, driveBusy, driveSignIn, driveSignOut } = useDrive({ t, pushToast });
+  const { driveAccount, driveBusy, driveSignIn, driveCancelSignIn, driveSignOut } = useDrive({ t, pushToast });
 
   const merged = useMemo<MergedConfig>(() => ({ ...appConfig, ...sessionConfig }), [appConfig, sessionConfig]);
 
@@ -583,6 +583,7 @@ export function useAppControllerValue() {
     driveAccount,
     driveBusy,
     driveSignIn,
+    driveCancelSignIn,
     driveSignOut,
 
     // Clean source folder

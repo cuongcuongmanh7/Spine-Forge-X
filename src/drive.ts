@@ -61,3 +61,24 @@ export function driveSignOut(): Promise<void> {
 export function fetchDriveFileMetadata(relPath: string): Promise<DriveFileInfo> {
   return invoke<DriveFileInfo>('drive_file_metadata', { relPath });
 }
+
+/** Lightweight owner + last-modified for the Library dashboard columns. */
+export type DriveBasic = {
+  relPath: string;
+  ownerEmail: string | null;
+  ownerName: string | null;
+  /** Fallback for the Owner column on shared drives (which have no per-file owner). */
+  lastEditorEmail: string | null;
+  lastEditorName: string | null;
+  modifiedTime: string | null;
+  error: string | null;
+};
+
+export function fetchDriveBasics(relPaths: string[]): Promise<DriveBasic[]> {
+  return invoke<DriveBasic[]>('drive_files_basic', { relPaths });
+}
+
+/** Download a past revision to a temp file; returns its local path (open it in Spine). */
+export function downloadDriveRevision(relPath: string, revisionId: string): Promise<string> {
+  return invoke<string>('drive_open_revision', { relPath, revisionId });
+}

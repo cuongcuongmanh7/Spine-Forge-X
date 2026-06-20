@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { AlertTriangle, FolderOpen, LogOut, RotateCw, Search, UserCircle2, X } from 'lucide-react';
 import { Section, FieldStatus, Hint } from './common';
 import { useApp } from '../useAppController';
+import { formatDateTime } from '../time';
 
 export function SettingsModal() {
   const {
@@ -28,6 +29,7 @@ export function SettingsModal() {
     driveAccount,
     driveBusy,
     driveSignIn,
+    driveCancelSignIn,
     driveSignOut
   } = useApp();
 
@@ -121,7 +123,7 @@ export function SettingsModal() {
                   <div className="sync-foot">
                     <span className={`sync-status-text status-${syncStatus}`}>
                       {syncStatusLabel}
-                      {syncLastSyncedAt && syncStatus !== 'error' ? ` · ${t.syncLastSynced}: ${new Date(syncLastSyncedAt).toLocaleString()}` : ''}
+                      {syncLastSyncedAt && syncStatus !== 'error' ? ` · ${t.syncLastSynced}: ${formatDateTime(syncLastSyncedAt)}` : ''}
                     </span>
                     <button
                       className="secondary-button small"
@@ -156,11 +158,20 @@ export function SettingsModal() {
                     <LogOut size={15} /> {t.driveSignOut}
                   </button>
                 </div>
+              ) : driveBusy ? (
+                <div className="drive-account-row">
+                  <span className="muted drive-waiting">
+                    <RotateCw className="spin" size={15} /> {t.driveSignInWaiting}
+                  </span>
+                  <button className="secondary-button small" onClick={() => driveCancelSignIn()}>
+                    {t.driveCancel}
+                  </button>
+                </div>
               ) : (
                 <div className="drive-account-row">
                   <span className="muted">{t.driveSignedOut}</span>
-                  <button className="secondary-button small" disabled={driveBusy} onClick={() => void driveSignIn()}>
-                    {driveBusy ? <RotateCw className="spin" size={15} /> : <UserCircle2 size={15} />} {t.driveSignIn}
+                  <button className="secondary-button small" onClick={() => void driveSignIn()}>
+                    <UserCircle2 size={15} /> {t.driveSignIn}
                   </button>
                 </div>
               )}

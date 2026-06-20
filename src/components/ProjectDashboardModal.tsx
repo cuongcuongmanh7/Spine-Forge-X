@@ -1,19 +1,18 @@
 import { useState } from 'react';
 import { X } from 'lucide-react';
 import { useApp } from '../useAppController';
-import { formatDuration } from '../time';
+import { formatDateTime, formatDuration } from '../time';
 
 /** Per-project export dashboard: last-run summary for each session, plus project totals. */
 export function ProjectDashboardModal() {
-  const { t, projects, sessions, activeProjectId, language, setDashboardOpen } = useApp();
+  const { t, projects, sessions, activeProjectId, setDashboardOpen } = useApp();
 
   // Default to the active project, but let the user inspect any project.
   const [projectId, setProjectId] = useState(activeProjectId ?? projects[0]?.id ?? '');
   const close = () => setDashboardOpen(false);
 
   const projectSessions = sessions.filter((s) => s.projectId === projectId);
-  const locale = language === 'vi' ? 'vi-VN' : 'en-US';
-  const fmtTime = (at: number) => new Date(at).toLocaleString(locale);
+  const fmtTime = (at: number) => formatDateTime(at);
 
   const totals = projectSessions.reduce(
     (acc, s) => {

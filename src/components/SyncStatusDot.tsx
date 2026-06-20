@@ -1,5 +1,6 @@
 import { Cloud, CloudOff, RefreshCw } from 'lucide-react';
 import { useApp } from '../useAppController';
+import { formatDateTime } from '../time';
 import './SyncStatusDot.css';
 
 /**
@@ -30,7 +31,7 @@ export function SyncStatusDot() {
 
   const lastLine =
     syncLastSyncedAt && syncStatus !== 'error'
-      ? `\n${t.syncLastSynced}: ${new Date(syncLastSyncedAt).toLocaleString()}`
+      ? `\n${t.syncLastSynced}: ${formatDateTime(syncLastSyncedAt)}`
       : '';
   const title = `${t.syncTitle} — ${label}${lastLine}`;
 

@@ -1,27 +1,37 @@
 import { useState } from 'react';
-import { UserCircle2 } from 'lucide-react';
+import { RotateCw, UserCircle2 } from 'lucide-react';
 import { useApp } from '../useAppController';
 
 /**
- * Persistent Google Drive account chip in the sidebar footer (VS Code style). Shows the
- * signed-in avatar + email, or a muted "sign in" prompt. Clicking opens Settings ▸ Sync,
- * where the full sign-in/out controls live — the footer is just a shortcut + status.
+ * Persistent Google Drive account chip in the sidebar footer (VS Code style). Signed out → clicking
+ * starts sign-in directly. While waiting → spinner (click opens Settings, which has Cancel). Signed
+ * in → shows avatar + email and opens Settings ▸ Sync (sign-out lives there).
  */
 export function AccountBadge() {
-  const { t, driveAccount, setSettingsOpen } = useApp();
+  const { t, driveAccount, driveBusy, driveSignIn, setSettingsOpen } = useApp();
   const [imgFailed, setImgFailed] = useState(false);
 
-  const label = driveAccount ? driveAccount.email : t.driveSignIn;
   const showPhoto = driveAccount?.photoLink && !imgFailed;
+  const label = driveAccount ? driveAccount.email : driveBusy ? t.driveSignInWaiting : t.driveSignIn;
+
+  const onClick = () => {
+    if (driveAccount || driveBusy) {
+      setSettingsOpen(true); // manage / cancel from Settings
+      return;
+    }
+    void driveSignIn();
+  };
 
   return (
     <button
       className="sidebar-settings account-badge"
-      onClick={() => setSettingsOpen(true)}
+      onClick={onClick}
       title={driveAccount ? `${t.driveSignedInAs}: ${driveAccount.email}` : t.driveSignInHelp}
     >
       {showPhoto ? (
         <img className="account-avatar" src={driveAccount!.photoLink!} alt="" onError={() => setImgFailed(true)} />
+      ) : driveBusy ? (
+        <RotateCw className="spin" size={18} />
       ) : (
         <UserCircle2 size={18} className={driveAccount ? undefined : 'muted'} />
       )}

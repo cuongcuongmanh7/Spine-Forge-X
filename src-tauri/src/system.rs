@@ -108,9 +108,11 @@ pub(crate) async fn open_url(url: String) -> Result<(), String> {
 
     #[cfg(windows)]
     {
-        // `explorer <url>` returns a non-zero exit code on success, so use `cmd /c start`.
-        Command::new("cmd")
-            .args(["/c", "start", "", target])
+        // Open via rundll32's URL handler, NOT `cmd /c start`: cmd treats `&` as a command
+        // separator, so a URL with query params (e.g. the Google OAuth URL) gets truncated at the
+        // first `&` and loses every later param. rundll32 receives the whole URL as one argument.
+        Command::new("rundll32")
+            .args(["url.dll,FileProtocolHandler", target])
             .spawn()
             .str_err()?;
     }

@@ -34,8 +34,11 @@ pub(crate) struct AppState {
     pub(crate) scan_cache: Mutex<HashMap<PathBuf, (ScanSig, FolderScan)>>,
     /// Tier B Google Drive: cached short-lived access token (refresh token is in the keyring).
     pub(crate) drive_token: Mutex<Option<DriveToken>>,
-    /// Tier B: cache of `relPath → Drive file ID` so each `.spine` is traversed only once/session.
+    /// Tier B: cache of `path-prefix → Drive file/folder ID` (every walked folder + the final file)
+    /// so a batch over a library traverses each shared folder only once/session.
     pub(crate) drive_file_ids: Mutex<HashMap<String, String>>,
+    /// Tier B: cache of `shared-drive-name → driveId`, fetched once via `drives.list`.
+    pub(crate) drive_roots: Mutex<Option<HashMap<String, String>>>,
 }
 
 impl Default for AppState {
@@ -49,6 +52,7 @@ impl Default for AppState {
             scan_cache: Mutex::new(HashMap::new()),
             drive_token: Mutex::new(None),
             drive_file_ids: Mutex::new(HashMap::new()),
+            drive_roots: Mutex::new(None),
         }
     }
 }

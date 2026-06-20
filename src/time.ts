@@ -9,6 +9,25 @@ export function formatDuration(ms: number): string {
   return `${seconds}s`;
 }
 
+function toDate(input: number | string | Date): Date | null {
+  const d = input instanceof Date ? input : new Date(input);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
+const pad2 = (n: number) => String(n).padStart(2, '0');
+
+/** Format a date as `dd/mm/yyyy` (day/month/year). Empty string for invalid input. */
+export function formatDate(input: number | string | Date): string {
+  const d = toDate(input);
+  return d ? `${pad2(d.getDate())}/${pad2(d.getMonth() + 1)}/${d.getFullYear()}` : '';
+}
+
+/** Format a date+time as `dd/mm/yyyy HH:mm` (24h). Empty string for invalid input. */
+export function formatDateTime(input: number | string | Date): string {
+  const d = toDate(input);
+  return d ? `${formatDate(d)} ${pad2(d.getHours())}:${pad2(d.getMinutes())}` : '';
+}
+
 /** Format a byte count as a compact human string: "0 B", "12.0 KB", "3.4 MB", "1.2 GB". */
 export function formatBytes(bytes: number): string {
   if (!Number.isFinite(bytes) || bytes <= 0) return '0 B';

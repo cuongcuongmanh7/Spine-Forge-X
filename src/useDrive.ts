@@ -21,6 +21,10 @@ export function useDrive({ t, pushToast }: Args) {
   tRef.current = t;
   const pushToastRef = useRef(pushToast);
   pushToastRef.current = pushToast;
+  // Each sign-in attempt gets an id. If the user cancels (or starts a new attempt), the id bumps and
+  // the stale in-flight `drive_sign_in` (which keeps blocking until its loopback timeout — e.g. the
+  // browser was closed before consent) is ignored, so the UI never stays stuck on "loading".
+  const attemptRef = useRef(0);
 
   useEffect(() => {
     void getDriveAccount()
@@ -29,19 +33,30 @@ export function useDrive({ t, pushToast }: Args) {
   }, []);
 
   const signIn = useCallback(async () => {
+    const id = ++attemptRef.current;
     setBusy(true);
     try {
       const acc = await driveSignIn();
+      if (id !== attemptRef.current) return; // cancelled or superseded
       setAccount(acc);
       pushToastRef.current(`${tRef.current.driveSignedInAs}: ${acc.email}`, 'success');
     } catch (e) {
+      if (id !== attemptRef.current) return;
       pushToastRef.current(`${tRef.current.driveSignInFailed}: ${String(e)}`, 'error');
     } finally {
-      setBusy(false);
+      if (id === attemptRef.current) setBusy(false);
     }
   }, []);
 
+  // Give up waiting on the current attempt (e.g. the browser tab was closed) so the user can retry.
+  const cancelSignIn = useCallback(() => {
+    attemptRef.current += 1;
+    setBusy(false);
+  }, []);
+
   const signOut = useCallback(async () => {
+    attemptRef.current += 1; // also drops any in-flight sign-in
+    setBusy(false);
     try {
       await driveSignOut();
       setAccount(null);
@@ -54,6 +69,7 @@ export function useDrive({ t, pushToast }: Args) {
     driveAccount: account,
     driveBusy: busy,
     driveSignIn: signIn,
+    driveCancelSignIn: cancelSignIn,
     driveSignOut: signOut
   };
 }

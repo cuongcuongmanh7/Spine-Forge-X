@@ -75,19 +75,22 @@ Tier A đọc *folder* Drive qua filesystem nên KHÔNG biết ai là chủ file
 
 **Cách dùng**
 1. Settings ▸ **Sync (Google Drive)** ▸ mục **Tài khoản Google Drive** ▸ **Đăng nhập**. Trình duyệt mở trang consent của Google; sau khi đồng ý là xong (refresh token lưu an toàn trong **Windows Credential Manager**, không phải đăng nhập lại mỗi lần mở app). Trạng thái đăng nhập cũng hiện ở **góc dưới trái** (badge avatar + email) — bấm vào là mở Settings.
-2. Trong **Library ▸ Inventory**, mỗi dòng file có nút **lịch sử** (icon đồng hồ). Bấm để xem **chủ sở hữu**, **sửa lần cuối + người sửa**, và **danh sách version** (ngày · người sửa · dung lượng). Tải **on demand** (chỉ khi bấm), cache trong phiên.
-3. File nằm ngoài gốc Drive đang đồng bộ → báo "không nằm trên Google Drive".
+2. Trong **Library ▸ Inventory**, mở menu **⋯** của một dòng ▸ **Owner & lịch sử**. Panel hiện **chủ sở hữu**, **sửa lần cuối + người sửa**, và **danh sách version** (ngày · người sửa · dung lượng). Tải **on demand** (chỉ khi bấm), cache trong phiên.
+3. **Dashboard người-sửa/sửa-cuối**: nút **Tải dữ liệu Drive** (toolbar) lấy người sửa + thời gian sửa cho các dòng đang lọc → hiện thành 2 cột **Người sửa / Sửa lần cuối** (sort được; file đổi trong 7 ngày được tô nổi). Batch dùng cache drive-name→ID + folder→ID nên mỗi folder chỉ tra một lần. *(File shared drive không có owner riêng — cả drive sở hữu — nên cột "Người sửa" lấy `lastModifyingUser`; cột header để là "Người sửa"/"Editor" cho đúng nghĩa.)*
+4. Các nút thao tác mỗi dòng (lịch sử, clean, mở folder, mở Spine, tạo session) gom trong **menu ⋯** (hiện khi rê chuột).
+5. **Mở revision cũ trong Spine**: trong panel lịch sử, mỗi version có nút mở → tải bản đó về file tạm rồi mở trong Spine để so sánh/truy vết regression. Chỉ đọc, không ghi lên Drive. ⚠️ Ảnh liên kết có thể không hiện vì file tạm nằm ngoài folder gốc — đủ để xem skeleton/animation.
+6. File nằm ngoài gốc Drive đang đồng bộ → báo "không nằm trên Google Drive".
 
 **Thiết kế / quyết định**
-- **Scope chỉ đọc** (`drive.metadata.readonly`) — không sửa/không restore file trên Drive.
+- **Scope chỉ đọc** (`drive.readonly`) — không sửa/không restore file trên Drive. *(Phải dùng `drive.readonly` chứ không phải `drive.metadata.readonly` hẹp hơn, vì `drives.list` — dùng để map tên shared drive → ID — chỉ chấp nhận `drive` hoặc `drive.readonly`.)*
 - **OAuth client nhúng sẵn** (loại "Desktop app"), luồng installed-app: loopback `127.0.0.1` + PKCE. Toàn bộ HTTP gọi Drive chạy ở **Rust** (reqwest), nên webview không gọi googleapis (CSP `connect-src` không đổi; chỉ mở `img-src` cho avatar `*.googleusercontent.com`).
 - Ánh xạ local→Drive: tái dùng anchor của Tier A. Path dưới mount `…\Shared drives` có dạng `<tên-shared-drive>/<folder>/…/file.spine`; Rust tra `drives.list` (tên→driveId) rồi đi từng folder bằng `files.list` để ra file ID (cache theo path).
 
 **Set-up GCP — DEV làm một lần, animator không đụng tới.** Animator chỉ bấm "Đăng nhập" rồi chọn Gmail; client ID nhúng sẵn trong app. (Mọi app gọi Google API đều bắt buộc có 1 OAuth client — không bỏ được bước này, nhưng chỉ làm một lần.)
 - Tạo project Google Cloud → bật **Google Drive API**.
 - **OAuth consent screen → User Type = Internal** (vì `ondigames.com` là Google Workspace). Nhờ Internal: **không cần** thêm test user, **không cần** Google verification, và **bất kỳ ai trong tổ chức** `@ondigames.com` login Gmail là dùng được. Quyền xem file vẫn do Shared drive/tổ chức quản lý. *(Nếu tài khoản KHÔNG phải Workspace thì phải dùng External + chế độ Testing + thêm từng test user.)*
-- Thêm scope `https://www.googleapis.com/auth/drive.metadata.readonly`.
+- Thêm scope `https://www.googleapis.com/auth/drive.readonly` (ở **OAuth consent screen ▸ Data access**). Lưu ý: `drive.metadata.readonly` KHÔNG đủ cho `drives.list` → phải dùng `drive.readonly`.
 - **Credentials → Create OAuth client ID → Desktop app** → lấy client ID + secret (loại Desktop tự cho phép loopback `127.0.0.1`, không cần khai báo redirect URI).
 - Nhúng lúc build qua biến môi trường `SPINEFORGE_GOOGLE_CLIENT_ID` + `SPINEFORGE_GOOGLE_CLIENT_SECRET` (xem `src-tauri/src/drive.rs`) — vd đặt trong `src-tauri/.cargo/config.toml` `[env]` (nhớ gitignore vì có secret).
 
-**Code**: `src-tauri/src/drive.rs` (OAuth + API), state token/cache trong `model.rs`, lệnh đăng ký trong `lib.rs`. Frontend: `src/drive.ts` (IPC + `toDriveRelPath`), `src/useDrive.ts` (auth), `src/components/AccountBadge.tsx` (badge góc dưới trái), Settings ▸ Sync, `LibraryInventory.tsx` (panel metadata). i18n key `drive*`. Test: `src/drive.test.ts`.
+**Code**: `src-tauri/src/drive.rs` (OAuth + API; lệnh `drive_account`/`drive_sign_in`/`drive_sign_out`/`drive_file_metadata`/`drive_files_basic`/`drive_open_revision`), state token + cache drive-name/folder-id trong `model.rs`, đăng ký trong `lib.rs`. Mở URL OAuth qua `rundll32` (không dùng `cmd start` vì `&` trong URL bị cắt). Frontend: `src/drive.ts` (IPC + `toDriveRelPath`), `src/useDrive.ts` (auth), `src/components/AccountBadge.tsx` (badge góc dưới trái), Settings ▸ Sync, `LibraryInventory.tsx` (panel metadata + cột dashboard + mở revision). i18n key `drive*`. Test: `src/drive.test.ts`.

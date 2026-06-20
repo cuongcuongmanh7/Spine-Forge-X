@@ -728,6 +728,14 @@ body.col-resizing {
   align-items: center;
   gap: 10px;
 }
+.drive-account-row > button {
+  margin-left: auto;
+}
+.drive-waiting {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
 .drive-account-row .account-avatar {
   width: 28px;
   height: 28px;
@@ -777,6 +785,42 @@ body.col-resizing {
 }
 .library-drive-revs li > span:first-child {
   min-width: 150px;
+}
+.library-drive-revs li > .icon-button {
+  margin-left: auto;
+}
+
+/* Dashboard columns (owner / last-modified). */
+.library-owner {
+  max-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.library-modified {
+  white-space: nowrap;
+}
+.library-modified-recent {
+  color: var(--accent, #4a90d9);
+  font-weight: 600;
+}
+
+/* Per-row "⋯" action menu (replaces the inline button cluster; revealed on hover). */
+.library-menu-cell {
+  position: relative;
+  text-align: right;
+}
+.library-menu-cell .session-menu-trigger {
+  opacity: 0;
+  transition: opacity 0.12s var(--ease);
+}
+.library-table tbody tr:hover .library-menu-cell .session-menu-trigger,
+.library-menu-cell .session-menu-trigger.open {
+  opacity: 1;
+}
+.library-row-menu {
+  top: 30px;
+  right: 6px;
 }
 
 .session-main {

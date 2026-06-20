@@ -451,6 +451,8 @@ pub fn run() {
             drive::drive_sign_in,
             drive::drive_sign_out,
             drive::drive_file_metadata,
+            drive::drive_files_basic,
+            drive::drive_open_revision,
             start_batch_export,
             stop_batch_export,
             set_run_in_background
