@@ -1,4 +1,4 @@
-import { Fragment, useMemo, useState } from 'react';
+import { Fragment, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import {
   AlertTriangle,
@@ -37,6 +37,8 @@ import {
   groupByIdBand,
   cleanStatusForEntry,
   type LibraryCleanStatus,
+  matchedNames,
+  parseQuery,
   versionLabel,
   versionSummary,
   versionTags,
@@ -53,10 +55,17 @@ type SortState = { key: SortKey; direction: SortDirection };
 
 const SORT_TIEBREAKER = { numeric: true, sensitivity: 'base' } as const;
 
-function compactRelPath(path: string): string {
+/**
+ * Split a relative path into a shrinkable directory prefix and the file name. The name is rendered
+ * separately so it stays fully visible while only the prefix gets ellipsized in a narrow column —
+ * otherwise a plain end-ellipsis hides the most important part (the file name).
+ */
+function splitRelPath(path: string): { dir: string; name: string } {
   const parts = path.replace(/\\/g, '/').split('/').filter(Boolean);
-  if (parts.length <= 3) return path;
-  return `.../${parts.slice(-3).join('/')}`;
+  const name = parts.length > 0 ? parts[parts.length - 1] : path;
+  let dirs = parts.slice(0, -1);
+  if (dirs.length > 2) dirs = ['...', ...dirs.slice(-2)];
+  return { dir: dirs.length > 0 ? `${dirs.join('/')}/` : '', name };
 }
 
 /** Inventory tab: stats, chip filters, search, and the per-skeleton table (with animation list). */
@@ -122,6 +131,12 @@ export function LibraryInventory({
     [entries, facet, selectedCats, selectedVersions, query]
   );
 
+  // Parsed search (scope + term) drives chip highlighting and auto-expanding the anim/skin panel.
+  const parsedQuery = useMemo(() => parseQuery(query), [query]);
+
+  const tableRef = useRef<HTMLTableElement>(null);
+  const theadRef = useRef<HTMLTableSectionElement>(null);
+
   const sorted = useMemo(() => {
     function compareString(a: string, b: string) {
       return a.localeCompare(b, undefined, SORT_TIEBREAKER);
@@ -182,6 +197,21 @@ export function LibraryInventory({
     const groups = facet === 'id' ? groupByIdBand(sorted) : groupByFolder(sorted);
     return groups.map((g) => ({ key: g.key, label: g.key, entries: g.entries, mixedVersion: g.mixedVersion }));
   }, [sorted, facet]);
+
+  // The group rows pin just below the sticky header at `top: var(--lib-thead-h)`. The real header
+  // height varies with font/zoom/i18n, so a hardcoded value leaves a gap that scrolling rows peek
+  // through — measure the actual thead and feed it back into the CSS var. Re-runs when the table
+  // mounts (sections appear) and whenever the header resizes.
+  useLayoutEffect(() => {
+    const table = tableRef.current;
+    const thead = theadRef.current;
+    if (!table || !thead) return;
+    const apply = () => table.style.setProperty('--lib-thead-h', `${thead.offsetHeight}px`);
+    apply();
+    const observer = new ResizeObserver(apply);
+    observer.observe(thead);
+    return () => observer.disconnect();
+  }, [sections.length]);
 
   function toggleSet(setter: React.Dispatch<React.SetStateAction<Set<string>>>, key: string) {
     setter((prev) => {
@@ -408,7 +438,7 @@ export function LibraryInventory({
       {sections.length === 0 ? (
         <p className="helper-text">{t.libraryNoSpine}</p>
       ) : (
-        <table className="library-table">
+        <table className="library-table" ref={tableRef}>
           <colgroup>
             <col className="lib-col-entry" />
             <col className="lib-col-version" />
@@ -419,7 +449,7 @@ export function LibraryInventory({
             <col className="lib-col-modified" />
             <col className="lib-col-actions" />
           </colgroup>
-          <thead>
+          <thead ref={theadRef}>
             <tr>
               <th aria-sort={ariaSort('entry')}>
                 <span className="library-th-actions">
@@ -482,38 +512,47 @@ export function LibraryInventory({
             return (
               <tbody key={section.key}>
                 <tr className="library-group-row">
-                  <td colSpan={7}>
-                    <button className="library-group-toggle" onClick={() => toggleSet(setCollapsed, section.key)} aria-expanded={!isCollapsed}>
-                      {isCollapsed ? <ChevronRight size={15} /> : <ChevronDown size={15} />}
-                      {isSectionClean(section) && cleanStatusIcon('clean')}
-                      {isSectionCleanWarning(section) && cleanStatusIcon('warning')}
-                      {isSectionCleanUnknown(section) && cleanStatusIcon('unknown')}
-                      {section.label} <span className="muted">({section.entries.length})</span>
-                    </button>
-                    {section.mixedVersion && (
-                      <span className="library-warn-badge" title={t.libraryWarnMixed}>
-                        <AlertTriangle size={13} /> {t.libraryWarnMixed}
+                  {/* Single spanning cell: one sticky background fills the whole row. A flex
+                      wrapper keeps the toggle on the left and the actions on the right (a flex
+                      <td> would shrink its painted box and leave a gap in the action column). */}
+                  <td colSpan={8}>
+                    <div className="library-group-head-row">
+                      <span className="library-group-head-left">
+                        <button className="library-group-toggle" onClick={() => toggleSet(setCollapsed, section.key)} aria-expanded={!isCollapsed}>
+                          {isCollapsed ? <ChevronRight size={15} /> : <ChevronDown size={15} />}
+                          {isSectionClean(section) && cleanStatusIcon('clean')}
+                          {isSectionCleanWarning(section) && cleanStatusIcon('warning')}
+                          {isSectionCleanUnknown(section) && cleanStatusIcon('unknown')}
+                          {section.label} <span className="muted">({section.entries.length})</span>
+                        </button>
+                        {section.mixedVersion && (
+                          <span className="library-warn-badge" title={t.libraryWarnMixed}>
+                            <AlertTriangle size={13} /> {t.libraryWarnMixed}
+                          </span>
+                        )}
                       </span>
-                    )}
-                  </td>
-                  <td className="library-actions">
-                    <button
-                      className="icon-button"
-                      onClick={() => onPrepareCleanScan(section.entries.map((entry) => entry.spineFile))}
-                      title={t.libraryPrepareCleanScan}
-                      aria-label={t.libraryPrepareCleanScan}
-                    >
-                      <ListChecks size={15} />
-                    </button>
-                    <button className="icon-button" onClick={() => createSessionForSection(section)} title={t.libraryCreateSession} aria-label={t.libraryCreateSession}>
-                      <FolderPlus size={15} />
-                    </button>
+                      <span className="library-actions">
+                        <button
+                          className="icon-button"
+                          onClick={() => onPrepareCleanScan(section.entries.map((entry) => entry.spineFile))}
+                          title={t.libraryPrepareCleanScan}
+                          aria-label={t.libraryPrepareCleanScan}
+                        >
+                          <ListChecks size={15} />
+                        </button>
+                        <button className="icon-button" onClick={() => createSessionForSection(section)} title={t.libraryCreateSession} aria-label={t.libraryCreateSession}>
+                          <FolderPlus size={15} />
+                        </button>
+                      </span>
+                    </div>
                   </td>
                 </tr>
                 {!isCollapsed &&
                   section.entries.map((entry) => {
                     const w = entryWarnings(entry, thresholds);
-                    const animOpen = expandedAnims.has(entry.spineFile);
+                    const matches = matchedNames(entry, parsedQuery);
+                    const hasChipMatch = matches.animations.size > 0 || matches.skins.size > 0;
+                    const animOpen = expandedAnims.has(entry.spineFile) || hasChipMatch;
                     const infoOpen = expandedInfo.has(entry.spineFile);
                     const info = driveInfo[entry.spineFile];
                     const basic = basicFor(entry);
@@ -523,8 +562,18 @@ export function LibraryInventory({
                       <Fragment key={entry.spineFile}>
                         <tr>
                           <td className="library-path" title={entry.spineFile}>
-                            {cleanStatusIcon(cleanStatus(entry))}
-                            {compactRelPath(entry.relPath)}
+                            <span className="library-path-line">
+                              {cleanStatusIcon(cleanStatus(entry))}
+                              {(() => {
+                                const { dir, name } = splitRelPath(entry.relPath);
+                                return (
+                                  <>
+                                    {dir && <span className="library-path-dir">{dir}</span>}
+                                    <span className="library-path-name">{name}</span>
+                                  </>
+                                );
+                              })()}
+                            </span>
                           </td>
                           <td>{entry.version ?? <span className="muted">{t.libraryUnknownVersion}</span>}</td>
                           <td className={`num ${w.heavySpine ? 'library-warn-cell' : ''}`} title={w.heavySpine ? t.libraryWarnHeavySpine : undefined}>
@@ -609,7 +658,7 @@ export function LibraryInventory({
                                 <div>
                                   <strong>{t.librarySkins}:</strong>{' '}
                                   {entry.skins.map((s) => (
-                                    <span className="library-anim-chip" key={s}>
+                                    <span className={`library-anim-chip ${matches.skins.has(s) ? 'matched' : ''}`} key={s}>
                                       {s}
                                     </span>
                                   ))}
@@ -621,7 +670,7 @@ export function LibraryInventory({
                                   <span className="muted">—</span>
                                 ) : (
                                   entry.animations.map((a) => (
-                                    <span className="library-anim-chip" key={a}>
+                                    <span className={`library-anim-chip ${matches.animations.has(a) ? 'matched' : ''}`} key={a}>
                                       {a}
                                     </span>
                                   ))

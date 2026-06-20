@@ -187,20 +187,63 @@ export type LibrarySelection = {
   query: string;
 };
 
+/** Which facet a search term is scoped to: path+anim+skin (default), or just one of them. */
+export type SearchScope = 'all' | 'anim' | 'skin';
+
+export type ParsedQuery = { scope: SearchScope; term: string };
+
+/**
+ * Parse the Library search box into a scope + term. A leading `anim:` / `animation:` or `skin:`
+ * prefix narrows the search to that facet ("anim:attack" → only animation names); otherwise the
+ * term matches path, animation, and skin names alike. Term is lower-cased for case-insensitive use.
+ */
+export function parseQuery(raw: string): ParsedQuery {
+  const trimmed = raw.trim();
+  const match = /^(anim|animation|skin)\s*:\s*(.*)$/i.exec(trimmed);
+  if (match) {
+    const scope: SearchScope = match[1].toLowerCase().startsWith('skin') ? 'skin' : 'anim';
+    return { scope, term: match[2].trim().toLowerCase() };
+  }
+  return { scope: 'all', term: trimmed.toLowerCase() };
+}
+
+/** True when an entry's path/anim/skin satisfies a parsed query (empty term always matches). */
+export function entryMatchesQuery(entry: LibraryEntry, parsed: ParsedQuery): boolean {
+  const { scope, term } = parsed;
+  if (!term) return true;
+  const inAnims = entry.animations.some((a) => a.toLowerCase().includes(term));
+  const inSkins = entry.skins.some((s) => s.toLowerCase().includes(term));
+  if (scope === 'anim') return inAnims;
+  if (scope === 'skin') return inSkins;
+  return entry.relPath.toLowerCase().includes(term) || inAnims || inSkins;
+}
+
+/**
+ * Names within an entry that match the query, for highlighting the matched chips in the panel.
+ * Anim/skin facets are only populated when the scope allows them (an `anim:` query never lights
+ * up skins). A path-only "all" match returns no chip highlights.
+ */
+export function matchedNames(entry: LibraryEntry, parsed: ParsedQuery): { animations: Set<string>; skins: Set<string> } {
+  const animations = new Set<string>();
+  const skins = new Set<string>();
+  const { scope, term } = parsed;
+  if (term) {
+    if (scope === 'all' || scope === 'anim') {
+      for (const a of entry.animations) if (a.toLowerCase().includes(term)) animations.add(a);
+    }
+    if (scope === 'all' || scope === 'skin') {
+      for (const s of entry.skins) if (s.toLowerCase().includes(term)) skins.add(s);
+    }
+  }
+  return { animations, skins };
+}
+
 /** True when an entry passes the current category-chip, version-chip, and search filters. */
 export function entryMatchesFilter(entry: LibraryEntry, sel: LibrarySelection): boolean {
   const catKey = sel.facet === 'id' ? idBand(entry) : topFolder(entry);
   if (sel.selectedCats.size > 0 && !sel.selectedCats.has(catKey)) return false;
   if (sel.selectedVersions.size > 0 && !sel.selectedVersions.has(entry.version ?? '')) return false;
-  const q = sel.query.trim().toLowerCase();
-  if (q) {
-    const hit =
-      entry.relPath.toLowerCase().includes(q) ||
-      entry.animations.some((a) => a.toLowerCase().includes(q)) ||
-      entry.skins.some((s) => s.toLowerCase().includes(q));
-    if (!hit) return false;
-  }
-  return true;
+  return entryMatchesQuery(entry, parseQuery(sel.query));
 }
 
 /** Short human summary of the active selection, e.g. "Hero, NPC · 3.8.99" or "" when none. */
@@ -212,6 +255,52 @@ export function selectionSummary(sel: LibrarySelection): string {
   }
   if (sel.query.trim()) parts.push(`"${sel.query.trim()}"`);
   return parts.join(' · ');
+}
+
+/** One entry inside a version-mix report, flagged if it diverges from its group's majority version. */
+export type VersionMixEntry = { entry: LibraryEntry; diverges: boolean };
+
+/** A folder group that spans more than one editor minor version, with the majority highlighted. */
+export type VersionMixGroup = {
+  key: string;
+  majority: string;
+  entries: VersionMixEntry[];
+};
+
+/**
+ * Folder groups whose entries span more than one editor `major.minor` version — the units a lead
+ * must reconcile. Within each group the most common version is the "majority"; entries on any other
+ * version are flagged `diverges` so a quick filter can surface just the odd ones out. Entries with an
+ * unknown version are never counted as the majority and never flagged (we can't tell what they are).
+ */
+export function versionMixGroups(entries: LibraryEntry[]): VersionMixGroup[] {
+  return groupByFolder(entries)
+    .filter((g) => g.mixedVersion)
+    .map((g) => {
+      const counts = new Map<string, number>();
+      for (const e of g.entries) {
+        const key = minorKey(e.version);
+        if (key === 'unknown') continue;
+        counts.set(key, (counts.get(key) ?? 0) + 1);
+      }
+      // Majority = most frequent known version; ties break to the lexicographically smaller key.
+      let majority = '';
+      let best = -1;
+      for (const [key, count] of counts) {
+        if (count > best || (count === best && key.localeCompare(majority) < 0)) {
+          majority = key;
+          best = count;
+        }
+      }
+      return {
+        key: g.key,
+        majority,
+        entries: g.entries.map((entry) => {
+          const key = minorKey(entry.version);
+          return { entry, diverges: key !== 'unknown' && key !== majority };
+        })
+      };
+    });
 }
 
 export type VersionTag = { version: string | null; count: number };

@@ -6,6 +6,18 @@ Source-of-truth tiến độ toàn dự án.
 
 ---
 
+## v0.4.3 — Spine Hub Tier C (1+2): Library search & version ✅ Done
+
+> Bump `0.4.2 → 0.4.3`; tag `v0.4.3`. Plan: [spine-hub-tier-c.md](spine-hub-tier-c.md) mục 1 & 2. Frontend-only trên dữ liệu scan sẵn có.
+
+- [x] **Tier C #1 — Search theo animation / skin**: query Library nhận cú pháp scope `anim:attack` / `skin:red` (mặc định `all` = path + anim + skin như cũ). Tách `parseQuery`/`entryMatchesQuery`/`matchedNames` thuần trong [src/library.ts](src/library.ts); chip animation/skin khớp được tô sáng (class `.matched`) + panel tự bung khi có khớp. Placeholder search gợi ý cú pháp.
+- [x] **Tier C #1b — đọc anim/skin từ export binary `.skel.bytes`**: trước chỉ đọc từ `.json` skeleton nên export binary (Unity, 3.8) không có anim/skin để search. Thêm `src-tauri/src/skel_binary.rs` — port phần đọc của spine-runtimes 3.8 `SkeletonBinary` (chỉ bóc tên skin + animation, consume hết các block khác). Validate **byte-exact** trên file thật (cursor dừng đúng EOF) + đối chiếu parser tham chiếu Python. `library::read_skeleton_meta` gọi parser cho file `.skel*` khi không có `.json`; 4.x/file hỏng → bỏ qua (vẫn tính exported). 3 unit test + 1 fixture test `#[ignore]` qua `SPINE_SKEL_FIXTURE`.
+- [x] **Tier C #2 — Version-mix panel**: tab **Phiên bản** mới (`LibraryVersion.tsx` + CSS riêng) — StatCard phân bố version + đếm nhóm lẫn version, liệt kê từng nhóm `mixedVersion` với version **chính (majority)** và cờ `diverges` cho file lệch, kèm filter "chỉ hiện file lệch version". Hàm thuần `versionMixGroups` trong `library.ts`.
+- [x] **Polish UI bảng Library + titlebar**: double-click titlebar → `toggleMaximize` (sửa race với `startDragging`); sticky header/group-row hết hở khi cuộn (đo header bằng JS cho `--lib-thead-h`, bỏ `padding-top` vùng cuộn, group-row gộp 1 ô `colSpan=8`); tên file luôn hiện đầy đủ (`splitRelPath`: dir co + name cố định); cân lại width cột (owner/modified cố định, actions 144→60, File co giãn); `scrollbar-gutter: stable` cho head/foot khớp mép cột với bảng.
+- [x] Verify: `tsc` + `npm test` (70, +12) + `npm run build` (file-size guard pass) + `cargo test` (+3 skel) + clippy (không warning mới) xanh.
+
+---
+
 ## v0.4.1 — Fix đăng nhập Google Drive mất sau khi thoát app ✅ Done
 
 > Bump `0.4.0 → 0.4.1`; tag `v0.4.1`.
@@ -39,7 +51,7 @@ Source-of-truth tiến độ toàn dự án.
 - [x] **Fix Library header bị dòng cuộn đè** (`border-collapse: separate`); group-row sticky tầng dưới header.
 - [x] Verify: `tsc` + `npm test` (47) + `cargo check` + `npm run build` xanh.
 - [x] **Tier B — Google Drive API** → đã làm, xem **v0.4.0** ở trên.
-- [ ] **Tier C — Spine Hub roadmap** (tags/ownership, used-by-projects, search anim/skin, version-mix panel, preview thumbnail) → plan chi tiết: **[spine-hub-tier-c.md](spine-hub-tier-c.md)**.
+- [~] **Tier C — Spine Hub roadmap** → plan: **[spine-hub-tier-c.md](spine-hub-tier-c.md)**. #1 search anim/skin + #2 version-mix panel **xong ở v0.4.3**; còn lại #3 used-by-projects, #4 tags/ownership, #5 preview thumbnail.
 - [ ] (Tạm hoãn) **Multi-root mapping** — khi source trải nhiều mount khác hẳn nhau; hiện dùng cha chung `G:\Shared drives` là đủ.
 
 ## v0.3.6 — Chuyển CI/CD GitLab → GitHub Actions ✅ Done

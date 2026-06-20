@@ -1,0 +1,59 @@
+/* Version tab: library-wide version distribution + mixed-version group cards. */
+.library-version-filter {
+  margin-left: auto;
+  font-size: 12px;
+  white-space: nowrap;
+}
+.library-version-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.library-version-group {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+.library-version-group-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  background: var(--surface-soft);
+  border-bottom: 1px solid var(--border);
+  font-size: 13px;
+}
+.library-version-majority {
+  margin-left: auto;
+  font-size: 11px;
+}
+.library-version-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+.library-version-table td {
+  padding: 5px 10px;
+  border-top: 1px solid var(--border);
+  font-size: 12px;
+}
+.library-version-table tbody tr:first-child td {
+  border-top: 0;
+}
+.library-version-table tr.diverges {
+  background: color-mix(in srgb, var(--warning), transparent 90%);
+}
+.library-version-cell {
+  white-space: nowrap;
+}
+.library-version-table tr.diverges .library-version-cell {
+  color: var(--warning);
+  font-weight: 600;
+}
+.library-version-cell svg {
+  vertical-align: -2px;
+}
+.library-version-table tr:hover .library-actions .icon-button,
+.library-version-table tr:focus-within .library-actions .icon-button {
+  opacity: 1;
+  pointer-events: auto;
+}

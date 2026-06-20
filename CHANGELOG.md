@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.4.3
+- **Thư viện: tìm theo animation / skin** — gõ tên một animation hay skin để lọc ra mọi file `.spine` chứa nó. Dùng `anim:attack` hoặc `skin:red` để tìm đúng loại; tên khớp được tô sáng ngay trong danh sách. Đọc được cả với export **binary** (`.skel.bytes` kiểu Unity, bản 3.8) — trước đây các file này không liệt kê được anim/skin.
+- **Thư viện: tab "Phiên bản"** — gom các nhóm đang lẫn lộn phiên bản editor (vd cùng nhân vật có file 3.8 lẫn 4.3) vào một chỗ, kèm bộ lọc "chỉ hiện file lệch version" để xử lý đồng bộ nhanh.
+- **Double-click thanh tiêu đề** để phóng to / thu gọn cửa sổ.
+- **Bảng Thư viện gọn hơn**: tên file luôn hiện đầy đủ (chỉ rút gọn phần thư mục), cột Sửa lần cuối / thao tác thu lại nhường chỗ cho cột tên; sửa các khe hở khi cuộn và canh thẳng nút theo cột.
+
 ## v0.4.2
 - **Thư viện: dữ liệu "Tải dữ liệu Drive" (Người sửa / Sửa lần cuối) giờ được lưu lại và đồng bộ qua Google Drive** — mở lại app, hay mở ở máy khác cùng Shared drive, đều thấy ngay mà không phải tải lại; bấm "Tải dữ liệu Drive" để cập nhật.
 

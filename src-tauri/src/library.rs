@@ -14,7 +14,7 @@ use crate::clean::discover_clean_units;
 use crate::model::{BatchScanSummary, FolderScan, LibraryEntry, LibraryScan};
 use crate::paths::{parse_quoted_path, path_to_string, unquote};
 use crate::util::normalize_path_for_compare;
-use crate::{cleaner, concurrent, spine_project};
+use crate::{cleaner, concurrent, skel_binary, spine_project};
 
 /// Animation + skin names read from a unit's exported skeleton(s).
 struct SkeletonMeta {
@@ -58,9 +58,18 @@ fn read_skeleton_meta(unit_folder: &Path) -> SkeletonMeta {
                 continue;
             }
             exported = true;
-            // Animation/skin names are only readable from a JSON skeleton; binary `.skel`
-            // can't be parsed offline, so those exports show as exported with no clip list.
+            // Binary skeletons (`.skel`/`.skel.bytes`, e.g. Unity exports) carry the same
+            // animation/skin names as JSON — read them with the 3.8 binary parser. 4.x or any
+            // malformed file simply yields nothing (the unit still counts as exported).
             if !is_skeleton_json {
+                if lname.contains(".skel") {
+                    if let Ok(data) = std::fs::read(&path) {
+                        if let Ok(names) = skel_binary::read_skel_names(&data) {
+                            animations.extend(names.animations);
+                            skins.extend(names.skins);
+                        }
+                    }
+                }
                 continue;
             }
             let Ok(content) = std::fs::read_to_string(&path) else { continue };

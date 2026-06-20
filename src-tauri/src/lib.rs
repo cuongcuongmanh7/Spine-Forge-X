@@ -10,6 +10,7 @@ mod library;
 mod model;
 mod paths;
 mod presets;
+mod skel_binary;
 mod spine_project;
 mod system;
 mod tray;

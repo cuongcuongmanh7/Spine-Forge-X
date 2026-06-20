@@ -11,8 +11,14 @@ export function Titlebar() {
     <div className="custom-titlebar">
       <div
         className="titlebar-drag-zone"
-        onMouseDown={() => void getAppWindow()?.startDragging()}
-        onDoubleClick={() => void getAppWindow()?.toggleMaximize()}
+        // Decide on mousedown: the 2nd press of a double-click (`detail === 2`) toggles maximize;
+        // any other left press starts a window drag. Starting the drag on every mousedown would
+        // swallow the native dblclick, so the two must be branched here, not via onDoubleClick.
+        onMouseDown={(event) => {
+          if (event.button !== 0) return;
+          if (event.detail === 2) void getAppWindow()?.toggleMaximize();
+          else void getAppWindow()?.startDragging();
+        }}
       >
         <div className="titlebar-brand">
           <img className="titlebar-mark" src={appIconUrl} alt="" aria-hidden="true" />

@@ -1,13 +1,17 @@
 import { describe, expect, it } from 'vitest';
 import type { LibraryEntry } from './config';
 import {
+  entryMatchesQuery,
   entryWarnings,
   groupByFolder,
   groupByIdBand,
   idBand,
   isMixedVersion,
   majorVersion,
+  matchedNames,
+  parseQuery,
   topFolder,
+  versionMixGroups,
   versionSummary
 } from './library';
 import { formatBytes } from './time';
@@ -113,6 +117,88 @@ describe('versionSummary', () => {
     expect(buckets.map((b) => b.major)).toEqual(['3', '4', 'unknown']);
     expect(buckets.find((b) => b.major === '4')?.count).toBe(2);
     expect(buckets.find((b) => b.major === '4')?.spineBytes).toBe(150);
+  });
+});
+
+describe('versionMixGroups', () => {
+  it('returns only folders that mix versions, flagging entries off the majority', () => {
+    const groups = versionMixGroups([
+      entry({ relPath: 'Heroes/a.spine', version: '4.3.17' }),
+      entry({ relPath: 'Heroes/b.spine', version: '4.3.10' }),
+      entry({ relPath: 'Heroes/c.spine', version: '3.8.99' }),
+      entry({ relPath: 'Enemies/d.spine', version: '4.3.17' }), // single version → not mixed
+      entry({ relPath: 'Enemies/e.spine', version: '4.3.10' })
+    ]);
+    expect(groups.map((g) => g.key)).toEqual(['Heroes']);
+    const heroes = groups[0];
+    expect(heroes.majority).toBe('4.3'); // two 4.3 entries beat one 3.8
+    const diverging = heroes.entries.filter((r) => r.diverges).map((r) => r.entry.relPath);
+    expect(diverging).toEqual(['Heroes/c.spine']);
+  });
+  it('never flags or counts unknown-version entries as the majority', () => {
+    const groups = versionMixGroups([
+      entry({ relPath: 'X/a.spine', version: '4.3.17' }),
+      entry({ relPath: 'X/b.spine', version: '3.8.99' }),
+      entry({ relPath: 'X/c.spine', version: null })
+    ]);
+    expect(groups).toHaveLength(1);
+    const unknown = groups[0].entries.find((r) => r.entry.relPath === 'X/c.spine');
+    expect(unknown?.diverges).toBe(false);
+  });
+});
+
+describe('parseQuery', () => {
+  it('defaults to "all" scope with a lower-cased term', () => {
+    expect(parseQuery('  Attack ')).toEqual({ scope: 'all', term: 'attack' });
+  });
+  it('parses anim:/animation: prefix into anim scope', () => {
+    expect(parseQuery('anim:attack')).toEqual({ scope: 'anim', term: 'attack' });
+    expect(parseQuery('Animation: Idle')).toEqual({ scope: 'anim', term: 'idle' });
+  });
+  it('parses skin: prefix into skin scope', () => {
+    expect(parseQuery('skin: Red')).toEqual({ scope: 'skin', term: 'red' });
+  });
+  it('treats a colon mid-word as a plain term', () => {
+    expect(parseQuery('boss:fight')).toEqual({ scope: 'all', term: 'boss:fight' });
+  });
+});
+
+describe('entryMatchesQuery', () => {
+  const e = entry({ relPath: 'Heroes/Lucius.spine', animations: ['attack', 'idle'], skins: ['red', 'blue'] });
+  it('matches path, anim, or skin for an "all" query', () => {
+    expect(entryMatchesQuery(e, parseQuery('lucius'))).toBe(true);
+    expect(entryMatchesQuery(e, parseQuery('attack'))).toBe(true);
+    expect(entryMatchesQuery(e, parseQuery('red'))).toBe(true);
+    expect(entryMatchesQuery(e, parseQuery('missing'))).toBe(false);
+  });
+  it('scopes anim:/skin: to that facet only', () => {
+    expect(entryMatchesQuery(e, parseQuery('anim:attack'))).toBe(true);
+    expect(entryMatchesQuery(e, parseQuery('anim:red'))).toBe(false); // red is a skin, not an anim
+    expect(entryMatchesQuery(e, parseQuery('skin:blue'))).toBe(true);
+    expect(entryMatchesQuery(e, parseQuery('skin:attack'))).toBe(false);
+  });
+  it('an empty term matches everything', () => {
+    expect(entryMatchesQuery(e, parseQuery(''))).toBe(true);
+    expect(entryMatchesQuery(e, parseQuery('anim:'))).toBe(true);
+  });
+});
+
+describe('matchedNames', () => {
+  const e = entry({ animations: ['attack', 'attack_combo', 'idle'], skins: ['attack_skin', 'red'] });
+  it('collects matching anim and skin names for an "all" query', () => {
+    const m = matchedNames(e, parseQuery('attack'));
+    expect([...m.animations]).toEqual(['attack', 'attack_combo']);
+    expect([...m.skins]).toEqual(['attack_skin']);
+  });
+  it('does not light up skins for an anim: query', () => {
+    const m = matchedNames(e, parseQuery('anim:attack'));
+    expect([...m.animations]).toEqual(['attack', 'attack_combo']);
+    expect(m.skins.size).toBe(0);
+  });
+  it('returns empty sets for an empty term', () => {
+    const m = matchedNames(e, parseQuery(''));
+    expect(m.animations.size).toBe(0);
+    expect(m.skins.size).toBe(0);
   });
 });
 

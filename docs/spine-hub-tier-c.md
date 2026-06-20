@@ -5,7 +5,7 @@ qua Google Drive; Tier B lấy owner/lịch sử/version qua Drive API. **Tier C
 file" thành lớp tri thức** giúp lead/animator trả lời nhanh: *asset này ai phụ trách, đang được
 project nào dùng, có animation/skin gì, version có lẫn lộn không, trông ra sao.*
 
-> Trạng thái: **chưa bắt đầu** — đây là plan đề xuất, chốt phạm vi/ưu tiên trước khi code.
+> Trạng thái: **#1 + #2 đã ship ở v0.4.3** (Library search & version). Còn lại #3/#4/#5.
 
 ## Nguyên tắc
 - **Tận dụng dữ liệu đã có trước.** `scan_library` đã trả mỗi `LibraryEntry` kèm `animations[]`,
@@ -16,7 +16,7 @@ project nào dùng, có animation/skin gì, version có lẫn lộn không, trô
 
 ---
 
-## 1. Search theo animation / skin  ⭐ ưu tiên 1 (rẻ, đã có data)
+## 1. Search theo animation / skin  ✅ Done (v0.4.3)
 **Mục tiêu:** gõ tên một animation/skin → ra mọi `.spine` chứa nó (vd "tìm tất cả file có anim `attack`").
 **Dữ liệu:** `entry.animations` / `entry.skins` đã có sẵn từ scan (chỉ với file đã export).
 **Thiết kế:** mở rộng ô search Library hiện có thành chế độ "tìm trong anim/skin" (toggle hoặc cú pháp
@@ -24,8 +24,11 @@ project nào dùng, có animation/skin gì, version có lẫn lộn không, trô
 **Việc cần làm:** thêm vị từ match vào [src/library.ts](src/library.ts) (`entryMatchesFilter`), UI chip/route
 trong [LibraryInventory.tsx](src/components/LibraryInventory.tsx). Frontend-only.
 **Lưu ý:** file chưa export không có anim/skin → cần gợi ý "rescan/export để index".
+**Đã làm thêm (v0.4.3):** đọc anim/skin từ export **binary** `.skel.bytes` (3.8) qua `src-tauri/src/skel_binary.rs`
+(port reader spine-runtimes 3.8, validate byte-exact trên file thật). Export `.skel` 4.x vẫn chưa đọc được
+(layout khác — cần file 4.x thật để reverse).
 
-## 2. Version-mix panel  ⭐ ưu tiên 2 (đã có một nửa)
+## 2. Version-mix panel  ✅ Done (v0.4.3)
 **Mục tiêu:** một chỗ tổng hợp các nhóm/đơn vị đang **lẫn lộn editor version** (vd cùng nhân vật có
 file 3.8 lẫn 4.3) để lead xử lý đồng bộ.
 **Hiện trạng:** `groupByFolder` đã tính cờ `mixedVersion` + có badge cảnh báo trong từng nhóm.
@@ -65,9 +68,9 @@ với dữ liệu Tier B.
 ---
 
 ## Thứ tự đề xuất
-**1 → 2 → 3** (đều frontend-only trên dữ liệu sẵn có, ship nhanh) → **4** (tags/ownership, đụng sync
-schema) → **5** (thumbnail, MVP ảnh đại diện trước, skeleton-render để cuối). Có thể gộp **1+2** vào một
-release "Library search & version", **3** một release, **4** một release.
+~~**1 → 2**~~ đã ship ở **v0.4.3** (release "Library search & version"). Tiếp theo: **3** (used-by-projects,
+frontend-only, một release) → **4** (tags/ownership, đụng sync schema) → **5** (thumbnail, MVP ảnh đại diện
+trước, skeleton-render để cuối).
 
 ## Câu hỏi cần chốt
 - Tag/owner đồng bộ qua profile (mọi máy thấy) hay machine-local? (đề xuất: đồng bộ).

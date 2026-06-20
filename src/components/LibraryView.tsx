@@ -7,9 +7,10 @@ import { ModeToggle } from './ModeToggle';
 import { SidebarFooter } from './SidebarFooter';
 import { LibraryInventory } from './LibraryInventory';
 import { LibraryClean } from './LibraryClean';
+import { LibraryVersion } from './LibraryVersion';
 import './LibraryView.css';
 
-type Tab = 'inventory' | 'clean' | 'coverage';
+type Tab = 'inventory' | 'version' | 'clean' | 'coverage';
 type CleanScopeRequest = { id: number; spineFiles: string[] };
 
 /** Asset Library main view: master-folder list (left) + tabbed inventory/clean (right). */
@@ -141,6 +142,9 @@ export function LibraryView() {
                 <button className={`library-tab ${tab === 'inventory' ? 'active' : ''}`} onClick={() => setTab('inventory')}>
                   {t.libraryTabInventory}
                 </button>
+                <button className={`library-tab ${tab === 'version' ? 'active' : ''}`} onClick={() => setTab('version')}>
+                  {t.libraryTabVersion}
+                </button>
                 <button className={`library-tab ${tab === 'clean' ? 'active' : ''}`} onClick={() => setTab('clean')}>
                   {t.libraryTabClean}
                 </button>
@@ -154,6 +158,9 @@ export function LibraryView() {
               {/* Both panes stay mounted so Inventory filters + Clean scan survive a tab switch. */}
               <div className="library-tabpane" style={{ display: tab === 'inventory' ? 'block' : 'none' }}>
                 <LibraryInventory filter={filter} onPrepareCleanScan={prepareCleanScan} />
+              </div>
+              <div className="library-tabpane" style={{ display: tab === 'version' ? 'block' : 'none' }}>
+                <LibraryVersion />
               </div>
               <div className="library-tabpane" style={{ display: tab === 'clean' ? 'block' : 'none' }}>
                 <LibraryClean filter={filter} scopeRequest={cleanScopeRequest} />
