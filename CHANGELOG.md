@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.4.4
+- **Thư viện: "Dùng bởi N project"** — mỗi file `.spine` cho biết đang được session/project nào dùng (rê chuột xem danh sách, bấm để nhảy tới session), kèm bộ lọc **"Chỉ file chưa dùng"** để tìm asset mồ côi cần dọn.
+- **Thư viện: gắn tag & người phụ trách** — gắn tag tự do (vd `boss`, `cần review`, `wip`) và đặt người phụ trách cho từng file; lọc nhanh theo tag. Người phụ trách mặc định lấy từ Google Drive, có thể sửa tay. Tag/người phụ trách được đồng bộ qua Drive nên máy khác / đồng đội đều thấy.
+- **Panel Người sửa & lịch sử có nút đóng (✕)** để thu gọn nhanh ngay tại chỗ.
+- **Cột bảng Thư viện cân đối lại** cho cột File rộng hơn (đủ chỗ hiện tên file + nhãn "dùng bởi"); thêm dòng **"Tải Drive lần cuối"** dưới "Lần quét cuối".
+
 ## v0.4.3
 - **Thư viện: tìm theo animation / skin** — gõ tên một animation hay skin để lọc ra mọi file `.spine` chứa nó. Dùng `anim:attack` hoặc `skin:red` để tìm đúng loại; tên khớp được tô sáng ngay trong danh sách. Đọc được cả với export **binary** (`.skel.bytes` kiểu Unity, bản 3.8) — trước đây các file này không liệt kê được anim/skin.
 - **Thư viện: tab "Phiên bản"** — gom các nhóm đang lẫn lộn phiên bản editor (vd cùng nhân vật có file 3.8 lẫn 4.3) vào một chỗ, kèm bộ lọc "chỉ hiện file lệch version" để xử lý đồng bộ nhanh.

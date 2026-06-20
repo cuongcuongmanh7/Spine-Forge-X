@@ -9,27 +9,28 @@ import {
   ChevronsDownUp,
   ChevronsUpDown,
   CloudDownload,
-  FileClock,
-  FolderOpen,
   FolderPlus,
-  History,
   Images,
   Layers,
   ListChecks,
-  MoreHorizontal,
   Circle,
   RotateCw,
   Search,
   Tag,
-  User
+  Users
 } from 'lucide-react';
 import { useApp } from '../useAppController';
-import { SpineFileIcon } from './SpineFileIcon';
 import { StatCard } from './StatCard';
 import { basename } from '../sessions';
-import { formatBytes, formatDate, formatDateTime } from '../time';
+import { formatBytes, formatDate } from '../time';
 import type { LibraryEntry } from '../config';
 import { useLibraryDrive } from '../useLibraryDrive';
+import { useLibraryTags } from '../useLibraryTags';
+import { LibraryDriveInfoRow } from './LibraryDriveInfoRow';
+import { LibraryRowMenu } from './LibraryRowMenu';
+import { LibraryTagCell } from './LibraryTagCell';
+import { LibraryOwnerCell } from './LibraryOwnerCell';
+import './LibraryMeta.css';
 import {
   entryMatchesFilter,
   entryWarnings,
@@ -37,8 +38,10 @@ import {
   groupByIdBand,
   cleanStatusForEntry,
   type LibraryCleanStatus,
+  entryMatchesTags,
   matchedNames,
   parseQuery,
+  usageByEntry,
   versionLabel,
   versionSummary,
   versionTags,
@@ -92,7 +95,10 @@ export function LibraryInventory({
     driveAccount,
     syncRoot,
     syncConnected,
-    setSettingsOpen
+    setSettingsOpen,
+    sessions,
+    projects,
+    selectSession
   } = useApp();
 
   const { facet, selectedCats, selectedVersions, query } = filter;
@@ -101,10 +107,17 @@ export function LibraryInventory({
   // Which row's "⋯" action menu is open (keyed by `.spine` path); null = none.
   const [menuOpen, setMenuOpen] = useState<string | null>(null);
   const [sort, setSort] = useState<SortState>({ key: 'entry', direction: 'asc' });
+  // "Used-by-projects" (#3): show only assets no session references — cleanup candidates.
+  const [unusedOnly, setUnusedOnly] = useState(false);
+  // Tags/ownership (#4): tag-chip filter selection.
+  const [selectedTags, setSelectedTags] = useState<Set<string>>(new Set());
+
+  // Tags + manual owner per asset (localStorage mirror + synced sidecar) — see useLibraryTags.
+  const { tagList, metaFor, addEntryTag, removeEntryTag, setEntryOwner } = useLibraryTags({ syncRoot, syncConnected });
 
   // Drive metadata (per-row owner/history panel, dashboard columns, open-revision) lives in its own
   // hook to keep this component thin — see useLibraryDrive.
-  const { driveInfo, expandedInfo, loadingBasics, basicFor, toggleDriveInfo, loadDriveBasics, openRevisionInSpine } =
+  const { driveInfo, expandedInfo, loadingBasics, basicsLoadedAt, basicFor, toggleDriveInfo, loadDriveBasics, openRevisionInSpine } =
     useLibraryDrive({
       t,
       pushToast,
@@ -126,10 +139,17 @@ export function LibraryInventory({
   const catChips = useMemo(() => (facet === 'id' ? groupByIdBand(entries) : groupByFolder(entries)), [entries, facet]);
   const versions = useMemo(() => versionTags(entries), [entries]);
 
-  const filtered = useMemo(
-    () => entries.filter((e) => entryMatchesFilter(e, { facet, selectedCats, selectedVersions, query })),
-    [entries, facet, selectedCats, selectedVersions, query]
-  );
+  // Which sessions/projects reference each .spine — drives the "used by" badge and the unused filter.
+  const usage = useMemo(() => usageByEntry(entries, sessions), [entries, sessions]);
+  const projectName = useMemo(() => new Map(projects.map((p) => [p.id, p.name])), [projects]);
+  const sessionById = useMemo(() => new Map(sessions.map((s) => [s.id, s])), [sessions]);
+
+  const filtered = useMemo(() => {
+    let base = entries.filter((e) => entryMatchesFilter(e, { facet, selectedCats, selectedVersions, query }));
+    if (unusedOnly) base = base.filter((e) => (usage.get(e.spineFile)?.projectIds.length ?? 0) === 0);
+    if (selectedTags.size > 0) base = base.filter((e) => entryMatchesTags(metaFor(e), selectedTags));
+    return base;
+  }, [entries, facet, selectedCats, selectedVersions, query, unusedOnly, usage, selectedTags, metaFor]);
 
   // Parsed search (scope + term) drives chip highlighting and auto-expanding the anim/skin panel.
   const parsedQuery = useMemo(() => parseQuery(query), [query]);
@@ -245,6 +265,23 @@ export function LibraryInventory({
     } catch (error) {
       pushToast(`${t.libraryOpenFolderFailed}: ${String(error)}`, 'error');
     }
+  }
+
+  // Jump from a "used by" badge to the workspace session that references the asset.
+  function goToSession(sessionId: string) {
+    selectSession(sessionId);
+    setViewMode('workspace');
+  }
+
+  // Tooltip listing each "Project › Session" that references the asset.
+  function usageTooltip(spineFile: string): string {
+    const ids = usage.get(spineFile)?.sessionIds ?? [];
+    return ids
+      .map((id) => {
+        const s = sessionById.get(id);
+        return s ? `${projectName.get(s.projectId) ?? '?'} › ${s.name}` : id;
+      })
+      .join('\n');
   }
 
   function createSessionForEntry(entry: LibraryEntry) {
@@ -367,8 +404,15 @@ export function LibraryInventory({
           onChange={(e) => filter.setQuery(e.target.value)}
         />
         <span className="muted library-lastscan">
-          {t.libraryLastScan}:{' '}
-          {activeLibrary?.lastScanAt ? formatDate(activeLibrary.lastScanAt) : t.libraryNeverScanned}
+          <span>
+            {t.libraryLastScan}:{' '}
+            {activeLibrary?.lastScanAt ? formatDate(activeLibrary.lastScanAt) : t.libraryNeverScanned}
+          </span>
+          {basicsLoadedAt && (
+            <span>
+              {t.libraryLastDriveLoad}: {formatDate(basicsLoadedAt)}
+            </span>
+          )}
         </span>
         <button className="secondary-button small" onClick={() => void rescanLibrary()} disabled={isScanningLibrary}>
           <RotateCw size={14} className={isScanningLibrary ? 'spin' : undefined} /> {t.libraryRescan}
@@ -432,6 +476,36 @@ export function LibraryInventory({
         </div>
       </div>
 
+      <div className="library-chip-row">
+        <span className="library-chip-label">{t.libraryColUsedBy}</span>
+        <div className="library-chip-set">
+          <button
+            className={`library-chip ${unusedOnly ? 'active' : ''}`}
+            onClick={() => setUnusedOnly((v) => !v)}
+            aria-pressed={unusedOnly}
+          >
+            <Users size={12} /> {t.libraryUnusedOnly}
+          </button>
+        </div>
+      </div>
+
+      {tagList.length > 0 && (
+        <div className="library-chip-row">
+          <span className="library-chip-label">{t.libraryFilterTag}</span>
+          <div className="library-chip-set">
+            {tagList.map((tag) => (
+              <button
+                key={tag}
+                className={`library-chip ${selectedTags.has(tag) ? 'active' : ''}`}
+                onClick={() => toggleSet(setSelectedTags, tag)}
+              >
+                <Tag size={11} /> {tag}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
       </div>
 
       <div className="library-pane-scroll">
@@ -445,6 +519,7 @@ export function LibraryInventory({
             <col className="lib-col-size" />
             <col className="lib-col-images" />
             <col className="lib-col-anims" />
+            <col className="lib-col-tags" />
             <col className="lib-col-owner" />
             <col className="lib-col-modified" />
             <col className="lib-col-actions" />
@@ -492,9 +567,10 @@ export function LibraryInventory({
                   {sortMark('anims')}
                 </button>
               </th>
+              <th>{t.libraryColTags}</th>
               <th aria-sort={ariaSort('owner')}>
                 <button className="library-th-sort" onClick={() => toggleSort('owner')}>
-                  {t.driveColOwner}
+                  {t.libraryColOwner}
                   {sortMark('owner')}
                 </button>
               </th>
@@ -515,7 +591,7 @@ export function LibraryInventory({
                   {/* Single spanning cell: one sticky background fills the whole row. A flex
                       wrapper keeps the toggle on the left and the actions on the right (a flex
                       <td> would shrink its painted box and leave a gap in the action column). */}
-                  <td colSpan={8}>
+                  <td colSpan={9}>
                     <div className="library-group-head-row">
                       <span className="library-group-head-left">
                         <button className="library-group-toggle" onClick={() => toggleSet(setCollapsed, section.key)} aria-expanded={!isCollapsed}>
@@ -573,6 +649,27 @@ export function LibraryInventory({
                                   </>
                                 );
                               })()}
+                              {(() => {
+                                const u = usage.get(entry.spineFile);
+                                const count = u?.projectIds.length ?? 0;
+                                if (count === 0) {
+                                  return (
+                                    <span className="library-usage-badge unused" title={t.libraryUsedByNone}>
+                                      <Users size={11} /> 0
+                                    </span>
+                                  );
+                                }
+                                return (
+                                  <button
+                                    type="button"
+                                    className="library-usage-badge"
+                                    title={`${t.libraryUsedByCount.replace('{count}', String(count))}\n${usageTooltip(entry.spineFile)}`}
+                                    onClick={() => goToSession(u!.sessionIds[0])}
+                                  >
+                                    <Users size={11} /> {count}
+                                  </button>
+                                );
+                              })()}
                             </span>
                           </td>
                           <td>{entry.version ?? <span className="muted">{t.libraryUnknownVersion}</span>}</td>
@@ -594,13 +691,22 @@ export function LibraryInventory({
                               <span className="muted" title={t.libraryBinExport}>—</span>
                             )}
                           </td>
-                          <td
-                            className="library-owner"
-                            title={basic?.ownerEmail ?? basic?.lastEditorEmail ?? undefined}
-                          >
-                            {basic?.ownerName || basic?.ownerEmail || basic?.lastEditorName || basic?.lastEditorEmail || (
-                              <span className="muted">—</span>
-                            )}
+                          <td className="library-tags">
+                            <LibraryTagCell
+                              tags={metaFor(entry)?.tags ?? []}
+                              onAdd={(tag) => addEntryTag(entry, tag)}
+                              onRemove={(tag) => removeEntryTag(entry, tag)}
+                              t={t}
+                            />
+                          </td>
+                          <td className="library-owner">
+                            <LibraryOwnerCell
+                              manualOwner={metaFor(entry)?.owner}
+                              driveName={basic?.ownerName || basic?.ownerEmail || basic?.lastEditorName || basic?.lastEditorEmail || ''}
+                              driveEmail={basic?.ownerEmail ?? basic?.lastEditorEmail ?? undefined}
+                              onSet={(owner) => setEntryOwner(entry, owner)}
+                              t={t}
+                            />
                           </td>
                           <td className={`library-modified ${recent ? 'library-modified-recent' : ''}`}>
                             {basic?.modifiedTime ? (
@@ -609,51 +715,22 @@ export function LibraryInventory({
                               <span className="muted">—</span>
                             )}
                           </td>
-                          <td className="library-actions library-menu-cell">
-                            <button
-                              className={`session-menu-trigger ${menuOpen === entry.spineFile ? 'open' : ''}`}
-                              title={t.options}
-                              aria-label={t.options}
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setMenuOpen(menuOpen === entry.spineFile ? null : entry.spineFile);
-                              }}
-                            >
-                              <MoreHorizontal size={16} />
-                            </button>
-                            {menuOpen === entry.spineFile && (
-                              <>
-                                <div
-                                  className="menu-backdrop"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    setMenuOpen(null);
-                                  }}
-                                />
-                                <div className="session-menu library-row-menu" onClick={(e) => e.stopPropagation()}>
-                                  <button onClick={() => { setMenuOpen(null); toggleDriveInfo(entry); }}>
-                                    <History size={14} /> {t.driveInfoTitle}
-                                  </button>
-                                  <button onClick={() => { setMenuOpen(null); onPrepareCleanScan([entry.spineFile]); }}>
-                                    <ListChecks size={14} /> {t.libraryPrepareCleanScan}
-                                  </button>
-                                  <button onClick={() => { setMenuOpen(null); void openFolder(entry); }}>
-                                    <FolderOpen size={14} /> {t.libraryOpenFolder}
-                                  </button>
-                                  <button onClick={() => { setMenuOpen(null); void openInSpine(entry); }}>
-                                    <SpineFileIcon size={14} /> {t.libraryOpenInSpine}
-                                  </button>
-                                  <button onClick={() => { setMenuOpen(null); createSessionForEntry(entry); }}>
-                                    <FolderPlus size={14} /> {t.libraryCreateSession}
-                                  </button>
-                                </div>
-                              </>
-                            )}
-                          </td>
+                          <LibraryRowMenu
+                            entry={entry}
+                            open={menuOpen === entry.spineFile}
+                            onToggle={() => setMenuOpen(menuOpen === entry.spineFile ? null : entry.spineFile)}
+                            onClose={() => setMenuOpen(null)}
+                            onDriveInfo={toggleDriveInfo}
+                            onCleanScan={(e) => onPrepareCleanScan([e.spineFile])}
+                            onOpenFolder={(e) => void openFolder(e)}
+                            onOpenInSpine={(e) => void openInSpine(e)}
+                            onCreateSession={createSessionForEntry}
+                            t={t}
+                          />
                         </tr>
                         {animOpen && entry.exported && (
                           <tr className="library-anim-list">
-                            <td colSpan={8}>
+                            <td colSpan={9}>
                               {entry.skins.length > 0 && (
                                 <div>
                                   <strong>{t.librarySkins}:</strong>{' '}
@@ -680,62 +757,13 @@ export function LibraryInventory({
                           </tr>
                         )}
                         {infoOpen && (
-                          <tr className="library-anim-list library-drive-row">
-                            <td colSpan={8}>
-                              {info?.loading && (
-                                <span className="muted">
-                                  <RotateCw size={13} className="spin" /> {t.driveLoading}
-                                </span>
-                              )}
-                              {info?.notOnDrive && <span className="muted">{t.driveNotOnDrive}</span>}
-                              {info?.error && <span className="library-drive-error">{info.error}</span>}
-                              {info?.data && (
-                                <div className="library-drive-info">
-                                  <div className="library-drive-meta">
-                                    <span>
-                                      <User size={13} /> <strong>{t.driveOwner}:</strong>{' '}
-                                      {info.data.ownerName ?? info.data.ownerEmail ?? '—'}
-                                      {info.data.ownerEmail ? <span className="muted"> ({info.data.ownerEmail})</span> : null}
-                                    </span>
-                                    {info.data.modifiedTime && (
-                                      <span>
-                                        <strong>{t.driveModified}:</strong> {formatDateTime(info.data.modifiedTime)}
-                                        {info.data.lastEditorName ? (
-                                          <span className="muted"> · {info.data.lastEditorName}</span>
-                                        ) : null}
-                                      </span>
-                                    )}
-                                  </div>
-                                  <div className="library-drive-revs">
-                                    <strong>
-                                      <History size={13} /> {t.driveRevisions} ({info.data.revisions.length}):
-                                    </strong>
-                                    {info.data.revisions.length === 0 ? (
-                                      <span className="muted"> —</span>
-                                    ) : (
-                                      <ul>
-                                        {info.data.revisions.slice(0, 20).map((rev) => (
-                                          <li key={rev.id}>
-                                            <span>{rev.modifiedTime ? formatDateTime(rev.modifiedTime) : '—'}</span>
-                                            <span className="muted">{rev.editorName ?? rev.editorEmail ?? ''}</span>
-                                            {rev.size ? <span className="muted">{formatBytes(Number(rev.size))}</span> : null}
-                                            <button
-                                              className="icon-button"
-                                              title={t.driveOpenRevision}
-                                              aria-label={t.driveOpenRevision}
-                                              onClick={() => void openRevisionInSpine(entry, rev)}
-                                            >
-                                              <FileClock size={14} />
-                                            </button>
-                                          </li>
-                                        ))}
-                                      </ul>
-                                    )}
-                                  </div>
-                                </div>
-                              )}
-                            </td>
-                          </tr>
+                          <LibraryDriveInfoRow
+                            entry={entry}
+                            info={info}
+                            t={t}
+                            onOpenRevision={openRevisionInSpine}
+                            onClose={() => toggleDriveInfo(entry)}
+                          />
                         )}
                       </Fragment>
                     );

@@ -303,6 +303,130 @@ export function versionMixGroups(entries: LibraryEntry[]): VersionMixGroup[] {
     });
 }
 
+/** Normalize a path for cross-source comparison: forward slashes, lower-cased, no trailing sep. */
+export function normalizePath(p: string): string {
+  return p.replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase();
+}
+
+/** Which sessions (and the projects they belong to) reference a given library entry. */
+export type EntryUsage = {
+  sessionIds: string[];
+  projectIds: string[];
+};
+
+/** Minimal session shape needed to attribute usage — keeps the helper decoupled from the full type. */
+export type UsageSession = { id: string; projectId: string; config: { inputFiles: string[] } };
+
+/**
+ * Map each library entry's `.spine` to the sessions/projects that list it among their input files —
+ * "used by N project". Matching is on the normalized full path (case-insensitive, slash-agnostic) so
+ * Windows back-slashes and casing don't cause false misses. Entries no session references come back
+ * with empty arrays (the "orphan"/unused candidates for cleanup). Keyed by `entry.spineFile`.
+ */
+export function usageByEntry(entries: LibraryEntry[], sessions: UsageSession[]): Map<string, EntryUsage> {
+  // normalized .spine path → the sessions/projects referencing it.
+  const byPath = new Map<string, { sessionIds: Set<string>; projectIds: Set<string> }>();
+  for (const s of sessions) {
+    for (const file of s.config.inputFiles) {
+      const key = normalizePath(file);
+      let rec = byPath.get(key);
+      if (!rec) {
+        rec = { sessionIds: new Set(), projectIds: new Set() };
+        byPath.set(key, rec);
+      }
+      rec.sessionIds.add(s.id);
+      rec.projectIds.add(s.projectId);
+    }
+  }
+  const result = new Map<string, EntryUsage>();
+  for (const entry of entries) {
+    const rec = byPath.get(normalizePath(entry.spineFile));
+    result.set(entry.spineFile, {
+      sessionIds: rec ? [...rec.sessionIds] : [],
+      projectIds: rec ? [...rec.projectIds] : []
+    });
+  }
+  return result;
+}
+
+// ---- tags / ownership (Tier C #4) ------------------------------------------
+// Free-form tags + an optional manual owner per asset. Stored in a sidecar in the sync root
+// (merge-before-write, like the Drive-meta cache) and keyed by the machine-independent relPath so
+// the same tags show up on every machine / for every teammate sharing the Drive folder.
+
+export type EntryMeta = { tags: string[]; owner?: string };
+/** relPath (forward-slashed) → its tags/owner. Absent keys carry no metadata. */
+export type LibraryMeta = Record<string, EntryMeta>;
+
+/** Stable, machine-independent metadata key for an entry (library-root-relative, forward slashes). */
+export function metaKeyForEntry(entry: LibraryEntry): string {
+  return entry.relPath.replace(/\\/g, '/');
+}
+
+/** Collapse surrounding/inner whitespace so "  cần  review " and "cần review" are the same tag. */
+export function normalizeTag(raw: string): string {
+  return raw.trim().replace(/\s+/g, ' ');
+}
+
+/** Apply an edit to one key, pruning the entry entirely when it ends up with no tags and no owner. */
+function withMetaEntry(meta: LibraryMeta, key: string, fn: (e: EntryMeta) => EntryMeta): LibraryMeta {
+  const current = meta[key] ?? { tags: [] };
+  const next = fn({ tags: [...current.tags], owner: current.owner });
+  if (next.tags.length === 0 && !next.owner) {
+    const { [key]: _drop, ...rest } = meta;
+    return rest;
+  }
+  return { ...meta, [key]: next };
+}
+
+/** Add a tag (deduped case-insensitively; blank tags ignored). Returns a new map. */
+export function addTag(meta: LibraryMeta, key: string, rawTag: string): LibraryMeta {
+  const tag = normalizeTag(rawTag);
+  if (!tag) return meta;
+  return withMetaEntry(meta, key, (e) => {
+    if (!e.tags.some((x) => x.toLowerCase() === tag.toLowerCase())) e.tags.push(tag);
+    return e;
+  });
+}
+
+/** Remove a tag (case-insensitive match). Returns a new map. */
+export function removeTag(meta: LibraryMeta, key: string, tag: string): LibraryMeta {
+  return withMetaEntry(meta, key, (e) => {
+    e.tags = e.tags.filter((x) => x.toLowerCase() !== tag.toLowerCase());
+    return e;
+  });
+}
+
+/** Set (or clear, when blank) the manual owner. Returns a new map. */
+export function setOwner(meta: LibraryMeta, key: string, owner: string): LibraryMeta {
+  const trimmed = owner.trim();
+  return withMetaEntry(meta, key, (e) => {
+    e.owner = trimmed || undefined;
+    return e;
+  });
+}
+
+/** Distinct tags across the whole map, sorted — for the filter chip row. */
+export function allTags(meta: LibraryMeta): string[] {
+  const byLower = new Map<string, string>();
+  for (const e of Object.values(meta)) {
+    for (const tag of e.tags) {
+      const lower = tag.toLowerCase();
+      if (!byLower.has(lower)) byLower.set(lower, tag);
+    }
+  }
+  return [...byLower.values()].sort((a, b) => a.localeCompare(b));
+}
+
+/** True when an entry carries at least one of the selected tags (OR semantics; empty = match all). */
+export function entryMatchesTags(metaEntry: EntryMeta | undefined, selected: Set<string>): boolean {
+  if (selected.size === 0) return true;
+  if (!metaEntry || metaEntry.tags.length === 0) return false;
+  const have = new Set(metaEntry.tags.map((t) => t.toLowerCase()));
+  for (const s of selected) if (have.has(s.toLowerCase())) return true;
+  return false;
+}
+
 export type VersionTag = { version: string | null; count: number };
 
 /** Distinct full editor versions with counts (e.g. 3.8.99, 4.3.11), unknown last — for filter chips. */

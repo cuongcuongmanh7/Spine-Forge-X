@@ -8,11 +8,20 @@ import {
   idBand,
   isMixedVersion,
   majorVersion,
+  addTag,
+  allTags,
+  entryMatchesTags,
   matchedNames,
+  metaKeyForEntry,
+  normalizePath,
   parseQuery,
+  removeTag,
+  setOwner,
   topFolder,
+  usageByEntry,
   versionMixGroups,
-  versionSummary
+  versionSummary,
+  type LibraryMeta
 } from './library';
 import { formatBytes } from './time';
 
@@ -199,6 +208,105 @@ describe('matchedNames', () => {
     const m = matchedNames(e, parseQuery(''));
     expect(m.animations.size).toBe(0);
     expect(m.skins.size).toBe(0);
+  });
+});
+
+describe('usageByEntry', () => {
+  const session = (id: string, projectId: string, inputFiles: string[]) => ({
+    id,
+    projectId,
+    config: { inputFiles }
+  });
+
+  it('attributes an entry to every session that lists its .spine', () => {
+    const e = entry({ spineFile: 'C:/root/a/b.spine' });
+    const usage = usageByEntry(
+      [e],
+      [session('s1', 'p1', ['C:/root/a/b.spine']), session('s2', 'p1', ['C:/root/a/b.spine'])]
+    );
+    const u = usage.get(e.spineFile)!;
+    expect(u.sessionIds.sort()).toEqual(['s1', 's2']);
+    expect(u.projectIds).toEqual(['p1']);
+  });
+
+  it('matches case-insensitively across slash styles', () => {
+    const e = entry({ spineFile: 'C:/root/a/b.spine' });
+    const usage = usageByEntry([e], [session('s1', 'p1', ['c:\\ROOT\\a\\b.spine'])]);
+    expect(usage.get(e.spineFile)!.sessionIds).toEqual(['s1']);
+  });
+
+  it('collects distinct projects across sessions', () => {
+    const e = entry({ spineFile: 'C:/root/a/b.spine' });
+    const usage = usageByEntry(
+      [e],
+      [session('s1', 'p1', ['C:/root/a/b.spine']), session('s2', 'p2', ['C:/root/a/b.spine'])]
+    );
+    expect(usage.get(e.spineFile)!.projectIds.sort()).toEqual(['p1', 'p2']);
+  });
+
+  it('reports an unreferenced entry as orphan (empty arrays)', () => {
+    const e = entry({ spineFile: 'C:/root/a/b.spine' });
+    const usage = usageByEntry([e], [session('s1', 'p1', ['C:/root/other.spine'])]);
+    expect(usage.get(e.spineFile)).toEqual({ sessionIds: [], projectIds: [] });
+  });
+});
+
+describe('normalizePath', () => {
+  it('lower-cases, forward-slashes, and trims trailing separators', () => {
+    expect(normalizePath('C:\\Root\\A\\')).toBe('c:/root/a');
+    expect(normalizePath('C:/Root/A/B.spine')).toBe('c:/root/a/b.spine');
+  });
+});
+
+describe('library tags / ownership', () => {
+  const key = 'Heroes/3001/x.spine';
+
+  it('builds a forward-slashed key from an entry relPath', () => {
+    expect(metaKeyForEntry(entry({ relPath: 'Heroes\\3001\\x.spine' }))).toBe('Heroes/3001/x.spine');
+  });
+
+  it('adds tags, deduping case-insensitively and ignoring blanks', () => {
+    let meta: LibraryMeta = {};
+    meta = addTag(meta, key, 'boss');
+    meta = addTag(meta, key, 'BOSS'); // dupe
+    meta = addTag(meta, key, '   '); // blank
+    meta = addTag(meta, key, ' cần  review '); // normalized whitespace
+    expect(meta[key].tags).toEqual(['boss', 'cần review']);
+  });
+
+  it('removes a tag case-insensitively and prunes empty entries', () => {
+    let meta: LibraryMeta = addTag({}, key, 'wip');
+    meta = removeTag(meta, key, 'WIP');
+    expect(meta[key]).toBeUndefined();
+  });
+
+  it('keeps an entry when it still has an owner after losing its last tag', () => {
+    let meta: LibraryMeta = addTag({}, key, 'wip');
+    meta = setOwner(meta, key, 'Anh');
+    meta = removeTag(meta, key, 'wip');
+    expect(meta[key]).toEqual({ tags: [], owner: 'Anh' });
+  });
+
+  it('sets and clears the manual owner', () => {
+    let meta: LibraryMeta = setOwner({}, key, '  Anh  ');
+    expect(meta[key].owner).toBe('Anh');
+    meta = setOwner(meta, key, '');
+    expect(meta[key]).toBeUndefined();
+  });
+
+  it('lists distinct tags sorted for the filter row', () => {
+    let meta: LibraryMeta = addTag({}, 'a', 'zeta');
+    meta = addTag(meta, 'b', 'Alpha');
+    meta = addTag(meta, 'c', 'alpha'); // dupe of Alpha
+    expect(allTags(meta)).toEqual(['Alpha', 'zeta']);
+  });
+
+  it('matches entries with any selected tag (OR), empty selection matches all', () => {
+    const m = { tags: ['boss', 'wip'] };
+    expect(entryMatchesTags(m, new Set())).toBe(true);
+    expect(entryMatchesTags(m, new Set(['WIP']))).toBe(true);
+    expect(entryMatchesTags(m, new Set(['done']))).toBe(false);
+    expect(entryMatchesTags(undefined, new Set(['boss']))).toBe(false);
   });
 });
 

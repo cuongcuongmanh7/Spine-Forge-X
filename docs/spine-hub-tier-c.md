@@ -5,7 +5,7 @@ qua Google Drive; Tier B lấy owner/lịch sử/version qua Drive API. **Tier C
 file" thành lớp tri thức** giúp lead/animator trả lời nhanh: *asset này ai phụ trách, đang được
 project nào dùng, có animation/skin gì, version có lẫn lộn không, trông ra sao.*
 
-> Trạng thái: **#1 + #2 đã ship ở v0.4.3** (Library search & version). Còn lại #3/#4/#5.
+> Trạng thái: **#1 + #2 đã ship ở v0.4.3** (Library search & version). **#3 + #4 đã ship ở v0.4.4.** Còn lại #5.
 
 ## Nguyên tắc
 - **Tận dụng dữ liệu đã có trước.** `scan_library` đã trả mỗi `LibraryEntry` kèm `animations[]`,
@@ -36,7 +36,7 @@ file 3.8 lẫn 4.3) để lead xử lý đồng bộ.
 danh sách nhóm `mixedVersion`, và filter nhanh "chỉ hiện file lệch version so với phần còn lại của nhóm".
 **Việc cần làm:** tổng hợp sẵn ở [src/library.ts](src/library.ts); thêm view. Frontend-only.
 
-## 3. Used-by-projects  ⭐ ưu tiên 3 (đối chiếu in-app)
+## 3. Used-by-projects  ✅ Done (v0.4.4)
 **Mục tiêu:** với mỗi asset, hiện **project/session nào đang dùng nó** (và ngược lại: asset "mồ côi"
 không thuộc project nào → ứng viên dọn).
 **Dữ liệu:** đối chiếu `entry.spineFile` với `session.config.inputFiles` / `inputPath` của các session
@@ -45,7 +45,7 @@ không thuộc project nào → ứng viên dọn).
 hành động nhảy tới session.
 **Việc cần làm:** hàm thuần `usageByEntry(entries, sessions)`; wire vào controller + UI. Frontend-only.
 
-## 4. Tags / ownership  (cần persistence + sync)
+## 4. Tags / ownership  ✅ Done (v0.4.4)
 **Mục tiêu:** gắn **tag** tự do (vd `boss`, `cần-review`, `wip`) và **người phụ trách** cho từng asset
 hoặc folder; lọc/nhóm theo tag.
 **Ownership:** lấy mặc định từ **Tier B** (người sửa cuối / owner Drive) — không bắt nhập tay; cho phép
@@ -55,6 +55,12 @@ thêm vào `SyncProfile` (kèm tokenize nếu cần) — xem [src/sync.ts](src/s
 **Thiết kế:** chip tag editable trên dòng/nhóm; filter theo tag (mở rộng chip-row sẵn có); cột owner gộp
 với dữ liệu Tier B.
 **Việc cần làm:** kiểu dữ liệu + lưu/đồng bộ + UI chỉnh tag. Đụng cả sync schema → cần migrate cẩn thận.
+**Đã làm (khác plan một chút):** thay vì nhồi vào `SyncProfile`, dùng **sidecar `spineforge-library-meta.json`**
+trong sync root, **merge-before-write** (đúng pattern Drive-meta v0.4.2) → không đụng schema sync lõi (an toàn,
+không cần migrate) và tránh clobber khi nhiều người sửa đồng thời. Key = `relPath` (machine-independent) nên
+team-shared. Helper thuần trong `src/library.ts` (`addTag/removeTag/setOwner/allTags/entryMatchesTags`), state +
+IO trong `src/useLibraryTags.ts`; UI tách `LibraryTagCell.tsx` + `LibraryOwnerCell.tsx` (owner thủ công gộp owner
+Drive Tier B). Lưu ý hạn chế: 2 library khác nhau có relPath trùng sẽ chia sẻ tag (hiếm).
 
 ## 5. Preview thumbnail  (nặng nhất, làm sau cùng)
 **Mục tiêu:** xem nhanh asset trông thế nào ngay trong Library.
@@ -68,9 +74,8 @@ với dữ liệu Tier B.
 ---
 
 ## Thứ tự đề xuất
-~~**1 → 2**~~ đã ship ở **v0.4.3** (release "Library search & version"). Tiếp theo: **3** (used-by-projects,
-frontend-only, một release) → **4** (tags/ownership, đụng sync schema) → **5** (thumbnail, MVP ảnh đại diện
-trước, skeleton-render để cuối).
+~~**1 → 2**~~ đã ship ở **v0.4.3** (release "Library search & version"). ~~**3 → 4**~~ đã ship ở **v0.4.4**:
+used-by-projects + tags/ownership. Còn lại: **5** (thumbnail, MVP ảnh đại diện trước, skeleton-render để cuối).
 
 ## Câu hỏi cần chốt
 - Tag/owner đồng bộ qua profile (mọi máy thấy) hay machine-local? (đề xuất: đồng bộ).

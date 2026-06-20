@@ -1,0 +1,170 @@
+/* Spine Hub Tier C #3/#4: used-by-projects badge, tag chips, and the manual-owner cell.
+   Split out of LibraryView.css to keep that file under the line-size guard. */
+
+/* Close (collapse) button for the per-row Drive owner/history panel. */
+.library-drive-row td {
+  position: relative;
+}
+.library-drive-close {
+  position: absolute;
+  top: 6px;
+  right: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--text-muted);
+  cursor: pointer;
+}
+.library-drive-close:hover {
+  border-color: var(--accent, #4a90d9);
+  color: var(--accent, #4a90d9);
+}
+/* "Last scan" + "Drive loaded" stacked at the right of the search row. */
+.library-lastscan {
+  flex: 0 0 auto;
+  margin-left: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  white-space: nowrap;
+  font-size: 12px;
+  line-height: 1.35;
+}
+/* "not exported" muted badge in the Anim cell. */
+.library-badge-muted {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-style: italic;
+}
+/* "Used by N project" pill in the file cell — clickable to jump to the first session. */
+.library-usage-badge {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  margin-left: 8px;
+  padding: 0 7px;
+  height: 18px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--surface-soft);
+  color: var(--text-muted);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+}
+button.library-usage-badge:hover {
+  border-color: var(--accent, #4a90d9);
+  color: var(--accent, #4a90d9);
+}
+.library-usage-badge.unused {
+  opacity: 0.55;
+  cursor: default;
+}
+/* Tags column: removable chips + an inline add input (Tier C #4). */
+.library-tags {
+  vertical-align: middle;
+}
+.library-tag-cell {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+}
+.library-tag-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 1px 4px 1px 8px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--accent, #4a90d9) 14%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent, #4a90d9) 35%, transparent);
+  color: var(--accent, #4a90d9);
+  font-size: 11px;
+  white-space: nowrap;
+}
+.library-tag-remove {
+  display: inline-flex;
+  align-items: center;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  opacity: 0.7;
+  padding: 0;
+}
+.library-tag-remove:hover {
+  opacity: 1;
+}
+.library-tag-add {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  border: 1px dashed var(--border);
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+.library-tag-add:hover {
+  border-color: var(--accent, #4a90d9);
+  color: var(--accent, #4a90d9);
+}
+.library-tag-input {
+  width: 90px;
+  font: inherit;
+  font-size: 12px;
+  padding: 1px 6px;
+  border: 1px solid var(--accent, #4a90d9);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--text);
+}
+/* Owner column: click-to-edit value; a manual owner reads in the accent colour. */
+.library-owner-value {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 100%;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  padding: 0;
+}
+.library-owner-value > span:first-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.library-owner-value.manual {
+  color: var(--accent, #4a90d9);
+  font-weight: 600;
+}
+.library-owner-edit {
+  flex: 0 0 auto;
+  opacity: 0;
+  color: var(--text-muted);
+}
+.library-owner-value:hover .library-owner-edit {
+  opacity: 0.8;
+}
+.library-owner-input {
+  width: 100%;
+  font: inherit;
+  font-size: 12px;
+  padding: 1px 6px;
+  border: 1px solid var(--accent, #4a90d9);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--text);
+}

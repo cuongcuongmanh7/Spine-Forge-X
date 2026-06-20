@@ -19,6 +19,14 @@ import {
 // machine-independent Drive relPath so it survives restarts AND works across machines (the synced
 // sidecar file in the Drive folder carries it between office/home).
 const DRIVE_BASICS_KEY = 'spineforge.library.driveBasics';
+// When the user last pressed "Load Drive data" on this machine (shown under "Last scan").
+const DRIVE_BASICS_AT_KEY = 'spineforge.library.driveBasicsLoadedAt';
+
+function loadBasicsLoadedAt(): number | null {
+  const raw = localStorage.getItem(DRIVE_BASICS_AT_KEY);
+  const n = raw ? Number(raw) : NaN;
+  return Number.isFinite(n) ? n : null;
+}
 
 function loadDriveBasicsCache(): Record<string, DriveBasic> {
   try {
@@ -62,6 +70,7 @@ export function useLibraryDrive({ t, pushToast, driveAccount, syncRoot, syncConn
   const [expandedInfo, setExpandedInfo] = useState<Set<string>>(new Set());
   const [driveBasics, setDriveBasics] = useState<Record<string, DriveBasic>>(loadDriveBasicsCache);
   const [loadingBasics, setLoadingBasics] = useState(false);
+  const [basicsLoadedAt, setBasicsLoadedAt] = useState<number | null>(loadBasicsLoadedAt);
 
   // Merge the cross-machine snapshot from the Drive sidecar on open / when the folder changes.
   useEffect(() => {
@@ -146,6 +155,9 @@ export function useLibraryDrive({ t, pushToast, driveAccount, syncRoot, syncConn
         const remote = await readDriveMetaSidecar(syncRoot).catch(() => ({}) as Record<string, DriveBasic>);
         await writeDriveMetaSidecar(syncRoot, { ...remote, ...fresh }).catch(() => undefined);
       }
+      const now = Date.now();
+      setBasicsLoadedAt(now);
+      localStorage.setItem(DRIVE_BASICS_AT_KEY, String(now));
     } catch (e) {
       pushToast(String(e), 'error');
     } finally {
@@ -169,6 +181,7 @@ export function useLibraryDrive({ t, pushToast, driveAccount, syncRoot, syncConn
     driveInfo,
     expandedInfo,
     loadingBasics,
+    basicsLoadedAt,
     basicFor,
     toggleDriveInfo,
     loadDriveBasics,

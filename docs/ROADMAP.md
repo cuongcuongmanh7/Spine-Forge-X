@@ -6,6 +6,15 @@ Source-of-truth tiến độ toàn dự án.
 
 ---
 
+## v0.4.4 — Spine Hub Tier C (3+4): Used-by-projects & tags/ownership ✅ Done
+
+> Bump `0.4.3 → 0.4.4`; tag `v0.4.4`. Plan: [spine-hub-tier-c.md](spine-hub-tier-c.md) mục 3 & 4. Frontend-only trên dữ liệu scan + session sẵn có.
+
+- [x] **Tier C #3 — Used-by-projects**: hàm thuần `usageByEntry(entries, sessions)` + `normalizePath` trong [src/library.ts](src/library.ts) (khớp `entry.spineFile` vs `session.config.inputFiles`, normalize `\`→`/` + lowercase). UI: badge "Dùng bởi N" trong cột File (tooltip `Project › Session`, bấm → nhảy tới session); bộ lọc chip **"Chỉ file chưa dùng"** (tìm asset mồ côi).
+- [x] **Tier C #4 — Tags / ownership**: helper thuần trong `library.ts` (`EntryMeta`/`LibraryMeta`, `addTag/removeTag/setOwner/allTags/entryMatchesTags`, key=`relPath`). **Lưu qua sidecar `spineforge-library-meta.json`** (merge-before-write như Drive-meta v0.4.2) thay vì `SyncProfile` → không đụng schema sync lõi, không clobber khi nhiều người sửa, team-shared. State+IO: `src/useLibraryTags.ts`. UI: cột **Tag** (`LibraryTagCell.tsx` chip + thêm inline) + hàng lọc theo tag; cột **Owner** gộp owner thủ công (sửa inline `LibraryOwnerCell.tsx`) lên trên owner Drive Tier B.
+- [x] **Polish UI**: nút đóng (✕) cho panel Owner & history (`LibraryDriveInfoRow.tsx`); cân lại width cột cho cột File rộng hơn; thêm dòng "Tải Drive lần cuối" dưới "Lần quét cuối". Tách `LibraryRowMenu.tsx` + CSS `LibraryMeta.css` để giữ `LibraryInventory` dưới mốc 800 dòng.
+- [x] Verify: `tsc` + `npm test` (82, +12) + `npm run build` (file-size guard pass) xanh.
+
 ## v0.4.3 — Spine Hub Tier C (1+2): Library search & version ✅ Done
 
 > Bump `0.4.2 → 0.4.3`; tag `v0.4.3`. Plan: [spine-hub-tier-c.md](spine-hub-tier-c.md) mục 1 & 2. Frontend-only trên dữ liệu scan sẵn có.
@@ -51,7 +60,7 @@ Source-of-truth tiến độ toàn dự án.
 - [x] **Fix Library header bị dòng cuộn đè** (`border-collapse: separate`); group-row sticky tầng dưới header.
 - [x] Verify: `tsc` + `npm test` (47) + `cargo check` + `npm run build` xanh.
 - [x] **Tier B — Google Drive API** → đã làm, xem **v0.4.0** ở trên.
-- [~] **Tier C — Spine Hub roadmap** → plan: **[spine-hub-tier-c.md](spine-hub-tier-c.md)**. #1 search anim/skin + #2 version-mix panel **xong ở v0.4.3**; còn lại #3 used-by-projects, #4 tags/ownership, #5 preview thumbnail.
+- [~] **Tier C — Spine Hub roadmap** → plan: **[spine-hub-tier-c.md](spine-hub-tier-c.md)**. #1 search anim/skin + #2 version-mix panel **xong ở v0.4.3**; #3 used-by-projects + #4 tags/ownership **xong ở v0.4.4**; còn lại #5 preview thumbnail.
 - [ ] (Tạm hoãn) **Multi-root mapping** — khi source trải nhiều mount khác hẳn nhau; hiện dùng cha chung `G:\Shared drives` là đủ.
 
 ## v0.3.6 — Chuyển CI/CD GitLab → GitHub Actions ✅ Done

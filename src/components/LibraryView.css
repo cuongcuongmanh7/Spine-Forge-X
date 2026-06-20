@@ -285,12 +285,6 @@
   width: auto;
 }
 /* Last-scan label + Rescan sit at the right end of the search row (moved off the tab bar). */
-.library-lastscan {
-  flex: 0 0 auto;
-  margin-left: auto;
-  white-space: nowrap;
-  font-size: 12px;
-}
 .library-clean-toolbar {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
@@ -559,22 +553,25 @@
   color: var(--text-muted);
 }
 .library-table col.lib-col-version {
-  width: 72px;
+  width: 68px;
 }
 .library-table col.lib-col-size {
-  width: 84px;
+  width: 76px;
 }
 .library-table col.lib-col-images {
-  width: 128px;
+  width: 110px;
 }
 .library-table col.lib-col-anims {
-  width: 88px;
+  width: 64px;
+}
+.library-table col.lib-col-tags {
+  width: 130px;
 }
 .library-table col.lib-col-owner {
-  width: 150px;
+  width: 132px;
 }
 .library-table col.lib-col-modified {
-  width: 104px;
+  width: 96px;
 }
 /* Per-row this column holds only the ⋯ menu trigger now, so the freed width goes to File. */
 .library-table col.lib-col-actions {
@@ -674,11 +671,6 @@
   border-color: var(--accent, #4a90d9);
   color: var(--accent, #4a90d9);
   font-weight: 600;
-}
-.library-badge-muted {
-  font-size: 11px;
-  color: var(--text-muted);
-  font-style: italic;
 }
 .library-warn-badge {
   display: inline-flex;
