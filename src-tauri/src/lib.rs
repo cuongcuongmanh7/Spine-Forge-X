@@ -440,6 +440,8 @@ pub fn run() {
             system::path_exists,
             system::read_image_data_url,
             system::read_file_data_url,
+            system::thumb_cache_get,
+            system::thumb_cache_put,
             library::list_export_assets,
             clean::count_clean_units,
             clean::list_clean_units,

@@ -1,7 +1,7 @@
 import { AlertTriangle, ChevronDown, ChevronRight, FolderPlus, ListChecks, Users } from 'lucide-react';
 import { formatBytes, formatDate } from '../time';
 import { entryWarnings, matchedNames } from '../library';
-import { SpineFileIcon } from './SpineFileIcon';
+import { LibraryCardThumb } from './LibraryCardThumb';
 import { LibraryTagCell } from './LibraryTagCell';
 import { LibraryOwnerCell } from './LibraryOwnerCell';
 import { LibraryPreviewButton } from './LibraryPreviewCell';
@@ -16,8 +16,8 @@ import {
 } from './LibraryViewShared';
 import './LibraryGrid.css';
 
-/** Inventory grid view: one card per unit, grouped by folder/id band. Same data as the table view —
- *  no thumbnail yet (phase 2). */
+/** Inventory grid view: one card per unit, grouped by folder/id band. Same data as the table view,
+ *  plus a lazy real-skeleton thumbnail per card ({@link LibraryCardThumb}). */
 export function LibraryGrid(props: LibraryViewProps) {
   const {
     t,
@@ -103,9 +103,7 @@ export function LibraryGrid(props: LibraryViewProps) {
                   const usedCount = u?.projectIds.length ?? 0;
                   return (
                     <article className="library-card" key={entry.spineFile}>
-                      <div className="library-card-thumb" aria-hidden="true">
-                        <SpineFileIcon size={20} />
-                      </div>
+                      <LibraryCardThumb entry={entry} />
 
                       <div className="library-card-head">
                         {cleanStatusIcon(cleanStatus(entry), t)}

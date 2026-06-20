@@ -2,6 +2,8 @@
 //! opening files/URLs in the system shell, text writes and thumbnails.
 
 use std::fs;
+use std::path::PathBuf;
+use tauri::{AppHandle, Manager};
 use tokio::process::Command;
 
 use crate::{
@@ -244,4 +246,57 @@ pub(crate) fn list_subdirectories(path: String) -> Result<Vec<String>, String> {
         .collect();
     names.sort();
     Ok(names)
+}
+
+/// Reject cache keys that aren't plain hex/word tokens — the key is joined into a file path,
+/// so this prevents `..`/separators from escaping the cache directory.
+fn safe_cache_key(key: &str) -> Result<&str, String> {
+    if !key.is_empty()
+        && key.len() <= 128
+        && key.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-')
+    {
+        Ok(key)
+    } else {
+        Err("Khóa cache không hợp lệ.".to_string())
+    }
+}
+
+fn thumb_cache_dir(app: &AppHandle) -> Result<PathBuf, String> {
+    app.path()
+        .app_cache_dir()
+        .map(|path| path.join("thumbs"))
+        .str_err()
+}
+
+/// Return a cached skeleton thumbnail as a PNG data URL, or `None` if not generated yet.
+/// Used by the Library grid to skip the (expensive) off-screen WebGL render when a thumbnail
+/// for this asset revision already exists on disk.
+#[tauri::command]
+pub(crate) fn thumb_cache_get(app: AppHandle, key: String) -> Result<Option<String>, String> {
+    use base64::Engine;
+    let key = safe_cache_key(&key)?;
+    let file = thumb_cache_dir(&app)?.join(format!("{key}.png"));
+    if !file.exists() {
+        return Ok(None);
+    }
+    let bytes = fs::read(&file).str_err()?;
+    let encoded = base64::engine::general_purpose::STANDARD.encode(&bytes);
+    Ok(Some(format!("data:image/png;base64,{encoded}")))
+}
+
+/// Persist a generated skeleton thumbnail (a `data:image/png;base64,...` URL) to the cache dir.
+#[tauri::command]
+pub(crate) fn thumb_cache_put(app: AppHandle, key: String, data: String) -> Result<(), String> {
+    use base64::Engine;
+    let key = safe_cache_key(&key)?;
+    let b64 = data
+        .split_once(',')
+        .map(|(_, rest)| rest)
+        .ok_or("data URL không hợp lệ.")?;
+    let bytes = base64::engine::general_purpose::STANDARD
+        .decode(b64)
+        .str_err()?;
+    let dir = thumb_cache_dir(&app)?;
+    fs::create_dir_all(&dir).str_err()?;
+    fs::write(dir.join(format!("{key}.png")), bytes).str_err()
 }

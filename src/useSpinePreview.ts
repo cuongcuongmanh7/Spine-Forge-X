@@ -1,70 +1,16 @@
 import { useEffect, useRef, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import type { ExportAssets, LibraryEntry } from './config';
+import { type DisposablePlayer, basename, buildRawDataURIs, loadSpine38, loadSpine4 } from './spineRuntime';
 
 /**
  * Live skeleton preview for a Library unit's exported skeleton, rendered with the
  * official Spine web player. Resolves the export file set via `list_export_assets`,
  * feeds the bytes to the player as `rawDataURIs` (no network), and picks the runtime
- * by detected version: vendored 3.8 player (public/spine-player-3.8) vs the 4.x npm
- * package. Both are loaded lazily so the heavy runtime only ships when a preview opens.
+ * by detected version (see {@link import('./spineRuntime')} for the shared loaders).
  */
 
 export type PreviewStatus = 'loading' | 'ready' | 'error';
-
-/** Minimal shape shared by both runtime versions of SpinePlayer. */
-type DisposablePlayer = { dispose: () => void };
-
-const basename = (p: string): string => p.replace(/\\/g, '/').split('/').pop() ?? p;
-
-// --- lazy runtime loaders (memoized so each runtime loads at most once) ---------
-
-let spine38Promise: Promise<{ SpinePlayer: new (el: HTMLElement, cfg: unknown) => DisposablePlayer }> | null = null;
-
-/** Load the vendored 3.8 player as a classic script — it sets the global `spine`. */
-function loadSpine38(): Promise<{ SpinePlayer: new (el: HTMLElement, cfg: unknown) => DisposablePlayer }> {
-  const existing = (window as unknown as { spine?: { SpinePlayer?: unknown } }).spine;
-  if (existing?.SpinePlayer) return Promise.resolve(existing as never);
-  if (spine38Promise) return spine38Promise;
-  spine38Promise = new Promise((resolve, reject) => {
-    if (!document.querySelector('link[data-spine38]')) {
-      const link = document.createElement('link');
-      link.rel = 'stylesheet';
-      link.href = '/spine-player-3.8/spine-player.css';
-      link.setAttribute('data-spine38', '');
-      document.head.appendChild(link);
-    }
-    const script = document.createElement('script');
-    script.src = '/spine-player-3.8/spine-player.js';
-    script.onload = () => {
-      const s = (window as unknown as { spine?: { SpinePlayer?: unknown } }).spine;
-      if (s?.SpinePlayer) resolve(s as never);
-      else reject(new Error('spine 3.8 runtime loaded but SpinePlayer is missing'));
-    };
-    script.onerror = () => reject(new Error('failed to load the vendored spine 3.8 runtime'));
-    document.head.appendChild(script);
-  });
-  return spine38Promise;
-}
-
-let spine4Promise: Promise<typeof import('@esotericsoftware/spine-player')> | null = null;
-
-/** Lazily import the 4.x npm player (keeps the runtime out of the main bundle). */
-function loadSpine4(): Promise<typeof import('@esotericsoftware/spine-player')> {
-  if (!spine4Promise) spine4Promise = import('@esotericsoftware/spine-player');
-  return spine4Promise;
-}
-
-/** Read every export file into a `name → dataURI` map for the player to resolve locally. */
-async function buildRawDataURIs(assets: ExportAssets): Promise<Record<string, string>> {
-  const read = (path: string) => invoke<string>('read_file_data_url', { path });
-  const entries = await Promise.all([
-    read(assets.skeletonPath).then((uri) => [basename(assets.skeletonPath), uri] as const),
-    read(assets.atlasPath).then((uri) => [basename(assets.atlasPath), uri] as const),
-    ...assets.pages.map((page) => read(page.path).then((uri) => [page.name, uri] as const)),
-  ]);
-  return Object.fromEntries(entries);
-}
 
 export function useSpinePreview(entry: LibraryEntry | null, containerRef: React.RefObject<HTMLDivElement>) {
   const [status, setStatus] = useState<PreviewStatus>('loading');
