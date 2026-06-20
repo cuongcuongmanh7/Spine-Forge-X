@@ -104,7 +104,7 @@ export function LibraryGrid(props: LibraryViewProps) {
                   return (
                     <article className="library-card" key={entry.spineFile}>
                       <div className="library-card-thumb" aria-hidden="true">
-                        <SpineFileIcon size={30} />
+                        <SpineFileIcon size={20} />
                       </div>
 
                       <div className="library-card-head">
@@ -112,25 +112,28 @@ export function LibraryGrid(props: LibraryViewProps) {
                         <span className="library-card-name" title={entry.spineFile}>
                           {name}
                         </span>
-                        <span className="library-card-menu">
-                          <LibraryRowMenuButton
-                            entry={entry}
-                            open={menuOpen === entry.spineFile}
-                            onToggle={() => setMenuOpen(menuOpen === entry.spineFile ? null : entry.spineFile)}
-                            onClose={() => setMenuOpen(null)}
-                            onDriveInfo={toggleDriveInfo}
-                            onCleanScan={(e) => onPrepareCleanScan([e.spineFile])}
-                            onOpenFolder={(e) => openFolder(e)}
-                            onOpenInSpine={(e) => openInSpine(e)}
-                            onCreateSession={createSessionForEntry}
-                            t={t}
-                          />
+                        <span className="library-card-actions">
+                          <LibraryPreviewButton entry={entry} onPreview={onPreview} t={t} />
+                          <span className="library-card-menu">
+                            <LibraryRowMenuButton
+                              entry={entry}
+                              open={menuOpen === entry.spineFile}
+                              onToggle={() => setMenuOpen(menuOpen === entry.spineFile ? null : entry.spineFile)}
+                              onClose={() => setMenuOpen(null)}
+                              onDriveInfo={toggleDriveInfo}
+                              onCleanScan={(e) => onPrepareCleanScan([e.spineFile])}
+                              onOpenFolder={(e) => openFolder(e)}
+                              onOpenInSpine={(e) => openInSpine(e)}
+                              onCreateSession={createSessionForEntry}
+                              t={t}
+                            />
+                          </span>
                         </span>
                       </div>
 
                       {dir && <div className="library-card-dir muted" title={entry.relPath}>{dir}</div>}
 
-                      <div className="library-card-meta">
+                      <div className="library-card-metastats">
                         <span className="library-badge">{entry.version ?? t.libraryUnknownVersion}</span>
                         {usedCount === 0 ? (
                           <span className="library-usage-badge unused" title={t.libraryUsedByNone}>
@@ -146,13 +149,10 @@ export function LibraryGrid(props: LibraryViewProps) {
                             <Users size={11} /> {usedCount}
                           </button>
                         )}
-                      </div>
-
-                      <div className="library-card-stats">
-                        <span className={w.heavySpine ? 'library-warn-cell' : ''} title={w.heavySpine ? t.libraryWarnHeavySpine : t.libraryColSpine}>
+                        <span className={`library-card-stat ${w.heavySpine ? 'library-warn-cell' : ''}`} title={w.heavySpine ? t.libraryWarnHeavySpine : t.libraryColSpine}>
                           {w.heavySpine && <AlertTriangle size={12} />} {formatBytes(entry.spineBytes)}
                         </span>
-                        <span className={w.heavyImages ? 'library-warn-cell' : ''} title={w.heavyImages ? t.libraryWarnHeavyImages : t.libraryColImages}>
+                        <span className={`library-card-stat ${w.heavyImages ? 'library-warn-cell' : ''}`} title={w.heavyImages ? t.libraryWarnHeavyImages : t.libraryColImages}>
                           {w.heavyImages && <AlertTriangle size={12} />} {formatBytes(entry.imageBytes)} <span className="muted">· {entry.imageCount}</span>
                         </span>
                         {!entry.exported ? (
@@ -203,17 +203,18 @@ export function LibraryGrid(props: LibraryViewProps) {
                       </div>
 
                       <div className="library-card-foot">
-                        <LibraryOwnerCell
-                          manualOwner={metaFor(entry)?.owner}
-                          driveName={basic?.ownerName || basic?.ownerEmail || basic?.lastEditorName || basic?.lastEditorEmail || ''}
-                          driveEmail={basic?.ownerEmail ?? basic?.lastEditorEmail ?? undefined}
-                          onSet={(owner) => setEntryOwner(entry, owner)}
-                          t={t}
-                        />
+                        <span className="library-card-owner">
+                          <LibraryOwnerCell
+                            manualOwner={metaFor(entry)?.owner}
+                            driveName={basic?.ownerName || basic?.ownerEmail || basic?.lastEditorName || basic?.lastEditorEmail || ''}
+                            driveEmail={basic?.ownerEmail ?? basic?.lastEditorEmail ?? undefined}
+                            onSet={(owner) => setEntryOwner(entry, owner)}
+                            t={t}
+                          />
+                        </span>
                         <span className={`library-card-modified muted ${recent ? 'library-modified-recent' : ''}`}>
                           {basic?.modifiedTime ? formatDate(basic.modifiedTime) : '—'}
                         </span>
-                        <LibraryPreviewButton entry={entry} onPreview={onPreview} t={t} />
                       </div>
 
                       {infoOpen && (

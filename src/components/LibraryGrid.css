@@ -15,11 +15,31 @@
   margin-top: 8px;
 }
 
+/* Each group header is a faint tinted bar so groups read as distinct sections — clear when
+   collapsed, and a tidy section heading above the card grid when expanded. */
+.library-grid-group > .library-group-head-row {
+  padding: 9px 8px;
+  background: color-mix(in srgb, var(--text) 4%, transparent);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+/* Group-header actions are hidden-until-row-hover in the table (which the grid header isn't part of);
+   keep them visible (muted) and brighten when the header is hovered. */
+.library-grid-group .library-actions .icon-button {
+  opacity: 0.55;
+  pointer-events: auto;
+}
+.library-grid-group .library-group-head-row:hover .library-actions .icon-button {
+  opacity: 1;
+}
+
 .library-card {
   position: relative;
   display: flex;
   flex-direction: column;
   gap: 6px;
+  min-width: 0;
   padding: 10px;
   border: 1px solid var(--border);
   border-radius: 10px;
@@ -29,12 +49,15 @@
 .library-card:hover {
   border-color: color-mix(in srgb, var(--primary), transparent 55%);
 }
+.library-card > * {
+  min-width: 0;
+}
 
 .library-card-thumb {
   display: flex;
   align-items: center;
   justify-content: center;
-  height: 60px;
+  height: 38px;
   border-radius: 8px;
   background: var(--surface-soft);
   color: var(--text-muted);
@@ -54,9 +77,25 @@
   font-size: 13px;
   font-weight: 600;
 }
+.library-card-actions {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
 .library-card-menu {
   position: relative;
-  flex: 0 0 auto;
+}
+/* Actions are hidden-until-hover in the table; cards have room, so keep them visible (muted)
+   and brighten on hover. */
+.library-card-actions .session-menu-trigger,
+.library-card-actions .library-preview-btn {
+  opacity: 0.55;
+}
+.library-card:hover .library-card-actions .session-menu-trigger,
+.library-card:hover .library-card-actions .library-preview-btn,
+.library-card-actions .session-menu-trigger.open {
+  opacity: 1;
 }
 
 .library-card-dir {
@@ -66,11 +105,19 @@
   white-space: nowrap;
 }
 
-.library-card-meta {
+/* Combined meta + size row: version / used-by / spine size / image size / anim count. */
+.library-card-metastats {
   display: flex;
   align-items: center;
-  gap: 6px;
   flex-wrap: wrap;
+  gap: 4px 8px;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+.library-card-stat {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
 }
 .library-badge {
   font-size: 11px;
@@ -80,33 +127,37 @@
   color: var(--text-muted);
 }
 
-.library-card-stats {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  font-size: 11px;
-  font-variant-numeric: tabular-nums;
-}
-.library-card-stats > span {
-  display: inline-flex;
-  align-items: center;
-  gap: 3px;
-}
-
 .library-card-anims {
   font-size: 11px;
   line-height: 1.7;
 }
 
+/* Tag "+" only appears on hover so untagged cards don't show a stray dashed circle. */
+.library-card-tags .library-tag-add {
+  opacity: 0;
+  transition: opacity 0.12s var(--ease);
+}
+.library-card:hover .library-card-tags .library-tag-add {
+  opacity: 1;
+}
+
 .library-card-foot {
   display: flex;
-  align-items: center;
+  align-items: baseline;
   gap: 8px;
   margin-top: auto;
-  padding-top: 4px;
+  padding-top: 2px;
+}
+.library-card-owner {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 12px;
+}
+.library-card-owner .library-owner-value {
+  max-width: 100%;
 }
 .library-card-modified {
-  margin-left: auto;
+  flex: 0 0 auto;
   font-size: 11px;
   white-space: nowrap;
 }
@@ -117,4 +168,26 @@
   margin-top: 4px;
   padding-top: 8px;
   font-size: 12px;
+}
+/* The Drive panel is built for a full-width table row; stack its fields so it fits a narrow card
+   (no horizontal scrollbar, no 3-line wrapping). */
+.library-card-drive .library-drive-meta {
+  flex-direction: column;
+  gap: 4px;
+}
+.library-card-drive .library-drive-revs li {
+  position: relative;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0;
+  padding-right: 22px;
+}
+.library-card-drive .library-drive-revs li > span:first-child {
+  min-width: 0;
+}
+.library-card-drive .library-drive-revs li > .icon-button {
+  position: absolute;
+  top: 0;
+  right: 0;
+  margin-left: 0;
 }

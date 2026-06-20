@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.4.6
+- **Thư viện: thêm chế độ xem dạng lưới thẻ** — nút chuyển **Bảng / Lưới** ở tab Inventory; mỗi unit hiện thành một thẻ (tên, version, dung lượng, "dùng bởi", tag, người phụ trách, preview, menu). Lựa chọn được nhớ qua các lần mở app; ở chế độ Lưới có thêm ô sắp xếp riêng.
+- **Gộp tab "Phiên bản" vào Inventory** — thay bằng chip lọc **"Lệch version"** (chỉ hiện khi có folder lẫn version editor), bớt một tab mà vẫn giữ chức năng.
+- **Đổi tên tab "Ảnh thừa" → "Dọn ảnh"** và bỏ tab "Coverage" chưa dùng.
+- **Sidebar Thư viện thêm icon thư mục** cho đồng bộ giao diện với Workspace.
+
 ## v0.4.5
 - **Thư viện: xem trước skeleton ngay trong app** — mỗi file đã export có nút 👁 ở cột riêng; bấm để mở cửa sổ preview render skeleton thật (trình phát của Spine), chọn **animation** và **skin** để xem chuyển động. Hỗ trợ cả file bản 3.8 lẫn 4.x.
 - **Cửa sổ mặc định rộng hơn ~50%** để có thêm chỗ cho bảng Thư viện.

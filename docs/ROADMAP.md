@@ -6,6 +6,17 @@ Source-of-truth tiến độ toàn dự án.
 
 ---
 
+## v0.4.6 — Library UI: Card/Grid view + dọn tab ✅ Done
+
+> Bump `0.4.5 → 0.4.6`; tag `v0.4.6`. Polish UI tab Library (không đổi backend).
+
+- [x] **Card/Grid view cho Inventory (B4 phase 1)**: toggle **Bảng / Lưới** (lưu `appConfig.libraryViewMode`, nhớ qua restart). Tách host giữ 1 nguồn sự thật → `LibraryTable` + `LibraryGrid` cùng nhận `LibraryViewProps` (không desync tag/owner/drive); helper/type chung ở `LibraryViewShared.tsx`. Tách button-only (`LibraryPreviewButton`, `LibraryRowMenuButton`, `LibraryDriveInfoPanel`) để bảng & card chung markup. Card giữ group header theo folder/id (thanh tint nhẹ + viền), cụm action 👁/⋯ dồn góc phải hiện-khi-hover, panel Drive stack dọc vừa card. Chưa có thumbnail (để phase 2). Grid có dropdown sort riêng; `LibraryInventory` 799 → 477 dòng.
+- [x] **Gộp tab "Phiên bản" vào Inventory**: thay bằng chip lọc **"Lệch version"** (helper thuần `divergingFileSet` trong `library.ts`), chỉ hiện khi có folder lẫn version. Xóa `LibraryVersion.tsx`/CSS + key i18n mồ côi.
+- [x] **Bỏ tab "Coverage"** (placeholder); **đổi tên tab "Ảnh thừa" → "Dọn ảnh"**; **sidebar Library thêm icon thư mục** cho đồng bộ với Workspace.
+- [x] Verify: `tsc` + `npm test` (82) + `npm run build` (file-size guard) xanh.
+
+> Phase 2 (chưa làm): render thumbnail thật cho card (offscreen Spine player → cache sidecar PNG); cân nhắc virtualize khi list lớn.
+
 ## v0.4.5 — Spine Hub Tier C (5): Preview skeleton thật ✅ Done
 
 > Bump `0.4.4 → 0.4.5`; tag `v0.4.5`. Plan: [spine-hub-tier-c.md](spine-hub-tier-c.md) mục 5 — Tier C hoàn tất.
