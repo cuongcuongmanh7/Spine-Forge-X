@@ -17,6 +17,7 @@ Stack: **Tauri** (Rust backend + React/TypeScript frontend). Windows first, macO
 - **Per-project export settings from `.spine`** — read the export settings stored inside each project file (atlas min/max, scale, padding, Rectangles/Polygons packing…) and override the base preset, no manual `.export.json` per file.
 - **Linked Project (Unity)** — route output straight into the Unity asset tree (`unityRoot/<Type>/<IdFolder>`), matching id by source folder name.
 - **Clean Source Folder** — scan and remove unused images (not referenced by the skeleton) when packing per folder; the used/unused list comes from the packed atlas, so it never mislabels images in a skin folder or renamed files.
+- **Asset Library (Spine Hub)** — inventory every `.spine` under a library root (version, size, animations/skins), search by `anim:`/`skin:`, a version-mix panel, "used by N projects", free-form tags + owner, Google Drive metadata (last editor / history / past revisions) with cross-machine sync, and a **live skeleton preview** in-app via the Spine web player (3.8 + 4.x).
 - **Background tray** + single instance — closing/minimizing hides to tray; reopening restores the exact hidden window.
 - **Region-based drag & drop** — drop a folder/file on the left half to set input, the right half to set output.
 - **Per-project dashboard**, **in-app changelog**, **auto-updater** with a "What's new" button.
@@ -135,6 +136,7 @@ Nền tảng: **Tauri** (Rust backend + React/TypeScript frontend). Windows trư
 - **Per-project export settings từ `.spine`** — đọc thẳng settings export lưu trong từng project file (min/max pack atlas, scale, padding, packing Rectangles/Polygons…) và ghi đè lên preset nền, không cần `.export.json` thủ công cho từng file.
 - **Linked Project (Unity)** — định tuyến output thẳng vào cây asset Unity (`unityRoot/<Type>/<IdFolder>`), tự khớp id theo tên thư mục nguồn.
 - **Clean Source Folder** — quét và gỡ ảnh thừa (không được skeleton tham chiếu) khi pack theo folder; danh sách "used/unused" lấy từ atlas đã pack nên không báo nhầm ảnh trong skin-folder hoặc bị đổi tên.
+- **Asset Library (Spine Hub)** — kiểm kê mọi `.spine` dưới thư mục thư viện (version, dung lượng, animation/skin), tìm theo `anim:`/`skin:`, tab gom version lẫn lộn, "dùng bởi N project", gắn tag + người phụ trách, dữ liệu Google Drive (người sửa cuối / lịch sử / mở bản cũ) kèm đồng bộ đa máy, và **xem trước skeleton trực tiếp** trong app bằng Spine web player (3.8 + 4.x).
 - **Chạy ngầm ở tray** + single instance — đóng/thu nhỏ là ẩn xuống khay; mở lại khôi phục đúng cửa sổ đang ẩn.
 - **Kéo-thả theo vùng** — thả folder/file vào nửa trái đặt input, nửa phải đặt output.
 - **Dashboard per-project**, **in-app changelog**, **auto-updater** với nút "What's new".
