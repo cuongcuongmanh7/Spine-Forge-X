@@ -1,5 +1,8 @@
 # Changelog
 
+## v0.4.1
+- **Sửa: đăng nhập Google Drive bị mất sau khi thoát app** — giờ token được lưu vào Windows Credential Manager nên mở lại app vẫn còn đăng nhập, không phải đăng nhập lại.
+
 ## v0.4.0
 - **Thư viện: người sửa, lịch sử & version file spine từ Google Drive (Tier B)**: đăng nhập Google ngay ở badge góc dưới trái (hoặc Settings ▸ Sync). Mỗi dòng có menu **⋯** mở panel lịch sử để xem người sửa cuối, thời gian và các phiên bản trước — bấm một version để **mở bản cũ đó trong Spine** (so sánh khi animation bị hỏng). Nút **Tải dữ liệu Drive** thêm 2 cột **Người sửa / Sửa lần cuối** (sort được, tô nổi file đổi trong 7 ngày). Chỉ đọc, không đụng tới file trên Drive.
 - **Gom nút thao tác mỗi dòng Thư viện vào menu ⋯** (hiện khi rê chuột) cho gọn.

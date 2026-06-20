@@ -6,9 +6,31 @@ Source-of-truth tiến độ toàn dự án.
 
 ---
 
-## Unreleased — Spine Hub: Sync (Tier A) + binary preset + Library polish 🚧
+## v0.4.1 — Fix đăng nhập Google Drive mất sau khi thoát app ✅ Done
 
-> Nhánh `feat/sync-profile` (đã merge vào `main`, **chưa tag release**). Bối cảnh: Library tab đang lớn thành "Spine Hub" — quản lý source spine dùng chung; animator làm xen kẽ công ty/nhà qua Google Drive. Plan 3 tầng A/B/C, đợt này làm Tier A.
+> Bump `0.4.0 → 0.4.1`; tag `v0.4.1`.
+
+- [x] **Fix keyring**: `keyring` v3 không bật backend nào theo mặc định → rơi về mock store in-memory, refresh token mất khi thoát app (phải đăng nhập lại mỗi lần mở). Bật feature `windows-native` (Windows Credential Manager) → token sống qua các phiên.
+
+---
+
+## v0.4.0 — Spine Hub Tier B: Google Drive API (owner / lịch sử / version) ✅ Done
+
+> Bump `0.3.9 → 0.4.0`; tag `v0.4.0`. Chi tiết: [sync.md](sync.md) §7.
+
+- [x] **OAuth installed-app** (loopback 127.0.0.1 + PKCE), client nhúng sẵn; refresh token trong Windows Credential Manager; toàn bộ HTTP gọi Drive ở Rust (`reqwest`) → không đổi `connect-src` CSP (chỉ mở `img-src` cho avatar). Scope **`drive.readonly`** (bắt buộc cho `drives.list`).
+- [x] **Panel Owner & lịch sử** mỗi file (lazy fetch): người sửa cuối, thời gian, danh sách revision. **Mở revision cũ trong Spine** (tải bản tạm) để truy vết regression.
+- [x] **Dashboard**: nút "Tải dữ liệu Drive" → cột **Người sửa / Sửa lần cuối** sort được, tô nổi file đổi < 7 ngày.
+- [x] **Badge tài khoản** góc dưới trái (đăng nhập trực tiếp); luồng đăng nhập có nút **Hủy** (không kẹt loading nếu đóng browser giữa chừng).
+- [x] **Polish chung**: ngày dd/mm/yyyy toàn app; gom nút mỗi dòng Library vào menu **⋯**; mở URL OAuth qua `rundll32` (cmd `start` cắt `&`).
+- [x] Build creds qua `SPINEFORGE_GOOGLE_CLIENT_ID/SECRET` (local `.cargo/config.toml`, GitHub Secrets ở CI).
+- [x] Verify: `cargo check` + clippy + `tsc` + `npm test` (58) + `npm run build` xanh.
+
+---
+
+## v0.3.8/v0.3.9 — Spine Hub: Sync (Tier A) + binary preset + Library polish ✅ Done
+
+> Đã release (Tier A ship ở v0.3.8; v0.3.9 fix gốc Drive ảo). Bối cảnh: Library tab đang lớn thành "Spine Hub" — quản lý source spine dùng chung; animator làm xen kẽ công ty/nhà qua Google Drive. Plan 3 tầng A/B/C.
 
 - [x] **Sync Tier A (file-based)** — mirror project/session/config vào `spineforge-profile.json` trong gốc Google Drive chung; token `${SPINE_ROOT}` + rebase per-máy. `src/sync.ts` (logic thuần) + `src/useSync.ts` (reconcile newer-wins, debounce, auto-detect) wire trong `useAppController`. Backend `system::read_text_file` + `detect_drive_root`. Chi tiết: [sync.md](sync.md).
 - [x] **Gộp folder + Spine root thành một gốc Drive**, toggle **mặc định ON**, **tự dò** `<ổ>:\Shared drives` (cảnh báo nếu fail). Setting cũ migrate sang `root` mới.
@@ -16,8 +38,8 @@ Source-of-truth tiến độ toàn dự án.
 - [x] **Base preset mặc định binary+pack** (`defaultExportPreset`).
 - [x] **Fix Library header bị dòng cuộn đè** (`border-collapse: separate`); group-row sticky tầng dưới header.
 - [x] Verify: `tsc` + `npm test` (47) + `cargo check` + `npm run build` xanh.
-- [ ] **Tier B — Google Drive API** (owner email / lịch sử / version): cần OAuth + reqwest + secure token + CSP. **3 quyết định chốt trước**: OAuth client embedded vs user-nhập · token keyring vs stronghold · read-only vs restore-version.
-- [ ] **Tier C — Spine Hub roadmap**: tags/ownership, used-by-projects, search anim/skin, version-mix panel, preview thumbnail.
+- [x] **Tier B — Google Drive API** → đã làm, xem **v0.4.0** ở trên.
+- [ ] **Tier C — Spine Hub roadmap** (tags/ownership, used-by-projects, search anim/skin, version-mix panel, preview thumbnail) → plan chi tiết: **[spine-hub-tier-c.md](spine-hub-tier-c.md)**.
 - [ ] (Tạm hoãn) **Multi-root mapping** — khi source trải nhiều mount khác hẳn nhau; hiện dùng cha chung `G:\Shared drives` là đủ.
 
 ## v0.3.6 — Chuyển CI/CD GitLab → GitHub Actions ✅ Done
@@ -398,7 +420,9 @@ Shipped ở commit `c133cac`.
 
 ---
 
-## v0.4.0 — Unity Headless Trigger (Pha 2) 📋 Planned
+## v0.6.0 — Unity Headless Trigger (Pha 2) 📋 Planned
+
+> (Đổi số từ v0.4.0 → v0.6.0: v0.4.0 đã dùng cho Spine Hub Tier B; v0.5.0 là macOS Support.)
 
 - [ ] Tách core export khỏi GUI
 - [ ] Parse CLI args + định dạng job file
