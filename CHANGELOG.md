@@ -1,12 +1,15 @@
 # Changelog
 
+## v0.4.7
+- **Thẻ ở chế độ Lưới hiện ảnh xem trước thật** — mỗi thẻ render thumbnail skeleton (skin/animation mặc định) ngay trên đầu thẻ, chỉ dựng khi thẻ cuộn vào tầm nhìn và lưu lại vào cache nên mở lại app không phải dựng lại; file chưa export vẫn hiện icon như cũ. Nút xem trước (👁) chuyển lên góc thumbnail.
+- **Tinh chỉnh giao diện Inventory** — thẻ thống kê gọn hơn, vùng tìm kiếm/bộ lọc và nút "Tạo project" có nền tách khỏi danh sách để dành thêm chỗ cho list; nút chuyển Theo thư mục / Theo ID và Bảng / Lưới đổi sang màu xanh chủ đạo (thay xanh lá), chip lọc nhỏ gọn hơn, thẻ ở chế độ Lưới nổi nhẹ khi rê chuột.
+- **Gộp chỉ báo đồng bộ vào nút tài khoản** — chấm trạng thái sync (xám/vàng/xanh/đỏ) giờ nằm ngay trên nút tài khoản ở góc dưới sidebar thay vì ở thanh tiêu đề; bấm vẫn mở Settings ▸ Sync.
+
 ## v0.4.6
 - **Thư viện: thêm chế độ xem dạng lưới thẻ** — nút chuyển **Bảng / Lưới** ở tab Inventory; mỗi unit hiện thành một thẻ (tên, version, dung lượng, "dùng bởi", tag, người phụ trách, preview, menu). Lựa chọn được nhớ qua các lần mở app; ở chế độ Lưới có thêm ô sắp xếp riêng.
 - **Gộp tab "Phiên bản" vào Inventory** — thay bằng chip lọc **"Lệch version"** (chỉ hiện khi có folder lẫn version editor), bớt một tab mà vẫn giữ chức năng.
 - **Đổi tên tab "Ảnh thừa" → "Dọn ảnh"** và bỏ tab "Coverage" chưa dùng.
 - **Sidebar Thư viện thêm icon thư mục** cho đồng bộ giao diện với Workspace.
-- **Tinh chỉnh giao diện Inventory** — thẻ thống kê gọn hơn, vùng tìm kiếm/bộ lọc và nút "Tạo project" có nền tách khỏi danh sách để dành thêm chỗ cho list; nút chuyển Theo thư mục / Theo ID và Bảng / Lưới đổi sang màu xanh chủ đạo (thay xanh lá), chip lọc nhỏ gọn hơn, thẻ ở chế độ Lưới nổi nhẹ khi rê chuột.
-- **Thẻ ở chế độ Lưới hiện ảnh xem trước thật** — mỗi thẻ render thumbnail skeleton (skin/animation mặc định) ngay trên đầu thẻ, chỉ dựng khi thẻ cuộn vào tầm nhìn và lưu lại vào cache nên mở lại app không phải dựng lại; file chưa export vẫn hiện icon như cũ.
 
 ## v0.4.5
 - **Thư viện: xem trước skeleton ngay trong app** — mỗi file đã export có nút 👁 ở cột riêng; bấm để mở cửa sổ preview render skeleton thật (trình phát của Spine), chọn **animation** và **skin** để xem chuyển động. Hỗ trợ cả file bản 3.8 lẫn 4.x.

@@ -23,7 +23,7 @@ Source-of-truth tiến độ toàn dự án.
 
 - [x] **Tier C #5 — Preview skeleton thật**: nút 👁 ở cột riêng mỗi dòng đã export → modal `LibrarySpinePreviewModal` render skeleton bằng Spine web player (dropdown animation + skin + timeline có sẵn). Backend `list_export_assets` (quét export/ex, detect version json/skel, lấy atlas + pages) + `read_file_data_url` generic ([library.rs](../src-tauri/src/library.rs), [system.rs](../src-tauri/src/system.rs)); feed local qua `rawDataURIs`. Hai runtime khoá theo version: npm `@esotericsoftware/spine-player@4.3` cho 4.x + **vendor bản 3.8 prebuilt** trong `public/spine-player-3.8/` (npm không có 3.8); chọn runtime theo version, nạp lazy. CSP thêm `data:` vào `connect-src`. Hook `useSpinePreview` + cell tách `LibraryPreviewCell` (giữ LibraryInventory dưới guard).
 - [x] **Cửa sổ mặc định rộng +50%** (width 980 → 1470) trong [tauri.conf.json](../src-tauri/tauri.conf.json).
-- [x] **Settings mở từ nút Sync / tài khoản tự bung mục Sync**: `openSettings(focusSync)` trong [useAppController.tsx](../src/useAppController.tsx); SyncStatusDot/AccountBadge/Drive-opener dùng `openSettings(true)`, nút bánh răng dùng `openSettings(false)`.
+- [x] **Settings mở từ nút Sync / tài khoản tự bung mục Sync**: `openSettings(focusSync)` trong [useAppController.tsx](../src/useAppController.tsx); AccountBadge (gồm chấm sync)/Drive-opener dùng `openSettings(true)`, nút bánh răng dùng `openSettings(false)`.
 
 ---
 
@@ -76,7 +76,7 @@ Source-of-truth tiến độ toàn dự án.
 
 - [x] **Sync Tier A (file-based)** — mirror project/session/config vào `spineforge-profile.json` trong gốc Google Drive chung; token `${SPINE_ROOT}` + rebase per-máy. `src/sync.ts` (logic thuần) + `src/useSync.ts` (reconcile newer-wins, debounce, auto-detect) wire trong `useAppController`. Backend `system::read_text_file` + `detect_drive_root`. Chi tiết: [sync.md](sync.md).
 - [x] **Gộp folder + Spine root thành một gốc Drive**, toggle **mặc định ON**, **tự dò** `<ổ>:\Shared drives` (cảnh báo nếu fail). Setting cũ migrate sang `root` mới.
-- [x] **Status dot** global (titlebar) xám/vàng/xanh/đỏ + Settings ▸ Sync (layout riêng). Guard chống máy mới đè dữ liệu rỗng + fix dot kẹt "pending" (ổn định identity callback).
+- [x] **Chấm trạng thái** global xám/vàng/xanh/đỏ (gộp vào nút tài khoản ở sidebar; trước đây là dot riêng trên titlebar) + Settings ▸ Sync (layout riêng). Guard chống máy mới đè dữ liệu rỗng + fix dot kẹt "pending" (ổn định identity callback).
 - [x] **Base preset mặc định binary+pack** (`defaultExportPreset`).
 - [x] **Fix Library header bị dòng cuộn đè** (`border-collapse: separate`); group-row sticky tầng dưới header.
 - [x] Verify: `tsc` + `npm test` (47) + `cargo check` + `npm run build` xanh.

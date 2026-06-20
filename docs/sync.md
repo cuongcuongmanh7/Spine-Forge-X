@@ -21,7 +21,7 @@
 
 1. Settings ▸ **Sync (Google Drive)**. Toggle **mặc định bật**.
 2. **Google Drive folder**: lần đầu app **tự dò** shared drive **ghi được** đầu tiên (vd `G:\Shared drives\FD`) và điền sẵn. Không dò được → cảnh báo, chọn thủ công một folder bên trong shared drive.
-3. Tạo/sửa project, session… → app **debounce ~1.5s** rồi ghi vào profile. Status dot trên titlebar: **xám** = tắt/chưa cấu hình · **vàng** = chưa lưu/đang ghi · **xanh** = đã đồng bộ · **đỏ** = lỗi.
+3. Tạo/sửa project, session… → app **debounce ~1.5s** rồi ghi vào profile. Chấm trạng thái trên nút tài khoản (sidebar): **xám** = tắt/chưa cấu hình · **vàng** = chưa lưu/đang ghi · **xanh** = đã đồng bộ · **đỏ** = lỗi.
 4. Máy thứ hai: bật sync + đặt gốc Drive = `<ổ>:\Shared drives` của máy đó → app đọc profile, rebase path, **reload một lần** để hiện đủ workspace.
 
 ## 3. Nhiều project ở các nhánh khác nhau
@@ -56,7 +56,7 @@ Sau đó mọi thay đổi local được debounce ghi lên (last-write-wins the
 |------|------|
 | Logic thuần (tokenize/rebase, build/apply profile, IPC) | `src/sync.ts` |
 | Hook điều phối (reconcile, debounce, auto-detect) | `src/useSync.ts` (wire trong `src/useAppController.tsx`) |
-| Status dot (titlebar) | `src/components/SyncStatusDot.tsx` + `.css` |
+| Chấm trạng thái (trong nút tài khoản) | `src/components/AccountBadge.tsx` + `.css` |
 | Settings ▸ Sync | `src/components/SettingsModal.tsx` |
 | Đọc/ghi file + dò Drive | Rust `system::read_text_file`, `system::write_text_file`, `system::detect_drive_root` |
 | i18n | `src/i18n/{vi,en}.ts` (key `sync*`) |
