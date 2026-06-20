@@ -439,6 +439,8 @@ pub fn run() {
             system::open_url,
             system::path_exists,
             system::read_image_data_url,
+            system::read_file_data_url,
+            library::list_export_assets,
             clean::count_clean_units,
             clean::list_clean_units,
             clean::scan_source_folders,

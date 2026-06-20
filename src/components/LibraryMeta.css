@@ -1,6 +1,16 @@
 /* Spine Hub Tier C #3/#4: used-by-projects badge, tag chips, and the manual-owner cell.
    Split out of LibraryView.css to keep that file under the line-size guard. */
 
+/* Spine Hub Tier C #5: dedicated Preview column (icon button per row). */
+.library-preview-cell {
+  text-align: center;
+}
+.library-preview-cell .library-preview-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
 /* Close (collapse) button for the per-row Drive owner/history panel. */
 .library-drive-row td {
   position: relative;

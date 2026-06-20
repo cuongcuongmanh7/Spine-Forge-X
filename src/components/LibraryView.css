@@ -573,6 +573,11 @@
 .library-table col.lib-col-modified {
   width: 96px;
 }
+/* Narrow icon-only Preview column (Spine Hub Tier C #5). Kept compact so the elastic
+   File column barely gives up width. */
+.library-table col.lib-col-preview {
+  width: 40px;
+}
 /* Per-row this column holds only the ⋯ menu trigger now, so the freed width goes to File. */
 .library-table col.lib-col-actions {
   width: 60px;

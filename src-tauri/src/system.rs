@@ -70,16 +70,17 @@ pub(crate) fn read_text_file(path: String) -> Result<Option<String>, String> {
     fs::read_to_string(&target).map(Some).str_err()
 }
 
-/// Read an image file and return it as a base64 data URL, for thumbnail display
-/// in the webview (used by the Clean Source Folder detail view). Size-capped so
-/// a stray huge file can't blow up the UI.
+/// Read any file and return it as a base64 data URL with a MIME guessed from the
+/// extension. Size-capped (16 MB) so a stray huge file can't blow up the UI.
+/// Used to feed local skeleton/atlas/image bytes to the Spine web player, which
+/// resolves them from a `rawDataURIs` map instead of fetching over the network.
 #[tauri::command]
-pub(crate) fn read_image_data_url(path: String) -> Result<String, String> {
+pub(crate) fn read_file_data_url(path: String) -> Result<String, String> {
     use base64::Engine;
     let p = parse_quoted_path(&path);
     let meta = fs::metadata(&p).str_err()?;
     if meta.len() > 16 * 1024 * 1024 {
-        return Err("Ảnh quá lớn để xem thumbnail.".to_string());
+        return Err("File quá lớn để nạp.".to_string());
     }
     let bytes = fs::read(&p).str_err()?;
     let mime = match p
@@ -93,10 +94,20 @@ pub(crate) fn read_image_data_url(path: String) -> Result<String, String> {
         Some("webp") => "image/webp",
         Some("bmp") => "image/bmp",
         Some("gif") => "image/gif",
+        Some("json") => "application/json",
+        Some("atlas") | Some("txt") => "text/plain",
+        Some("skel") | Some("bytes") => "application/octet-stream",
         _ => "application/octet-stream",
     };
     let encoded = base64::engine::general_purpose::STANDARD.encode(&bytes);
     Ok(format!("data:{mime};base64,{encoded}"))
+}
+
+/// Read an image file as a base64 data URL for thumbnail display (Clean Source
+/// detail view). Thin wrapper over [`read_file_data_url`].
+#[tauri::command]
+pub(crate) fn read_image_data_url(path: String) -> Result<String, String> {
+    read_file_data_url(path)
 }
 
 #[tauri::command]

@@ -44,6 +44,13 @@ export function useAppControllerValue() {
   const [theme, setTheme] = useState<ThemeMode>(persisted.theme);
   const [appConfig, setAppConfig] = useState<AppConfig>(persisted.appConfig);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  // When Settings is opened from a sync/Drive entry point, expand the (default-collapsed)
+  // Sync section so the user lands right on it.
+  const [settingsFocusSync, setSettingsFocusSync] = useState(false);
+  const openSettings = (focusSync = false) => {
+    setSettingsFocusSync(focusSync);
+    setSettingsOpen(true);
+  };
   const [linkedModalOpen, setLinkedModalOpen] = useState(false);
   const [dashboardOpen, setDashboardOpen] = useState(false);
   // Top-level mode shown in the left nav rail: export Workspace vs asset Library.
@@ -566,6 +573,8 @@ export function useAppControllerValue() {
 
     settingsOpen,
     setSettingsOpen,
+    settingsFocusSync,
+    openSettings,
 
     // App-data sync (Tier A)
     syncEnabled,

@@ -4,14 +4,14 @@ import { AccountBadge } from './AccountBadge';
 
 /** Shared sidebar footer (Dashboard + Settings + account), shown in both Workspace and Library modes. */
 export function SidebarFooter() {
-  const { t, setDashboardOpen, setSettingsOpen } = useApp();
+  const { t, setDashboardOpen, openSettings } = useApp();
   return (
     <div className="sidebar-footer">
       <button className="sidebar-settings" onClick={() => setDashboardOpen(true)}>
         <LayoutDashboard size={16} />
         <span>{t.dashboardFolder}</span>
       </button>
-      <button className="sidebar-settings" onClick={() => setSettingsOpen(true)}>
+      <button className="sidebar-settings" onClick={() => openSettings(false)}>
         <Settings size={16} />
         <span>{t.settings}</span>
       </button>

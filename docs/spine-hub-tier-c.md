@@ -5,7 +5,7 @@ qua Google Drive; Tier B lấy owner/lịch sử/version qua Drive API. **Tier C
 file" thành lớp tri thức** giúp lead/animator trả lời nhanh: *asset này ai phụ trách, đang được
 project nào dùng, có animation/skin gì, version có lẫn lộn không, trông ra sao.*
 
-> Trạng thái: **#1 + #2 đã ship ở v0.4.3** (Library search & version). **#3 + #4 đã ship ở v0.4.4.** Còn lại #5.
+> Trạng thái: **#1 + #2 đã ship ở v0.4.3** (Library search & version). **#3 + #4 đã ship ở v0.4.4.** **#5 đã làm** (preview skeleton thật, xem dưới) — Tier C hoàn tất.
 
 ## Nguyên tắc
 - **Tận dụng dữ liệu đã có trước.** `scan_library` đã trả mỗi `LibraryEntry` kèm `animations[]`,
@@ -62,20 +62,29 @@ team-shared. Helper thuần trong `src/library.ts` (`addTag/removeTag/setOwner/a
 IO trong `src/useLibraryTags.ts`; UI tách `LibraryTagCell.tsx` + `LibraryOwnerCell.tsx` (owner thủ công gộp owner
 Drive Tier B). Lưu ý hạn chế: 2 library khác nhau có relPath trùng sẽ chia sẻ tag (hiếm).
 
-## 5. Preview thumbnail  (nặng nhất, làm sau cùng)
+## 5. Preview skeleton thật  ✅ Done
 **Mục tiêu:** xem nhanh asset trông thế nào ngay trong Library.
-**Khó khăn:** `.spine` là binary; render skeleton thật cần runtime. Các mức độ:
-- **MVP rẻ:** hiện 1 ảnh đại diện từ thư mục ảnh của unit (đã có `read_image_data_url`, lazy-load + cache
-  như Clean detail) — không phải "skeleton preview" thật nhưng đủ nhận diện.
-- **Đầy đủ (sau):** render skeleton (atlas+json đã export) bằng spine-runtime web, hoặc sinh preview qua
-  công cụ ngoài. Phụ thuộc lớn, để cuối.
-**Việc cần làm (MVP):** chọn ảnh đại diện + ô thumbnail trong dòng/nhóm, tái dùng pipeline thumbnail sẵn có.
+**Đã làm (khác plan gốc):** bỏ hướng "ảnh đại diện" — ảnh trong `imagesDir` toàn là part lẻ, không nhận
+diện được unit. Thay vào đó **render skeleton thật** bằng Spine web player (widget có sẵn dropdown
+animation + skin + timeline). Nút **"Preview"** trong panel mở rộng của dòng Inventory → mở **modal riêng**
+(`LibrarySpinePreviewModal`). Lazy: chỉ nạp runtime + skeleton khi mở.
+- **Backend:** `list_export_assets(folder)` ([library.rs]) quét `export/`·`ex/`, trả skeleton (json/skel) +
+  atlas + danh sách page, và **detect version** (json: `skeleton.spine`; skel: thử parser 3.8, fail ⇒ 4.x).
+  Command generic `read_file_data_url(path)` ([system.rs]) nạp mọi file thành base64 data URI.
+- **Feed local:** player nhận `rawDataURIs` (skeleton/atlas/page → data URI) nên không cần network. CSP
+  thêm `data:` vào `connect-src` (XHR data-URI của AssetManager).
+- **Hai runtime, khoá theo version:** npm `@esotericsoftware/spine-player@4.3` chỉ có 4.x → **vendor bản
+  prebuilt 3.8** vào `public/spine-player-3.8/` (classic script, set global `spine`; xem NOTICE license).
+  `useSpinePreview` chọn runtime theo version detect được; cả hai nạp lazy (4.x là dynamic-import chunk riêng).
+- **Hạn chế:** chỉ 3.8 và 4.x (4.0–4.3); version 3.8 cần đúng prebuilt 3.8, các minor 4.x khác editor có thể
+  lệch → player báo lỗi (hiện message). Một unit nhiều bộ export → lấy bộ đầu.
 
 ---
 
 ## Thứ tự đề xuất
 ~~**1 → 2**~~ đã ship ở **v0.4.3** (release "Library search & version"). ~~**3 → 4**~~ đã ship ở **v0.4.4**:
-used-by-projects + tags/ownership. Còn lại: **5** (thumbnail, MVP ảnh đại diện trước, skeleton-render để cuối).
+used-by-projects + tags/ownership. ~~**5**~~ đã làm: **preview skeleton thật** (Spine web player, 3.8 vendored
++ 4.x npm) — Tier C hoàn tất.
 
 ## Câu hỏi cần chốt
 - Tag/owner đồng bộ qua profile (mọi máy thấy) hay machine-local? (đề xuất: đồng bộ).

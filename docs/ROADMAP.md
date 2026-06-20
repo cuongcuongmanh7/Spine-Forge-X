@@ -6,6 +6,16 @@ Source-of-truth tiến độ toàn dự án.
 
 ---
 
+## v0.4.5 — Spine Hub Tier C (5): Preview skeleton thật ✅ Done
+
+> Bump `0.4.4 → 0.4.5`; tag `v0.4.5`. Plan: [spine-hub-tier-c.md](spine-hub-tier-c.md) mục 5 — Tier C hoàn tất.
+
+- [x] **Tier C #5 — Preview skeleton thật**: nút 👁 ở cột riêng mỗi dòng đã export → modal `LibrarySpinePreviewModal` render skeleton bằng Spine web player (dropdown animation + skin + timeline có sẵn). Backend `list_export_assets` (quét export/ex, detect version json/skel, lấy atlas + pages) + `read_file_data_url` generic ([library.rs](../src-tauri/src/library.rs), [system.rs](../src-tauri/src/system.rs)); feed local qua `rawDataURIs`. Hai runtime khoá theo version: npm `@esotericsoftware/spine-player@4.3` cho 4.x + **vendor bản 3.8 prebuilt** trong `public/spine-player-3.8/` (npm không có 3.8); chọn runtime theo version, nạp lazy. CSP thêm `data:` vào `connect-src`. Hook `useSpinePreview` + cell tách `LibraryPreviewCell` (giữ LibraryInventory dưới guard).
+- [x] **Cửa sổ mặc định rộng +50%** (width 980 → 1470) trong [tauri.conf.json](../src-tauri/tauri.conf.json).
+- [x] **Settings mở từ nút Sync / tài khoản tự bung mục Sync**: `openSettings(focusSync)` trong [useAppController.tsx](../src/useAppController.tsx); SyncStatusDot/AccountBadge/Drive-opener dùng `openSettings(true)`, nút bánh răng dùng `openSettings(false)`.
+
+---
+
 ## v0.4.4 — Spine Hub Tier C (3+4): Used-by-projects & tags/ownership ✅ Done
 
 > Bump `0.4.3 → 0.4.4`; tag `v0.4.4`. Plan: [spine-hub-tier-c.md](spine-hub-tier-c.md) mục 3 & 4. Frontend-only trên dữ liệu scan + session sẵn có.

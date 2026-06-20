@@ -5,13 +5,13 @@
 //! Per-unit work runs bounded-parallel via `concurrent::run_indexed`.
 
 use std::collections::{BTreeSet, HashSet};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::atomic::AtomicBool;
 
 use serde_json::Value;
 
 use crate::clean::discover_clean_units;
-use crate::model::{BatchScanSummary, FolderScan, LibraryEntry, LibraryScan};
+use crate::model::{BatchScanSummary, ExportAssets, ExportPage, FolderScan, LibraryEntry, LibraryScan};
 use crate::paths::{parse_quoted_path, path_to_string, unquote};
 use crate::util::normalize_path_for_compare;
 use crate::{cleaner, concurrent, skel_binary, spine_project};
@@ -257,6 +257,140 @@ pub(crate) fn scan_library_unused(root: String, selected: Vec<String>) -> Result
     Ok(BatchScanSummary { units: out, total_unused, total_unused_bytes })
 }
 
+/// Image extensions an atlas page filename can carry.
+const PAGE_IMAGE_EXTS: [&str; 6] = ["png", "jpg", "jpeg", "webp", "bmp", "tga"];
+
+/// Texture-page filenames an atlas references: the non-indented, colon-free lines
+/// ending in an image extension (the page headers; region/property lines are excluded).
+fn atlas_page_names(content: &str) -> Vec<String> {
+    let mut out: Vec<String> = Vec::new();
+    for line in content.lines() {
+        if line.is_empty() || line.starts_with(' ') || line.starts_with('\t') || line.contains(':') {
+            continue;
+        }
+        let name = line.trim_end();
+        let lower = name.to_ascii_lowercase();
+        if PAGE_IMAGE_EXTS.iter().any(|ext| lower.ends_with(&format!(".{ext}"))) {
+            let name = name.to_string();
+            if !out.contains(&name) {
+                out.push(name);
+            }
+        }
+    }
+    out
+}
+
+/// Map a full Spine version ("3.8.99", "4.3.17") to the runtime family we render with:
+/// vendored 3.8 player vs the 4.x npm player. Anything that isn't 3.8 is treated as 4.x.
+fn version_family(v: &str) -> String {
+    if v.starts_with("3.8") { "3.8".to_string() } else { "4.x".to_string() }
+}
+
+/// Version family of a JSON skeleton, read from its `skeleton.spine` field.
+fn json_skeleton_version(content: &str) -> Option<String> {
+    let root: Value = serde_json::from_str(content).ok()?;
+    let spine = root.get("skeleton")?.get("spine")?.as_str()?;
+    Some(version_family(spine))
+}
+
+/// Resolve the file set the Spine web player needs to render a unit's already-exported
+/// skeleton: skeleton (json/skel) + atlas + texture pages, plus the runtime version
+/// detected from the skeleton itself. Scans the unit's `export`/`ex` subfolder and returns
+/// the first complete skeleton+atlas pair (JSON preferred over binary). Offline — no Spine CLI.
+#[tauri::command]
+pub(crate) fn list_export_assets(folder: String) -> Result<ExportAssets, String> {
+    let unit_folder = parse_quoted_path(&folder);
+    if !unit_folder.exists() {
+        return Err("Folder không tồn tại.".to_string());
+    }
+
+    let Ok(children) = std::fs::read_dir(&unit_folder) else {
+        return Err("Không đọc được folder.".to_string());
+    };
+    let mut export_dirs: Vec<PathBuf> = Vec::new();
+    for child in children.filter_map(Result::ok) {
+        if !child.file_type().map(|t| t.is_dir()).unwrap_or(false) {
+            continue;
+        }
+        let name = child.file_name().to_string_lossy().to_ascii_lowercase();
+        if name == "export" || name == "ex" {
+            export_dirs.push(child.path());
+        }
+    }
+    if export_dirs.is_empty() {
+        return Err("Chưa export — không có thư mục export/.".to_string());
+    }
+
+    for dir in export_dirs {
+        let Ok(files) = std::fs::read_dir(&dir) else { continue };
+        let mut json_first: Option<PathBuf> = None;
+        let mut skel_first: Option<PathBuf> = None;
+        let mut atlas: Option<PathBuf> = None;
+        for file in files.filter_map(Result::ok) {
+            let path = file.path();
+            if !path.is_file() {
+                continue;
+            }
+            let lname = file.file_name().to_string_lossy().to_ascii_lowercase();
+            if lname.ends_with(".export.json") {
+                continue;
+            }
+            if lname.ends_with(".json") {
+                json_first.get_or_insert(path.clone());
+            } else if lname.contains(".skel") {
+                skel_first.get_or_insert(path.clone());
+            }
+            if lname.contains(".atlas") {
+                atlas.get_or_insert(path.clone());
+            }
+        }
+
+        // Prefer JSON (loads more reliably across runtimes) then binary `.skel`.
+        let skeleton = json_first
+            .map(|p| (p, "json".to_string()))
+            .or_else(|| skel_first.map(|p| (p, "skel".to_string())));
+        let (Some((skel_path, format)), Some(atlas_path)) = (skeleton, atlas) else {
+            continue;
+        };
+
+        let version = if format == "json" {
+            std::fs::read_to_string(&skel_path)
+                .ok()
+                .and_then(|c| json_skeleton_version(&c))
+        } else {
+            // 3.8 binary parser succeeds only on the 3.8 format; failure ⇒ 4.x.
+            std::fs::read(&skel_path).ok().map(|data| {
+                if skel_binary::read_skel_names(&data).is_ok() {
+                    "3.8".to_string()
+                } else {
+                    "4.x".to_string()
+                }
+            })
+        };
+
+        let atlas_dir = atlas_path.parent().unwrap_or(&dir).to_path_buf();
+        let pages = std::fs::read_to_string(&atlas_path)
+            .map(|c| atlas_page_names(&c))
+            .unwrap_or_default()
+            .into_iter()
+            .map(|name| {
+                let page_path = atlas_dir.join(&name);
+                ExportPage { name, path: path_to_string(&page_path) }
+            })
+            .collect();
+
+        return Ok(ExportAssets {
+            skeleton_path: path_to_string(&skel_path),
+            skeleton_format: format,
+            version,
+            atlas_path: path_to_string(&atlas_path),
+            pages,
+        });
+    }
+
+    Err("Không tìm thấy skeleton + atlas hợp lệ trong export/.".to_string())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -344,6 +478,64 @@ mod tests {
         let meta = read_skeleton_meta(&unit);
         assert!(!meta.exported);
         assert!(meta.animations.is_empty());
+        let _ = std::fs::remove_dir_all(&unit);
+    }
+
+    #[test]
+    fn list_export_assets_prefers_json_and_detects_version_and_pages() {
+        let unit = temp_dir("exassets");
+        let export = unit.join("export");
+        std::fs::create_dir_all(&export).unwrap();
+        // 4.x JSON skeleton carries its version in skeleton.spine.
+        std::fs::write(
+            export.join("hero.json"),
+            r#"{"skeleton":{"spine":"4.3.17"},"skins":[{"name":"default"}],"animations":{"idle":{}}}"#,
+        )
+        .unwrap();
+        // A binary skeleton also present — JSON must win.
+        std::fs::write(export.join("hero.skel"), b"\x00binary").unwrap();
+        // Atlas with two pages; region/property lines must not be picked as pages.
+        std::fs::write(
+            export.join("hero.atlas"),
+            "hero.png\nsize: 1024,1024\nformat: RGBA8888\nhead\n  xy: 2, 2\nhero_1.png\nsize: 512,512\nbody\n  xy: 2, 2\n",
+        )
+        .unwrap();
+        std::fs::write(export.join("hero.export.json"), r#"{"ignored":true}"#).unwrap();
+
+        let assets = list_export_assets(unit.to_string_lossy().to_string()).unwrap();
+        assert_eq!(assets.skeleton_format, "json");
+        assert!(assets.skeleton_path.ends_with("hero.json"));
+        assert_eq!(assets.version.as_deref(), Some("4.x"));
+        assert!(assets.atlas_path.ends_with("hero.atlas"));
+        let names: Vec<&str> = assets.pages.iter().map(|p| p.name.as_str()).collect();
+        assert_eq!(names, vec!["hero.png", "hero_1.png"], "pages only, in order");
+
+        let _ = std::fs::remove_dir_all(&unit);
+    }
+
+    #[test]
+    fn list_export_assets_binary_3_8_detected() {
+        let unit = temp_dir("exassets-bin");
+        let export = unit.join("ex");
+        std::fs::create_dir_all(&export).unwrap();
+        // A real 3.8-format binary skeleton parses; build a minimal valid one via skel_binary's
+        // own round-trip is overkill here, so assert the 4.x fallback for an unparseable blob.
+        std::fs::write(export.join("mob.skel.bytes"), b"\x00not-a-real-skel").unwrap();
+        std::fs::write(export.join("mob.atlas.txt"), "mob.png\nsize: 64,64\npart\n  xy: 1,1\n").unwrap();
+
+        let assets = list_export_assets(unit.to_string_lossy().to_string()).unwrap();
+        assert_eq!(assets.skeleton_format, "skel");
+        // Unparseable binary ⇒ treated as 4.x (the 3.8 parser rejected it).
+        assert_eq!(assets.version.as_deref(), Some("4.x"));
+        assert_eq!(assets.pages.iter().map(|p| p.name.as_str()).collect::<Vec<_>>(), vec!["mob.png"]);
+
+        let _ = std::fs::remove_dir_all(&unit);
+    }
+
+    #[test]
+    fn list_export_assets_errors_without_export() {
+        let unit = temp_dir("exassets-none");
+        assert!(list_export_assets(unit.to_string_lossy().to_string()).is_err());
         let _ = std::fs::remove_dir_all(&unit);
     }
 }

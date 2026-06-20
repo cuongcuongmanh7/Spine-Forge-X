@@ -18,6 +18,7 @@ export function SettingsModal() {
     isAutoDetecting,
     autoDetectSpine,
     setSettingsOpen,
+    settingsFocusSync,
     syncEnabled,
     syncRoot,
     syncLastSyncedAt,
@@ -93,7 +94,7 @@ export function SettingsModal() {
             </label>
           </Section>
 
-          <Section title={t.syncTitle} defaultOpen={false}>
+          <Section title={t.syncTitle} defaultOpen={settingsFocusSync}>
             <div className="sync-fields">
               <label className="checkbox-line">
                 <input type="checkbox" checked={syncEnabled} onChange={(event) => setSyncEnabled(event.target.checked)} />

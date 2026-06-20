@@ -23,7 +23,7 @@ export function LibraryDriveInfoRow({
 }) {
   return (
     <tr className="library-anim-list library-drive-row">
-      <td colSpan={9}>
+      <td colSpan={10}>
         <button className="library-drive-close" title={t.libraryCollapse} aria-label={t.libraryCollapse} onClick={onClose}>
           <X size={14} />
         </button>

@@ -1,0 +1,19 @@
+Spine Player 3.8 (vendored prebuilt)
+
+Source : https://github.com/EsotericSoftware/spine-runtimes (branch 3.8)
+  - spine-ts/build/spine-player.js
+  - spine-ts/player/css/spine-player.css
+Runtime: Spine 3.8.x
+
+Why vendored: the official @esotericsoftware/spine-player npm package only
+publishes 4.0+. Spine 3.8 web runtime is distributed only as prebuilt files in
+the spine-runtimes repo, so it is vendored here to render legacy 3.8 exports in
+the Library preview. 4.x exports use the npm package instead.
+
+Loaded as a classic <script> at runtime (sets global `window.spine`), kept out of
+the module graph because this is a non-ESM UMD-style build.
+
+License: Spine Runtimes License Agreement
+  http://esotericsoftware.com/spine-runtimes-license
+Use requires a valid Spine license (the studio holds one for the Spine editor).
+Do not redistribute these files outside a licensed product.

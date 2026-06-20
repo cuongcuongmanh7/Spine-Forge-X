@@ -323,3 +323,32 @@ pub(crate) struct LibraryScan {
     pub(crate) total_spine_bytes: u64,
     pub(crate) total_image_bytes: u64,
 }
+
+/// One texture page referenced by an exported atlas.
+#[derive(Debug, Serialize, Clone, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct ExportPage {
+    /// The page filename exactly as the atlas references it (e.g. `hero.png`).
+    pub(crate) name: String,
+    /// Absolute path to that page image on disk.
+    pub(crate) path: String,
+}
+
+/// The on-disk file set the Spine web player needs to render a unit's export:
+/// one skeleton (json/skel), its atlas, and the texture pages. Resolved from the
+/// unit's `export`/`ex` subfolder ([`crate::library::list_export_assets`]).
+#[derive(Debug, Serialize, Clone, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct ExportAssets {
+    /// Absolute path to the skeleton file.
+    pub(crate) skeleton_path: String,
+    /// `"json"` or `"skel"` (binary).
+    pub(crate) skeleton_format: String,
+    /// Runtime version family needed to load it: `"3.8"`, `"4.x"`, or `None` when
+    /// it couldn't be determined.
+    pub(crate) version: Option<String>,
+    /// Absolute path to the atlas file.
+    pub(crate) atlas_path: String,
+    /// Texture pages the atlas references (resolved to absolute paths).
+    pub(crate) pages: Vec<ExportPage>,
+}

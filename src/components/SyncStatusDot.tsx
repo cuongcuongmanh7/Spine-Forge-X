@@ -9,7 +9,7 @@ import './SyncStatusDot.css';
  * Settings so the user can configure the Drive folder / Spine root or hit "Sync now".
  */
 export function SyncStatusDot() {
-  const { syncStatus, syncEnabled, syncLastSyncedAt, syncError, t, setSettingsOpen } = useApp();
+  const { syncStatus, syncEnabled, syncLastSyncedAt, syncError, t, openSettings } = useApp();
 
   // Don't show anything until the user has turned sync on (keeps the titlebar quiet by default).
   if (!syncEnabled) return null;
@@ -43,7 +43,7 @@ export function SyncStatusDot() {
       title={title}
       aria-label={title}
       onMouseDown={(event) => event.stopPropagation()}
-      onClick={() => setSettingsOpen(true)}
+      onClick={() => openSettings(true)}
     >
       <Icon className={syncStatus === 'syncing' ? 'spin' : undefined} size={13} />
       <span className="sync-status-pip" aria-hidden="true" />

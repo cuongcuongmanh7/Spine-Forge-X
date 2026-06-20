@@ -28,6 +28,7 @@ import { useLibraryDrive } from '../useLibraryDrive';
 import { useLibraryTags } from '../useLibraryTags';
 import { LibraryDriveInfoRow } from './LibraryDriveInfoRow';
 import { LibraryRowMenu } from './LibraryRowMenu';
+import { LibraryPreviewCell } from './LibraryPreviewCell';
 import { LibraryTagCell } from './LibraryTagCell';
 import { LibraryOwnerCell } from './LibraryOwnerCell';
 import './LibraryMeta.css';
@@ -74,10 +75,12 @@ function splitRelPath(path: string): { dir: string; name: string } {
 /** Inventory tab: stats, chip filters, search, and the per-skeleton table (with animation list). */
 export function LibraryInventory({
   filter,
-  onPrepareCleanScan
+  onPrepareCleanScan,
+  onPreview
 }: {
   filter: LibraryFilterApi;
   onPrepareCleanScan: (spineFiles: string[]) => void;
+  onPreview: (entry: LibraryEntry) => void;
 }) {
   const {
     t,
@@ -95,7 +98,7 @@ export function LibraryInventory({
     driveAccount,
     syncRoot,
     syncConnected,
-    setSettingsOpen,
+    openSettings,
     sessions,
     projects,
     selectSession
@@ -125,7 +128,7 @@ export function LibraryInventory({
       syncRoot,
       syncConnected,
       spinePath: merged.spinePath,
-      openSettings: () => setSettingsOpen(true)
+      openSettings: () => openSettings(true)
     });
 
   const thresholds: LibraryThresholds = {
@@ -522,6 +525,7 @@ export function LibraryInventory({
             <col className="lib-col-tags" />
             <col className="lib-col-owner" />
             <col className="lib-col-modified" />
+            <col className="lib-col-preview" />
             <col className="lib-col-actions" />
           </colgroup>
           <thead ref={theadRef}>
@@ -580,6 +584,7 @@ export function LibraryInventory({
                   {sortMark('modified')}
                 </button>
               </th>
+              <th aria-label={t.libraryPreview} />
               <th />
             </tr>
           </thead>
@@ -591,7 +596,7 @@ export function LibraryInventory({
                   {/* Single spanning cell: one sticky background fills the whole row. A flex
                       wrapper keeps the toggle on the left and the actions on the right (a flex
                       <td> would shrink its painted box and leave a gap in the action column). */}
-                  <td colSpan={9}>
+                  <td colSpan={10}>
                     <div className="library-group-head-row">
                       <span className="library-group-head-left">
                         <button className="library-group-toggle" onClick={() => toggleSet(setCollapsed, section.key)} aria-expanded={!isCollapsed}>
@@ -715,6 +720,7 @@ export function LibraryInventory({
                               <span className="muted">—</span>
                             )}
                           </td>
+                          <LibraryPreviewCell entry={entry} onPreview={onPreview} t={t} />
                           <LibraryRowMenu
                             entry={entry}
                             open={menuOpen === entry.spineFile}
@@ -730,7 +736,7 @@ export function LibraryInventory({
                         </tr>
                         {animOpen && entry.exported && (
                           <tr className="library-anim-list">
-                            <td colSpan={9}>
+                            <td colSpan={10}>
                               {entry.skins.length > 0 && (
                                 <div>
                                   <strong>{t.librarySkins}:</strong>{' '}

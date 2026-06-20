@@ -1,5 +1,10 @@
 # Changelog
 
+## v0.4.5
+- **Thư viện: xem trước skeleton ngay trong app** — mỗi file đã export có nút 👁 ở cột riêng; bấm để mở cửa sổ preview render skeleton thật (trình phát của Spine), chọn **animation** và **skin** để xem chuyển động. Hỗ trợ cả file bản 3.8 lẫn 4.x.
+- **Cửa sổ mặc định rộng hơn ~50%** để có thêm chỗ cho bảng Thư viện.
+- **Bấm nút Sync hoặc nút tài khoản** giờ mở Settings và mở sẵn mục **Sync** (trước đây mục này bị thu gọn).
+
 ## v0.4.4
 - **Thư viện: "Dùng bởi N project"** — mỗi file `.spine` cho biết đang được session/project nào dùng (rê chuột xem danh sách, bấm để nhảy tới session), kèm bộ lọc **"Chỉ file chưa dùng"** để tìm asset mồ côi cần dọn.
 - **Thư viện: gắn tag & người phụ trách** — gắn tag tự do (vd `boss`, `cần review`, `wip`) và đặt người phụ trách cho từng file; lọc nhanh theo tag. Người phụ trách mặc định lấy từ Google Drive, có thể sửa tay. Tag/người phụ trách được đồng bộ qua Drive nên máy khác / đồng đội đều thấy.

@@ -8,6 +8,8 @@ import { SidebarFooter } from './SidebarFooter';
 import { LibraryInventory } from './LibraryInventory';
 import { LibraryClean } from './LibraryClean';
 import { LibraryVersion } from './LibraryVersion';
+import { LibrarySpinePreviewModal } from './LibrarySpinePreviewModal';
+import type { LibraryEntry } from '../config';
 import './LibraryView.css';
 
 type Tab = 'inventory' | 'version' | 'clean' | 'coverage';
@@ -29,6 +31,7 @@ export function LibraryView() {
 
   const [tab, setTab] = useState<Tab>('inventory');
   const [cleanScopeRequest, setCleanScopeRequest] = useState<CleanScopeRequest | null>(null);
+  const [previewEntry, setPreviewEntry] = useState<LibraryEntry | null>(null);
   const { width, setWidth, startResize } = useSidebarWidth();
   const filter = useLibraryFilter();
   const entries = libraryScan?.entries ?? [];
@@ -157,7 +160,7 @@ export function LibraryView() {
             <div className="library-panel">
               {/* Both panes stay mounted so Inventory filters + Clean scan survive a tab switch. */}
               <div className="library-tabpane" style={{ display: tab === 'inventory' ? 'block' : 'none' }}>
-                <LibraryInventory filter={filter} onPrepareCleanScan={prepareCleanScan} />
+                <LibraryInventory filter={filter} onPrepareCleanScan={prepareCleanScan} onPreview={setPreviewEntry} />
               </div>
               <div className="library-tabpane" style={{ display: tab === 'version' ? 'block' : 'none' }}>
                 <LibraryVersion />
@@ -169,6 +172,8 @@ export function LibraryView() {
           </>
         )}
       </div>
+
+      {previewEntry && <LibrarySpinePreviewModal entry={previewEntry} onClose={() => setPreviewEntry(null)} />}
     </div>
   );
 }

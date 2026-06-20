@@ -8,7 +8,7 @@ import { useApp } from '../useAppController';
  * in → shows avatar + email and opens Settings ▸ Sync (sign-out lives there).
  */
 export function AccountBadge() {
-  const { t, driveAccount, driveBusy, driveSignIn, setSettingsOpen } = useApp();
+  const { t, driveAccount, driveBusy, driveSignIn, openSettings } = useApp();
   const [imgFailed, setImgFailed] = useState(false);
 
   const showPhoto = driveAccount?.photoLink && !imgFailed;
@@ -16,7 +16,7 @@ export function AccountBadge() {
 
   const onClick = () => {
     if (driveAccount || driveBusy) {
-      setSettingsOpen(true); // manage / cancel from Settings
+      openSettings(true); // manage / cancel from Settings ▸ Sync
       return;
     }
     void driveSignIn();

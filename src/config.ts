@@ -184,6 +184,28 @@ export type LibraryEntry = {
   error: string | null;
 };
 
+/** A texture page an exported atlas references (mirrors the Rust `ExportPage`). */
+export type ExportPage = {
+  /** Page filename exactly as the atlas references it (e.g. `hero.png`). */
+  name: string;
+  /** Absolute path to that page image on disk. */
+  path: string;
+};
+
+/**
+ * On-disk file set the Spine web player needs to render a unit's export
+ * (mirrors the Rust `ExportAssets`). Returned by the `list_export_assets` command.
+ */
+export type ExportAssets = {
+  skeletonPath: string;
+  /** `"json"` or `"skel"` (binary). */
+  skeletonFormat: 'json' | 'skel';
+  /** Runtime family: `"3.8"`, `"4.x"`, or null when undetermined. */
+  version: string | null;
+  atlasPath: string;
+  pages: ExportPage[];
+};
+
 /** Result of scanning a master folder (mirrors the Rust `LibraryScan`). */
 export type LibraryScan = {
   root: string;
