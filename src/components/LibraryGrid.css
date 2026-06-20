@@ -51,8 +51,36 @@
   box-shadow: 0 4px 12px var(--shadow);
   transform: translateY(-1px);
 }
+/* The hover transform creates a stacking context that would otherwise trap the row-menu
+   dropdown below the next row's cards — lift the card (and its menu) above its neighbours
+   while hovered or while its menu is open. */
+.library-card:hover,
+.library-card:has(.session-menu-trigger.open) {
+  z-index: 3;
+}
 .library-card > * {
   min-width: 0;
+}
+
+/* Thumbnail + a floating Preview button overlaid on its top-right corner. */
+.library-card-thumb-wrap {
+  position: relative;
+}
+.library-card-thumb-wrap .library-preview-btn {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  opacity: 0;
+  color: var(--text-strong);
+  background: color-mix(in srgb, var(--surface), transparent 8%);
+  box-shadow: 0 1px 4px var(--shadow);
+  -webkit-backdrop-filter: blur(4px);
+  backdrop-filter: blur(4px);
+  transition: opacity 0.12s var(--ease), background 0.15s var(--ease);
+}
+.library-card:hover .library-card-thumb-wrap .library-preview-btn,
+.library-card-thumb-wrap .library-preview-btn:focus-visible {
+  opacity: 1;
 }
 
 .library-card-thumb {
@@ -117,12 +145,10 @@
 }
 /* Actions are hidden-until-hover in the table; cards have room, so keep them visible (muted)
    and brighten on hover. */
-.library-card-actions .session-menu-trigger,
-.library-card-actions .library-preview-btn {
+.library-card-actions .session-menu-trigger {
   opacity: 0.55;
 }
 .library-card:hover .library-card-actions .session-menu-trigger,
-.library-card:hover .library-card-actions .library-preview-btn,
 .library-card-actions .session-menu-trigger.open {
   opacity: 1;
 }

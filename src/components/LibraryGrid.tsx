@@ -103,7 +103,10 @@ export function LibraryGrid(props: LibraryViewProps) {
                   const usedCount = u?.projectIds.length ?? 0;
                   return (
                     <article className="library-card" key={entry.spineFile}>
-                      <LibraryCardThumb entry={entry} />
+                      <div className="library-card-thumb-wrap">
+                        <LibraryCardThumb entry={entry} />
+                        <LibraryPreviewButton entry={entry} onPreview={onPreview} t={t} />
+                      </div>
 
                       <div className="library-card-head">
                         {cleanStatusIcon(cleanStatus(entry), t)}
@@ -111,7 +114,6 @@ export function LibraryGrid(props: LibraryViewProps) {
                           {name}
                         </span>
                         <span className="library-card-actions">
-                          <LibraryPreviewButton entry={entry} onPreview={onPreview} t={t} />
                           <span className="library-card-menu">
                             <LibraryRowMenuButton
                               entry={entry}
