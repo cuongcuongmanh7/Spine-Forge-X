@@ -11,6 +11,7 @@ import { useLibraryTags } from '../useLibraryTags';
 import { LibraryTable } from './LibraryTable';
 import { LibraryGrid } from './LibraryGrid';
 import './LibraryMeta.css';
+import './LibraryFilters.css';
 import {
   entryMatchesFilter,
   groupByFolder,

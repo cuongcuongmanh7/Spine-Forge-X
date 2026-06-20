@@ -1117,8 +1117,8 @@ body.col-resizing {
 }
 
 .segmented-control button.active {
-  background: var(--success-fill);
-  color: var(--success-text);
+  background: var(--primary);
+  color: var(--primary-text);
   box-shadow: 0 2px 8px var(--shadow);
 }
 

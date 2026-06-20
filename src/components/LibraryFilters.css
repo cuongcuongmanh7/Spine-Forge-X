@@ -1,0 +1,61 @@
+/* Inventory filter rows: a fixed label rail + a wrapping chip set, so every row aligns.
+   Split out of LibraryView.css to keep that file under the line ceiling. */
+.library-chip-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+}
+.library-chip-label {
+  flex: 0 0 64px;
+  width: 64px;
+  padding-top: 5px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+}
+.library-chip-set {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+.library-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 9px;
+  border: 1px solid color-mix(in srgb, var(--border), transparent 20%);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.12s var(--ease), border-color 0.12s var(--ease), color 0.12s var(--ease);
+}
+.library-chip:hover {
+  border-color: var(--primary);
+}
+.library-chip.active {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: var(--primary-text);
+}
+.library-chip.mixed {
+  border-color: color-mix(in srgb, var(--warning), transparent 45%);
+  color: var(--warning);
+}
+.library-chip.mixed.active {
+  background: var(--warning);
+  color: var(--warning-text);
+}
+.library-chip em {
+  font-style: normal;
+  font-weight: 700;
+  opacity: 0.7;
+  font-size: 11px;
+}

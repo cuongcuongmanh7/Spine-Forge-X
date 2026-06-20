@@ -176,9 +176,11 @@
   flex: 0 0 auto;
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  padding: 14px max(18px, calc((100% - var(--lib-content-max)) / 2));
+  gap: 8px;
+  padding: 12px max(18px, calc((100% - var(--lib-content-max)) / 2));
   border-bottom: 1px solid var(--border);
+  /* Faint fill separates the controls header from the scrolling list below. */
+  background: var(--surface-soft);
   /* Reserve the scrollbar gutter so right-aligned controls line up with the table columns. */
   overflow: hidden;
   scrollbar-gutter: stable;
@@ -199,6 +201,8 @@
   gap: 12px;
   padding: 10px max(18px, calc((100% - var(--lib-content-max)) / 2));
   border-top: 1px solid var(--border);
+  /* Match the header fill so the "Create project…" CTA reads as a footer band, not floating. */
+  background: var(--surface-soft);
   overflow: hidden;
   scrollbar-gutter: stable;
 }
@@ -285,6 +289,14 @@
   flex: 1 1 220px;
   min-width: 0;
   width: auto;
+  /* Stand out against the soft header band; brighter focus ring in the app primary. */
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  transition: border-color 0.12s var(--ease), box-shadow 0.12s var(--ease);
+}
+.library-search:focus {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary), transparent 80%);
 }
 /* Last-scan label + Rescan sit at the right end of the search row (moved off the tab bar). */
 .library-clean-toolbar {
@@ -455,65 +467,7 @@
   }
 }
 
-/* Filter rows: a fixed label rail + a wrapping chip set, so every row aligns. */
-.library-chip-row {
-  display: flex;
-  align-items: flex-start;
-  gap: 8px;
-}
-.library-chip-label {
-  flex: 0 0 64px;
-  width: 64px;
-  padding-top: 5px;
-  font-size: 11px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: var(--text-muted);
-}
-.library-chip-set {
-  flex: 1 1 auto;
-  min-width: 0;
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 6px;
-}
-.library-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  padding: 3px 10px;
-  border: 1px solid var(--border);
-  border-radius: 999px;
-  background: var(--surface-soft);
-  color: var(--text);
-  font-size: 12px;
-  cursor: pointer;
-  transition: background 0.12s var(--ease), border-color 0.12s var(--ease), color 0.12s var(--ease);
-}
-.library-chip:hover {
-  border-color: var(--primary);
-}
-.library-chip.active {
-  background: var(--primary);
-  border-color: var(--primary);
-  color: var(--primary-text);
-}
-.library-chip.mixed {
-  border-color: var(--warning);
-  color: var(--warning);
-}
-.library-chip.mixed.active {
-  background: var(--warning);
-  color: var(--warning-text);
-}
-.library-chip em {
-  font-style: normal;
-  font-weight: 700;
-  opacity: 0.7;
-  font-size: 11px;
-}
+/* Filter rows + chips: see LibraryFilters.css (split out to keep this file under the ceiling). */
 
 /* Own table base (NOT .clean-source-table, whose `td:not(:first-child){width:1%}` breaks
    fixed layout). Fixed layout + colgroup widths so a long path can't widen the table. */
@@ -537,7 +491,7 @@
   border-bottom: 1px solid var(--border);
 }
 .library-table th {
-  color: var(--text-muted);
+  color: var(--text);
   font-weight: 600;
 }
 /* Pin the header row so column titles stay put while the body scrolls. The scroll
@@ -546,7 +500,7 @@
   position: sticky;
   top: 0;
   z-index: 3;
-  background: var(--bg);
+  background: var(--surface-soft);
   /* Bottom border via shadow so it rides along while stuck (the cell border-bottom
      can render under later rows once unstuck). */
   box-shadow: inset 0 -1px 0 var(--border);
@@ -634,7 +588,9 @@
   position: sticky;
   top: var(--lib-thead-h);
   z-index: 1;
-  background: var(--surface-soft);
+  /* Opaque (mixed over surface, not transparent) so it still covers scrolling rows,
+     but a touch softer than the header band above it. */
+  background: color-mix(in srgb, var(--text) 3.5%, var(--surface));
   font-weight: 600;
   box-shadow: inset 0 -1px 0 var(--border);
 }
@@ -674,9 +630,9 @@
   border: 1px solid var(--border);
 }
 .library-anim-chip.matched {
-  background: color-mix(in srgb, var(--accent, #4a90d9) 18%, transparent);
-  border-color: var(--accent, #4a90d9);
-  color: var(--accent, #4a90d9);
+  background: color-mix(in srgb, var(--primary) 18%, transparent);
+  border-color: var(--primary);
+  color: var(--primary);
   font-weight: 600;
 }
 .library-warn-badge {

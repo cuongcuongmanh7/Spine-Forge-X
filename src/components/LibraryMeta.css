@@ -56,8 +56,8 @@
   cursor: pointer;
 }
 .library-drive-close:hover {
-  border-color: var(--accent, #4a90d9);
-  color: var(--accent, #4a90d9);
+  border-color: var(--primary);
+  color: var(--primary);
 }
 /* "Last scan" + "Drive loaded" stacked at the right of the search row. */
 .library-lastscan {
@@ -94,8 +94,8 @@
   cursor: pointer;
 }
 button.library-usage-badge:hover {
-  border-color: var(--accent, #4a90d9);
-  color: var(--accent, #4a90d9);
+  border-color: var(--primary);
+  color: var(--primary);
 }
 .library-usage-badge.unused {
   opacity: 0.55;
@@ -117,9 +117,9 @@ button.library-usage-badge:hover {
   gap: 2px;
   padding: 1px 4px 1px 8px;
   border-radius: 999px;
-  background: color-mix(in srgb, var(--accent, #4a90d9) 14%, transparent);
-  border: 1px solid color-mix(in srgb, var(--accent, #4a90d9) 35%, transparent);
-  color: var(--accent, #4a90d9);
+  background: color-mix(in srgb, var(--primary) 14%, transparent);
+  border: 1px solid color-mix(in srgb, var(--primary) 35%, transparent);
+  color: var(--primary);
   font-size: 11px;
   white-space: nowrap;
 }
@@ -149,15 +149,15 @@ button.library-usage-badge:hover {
   cursor: pointer;
 }
 .library-tag-add:hover {
-  border-color: var(--accent, #4a90d9);
-  color: var(--accent, #4a90d9);
+  border-color: var(--primary);
+  color: var(--primary);
 }
 .library-tag-input {
   width: 90px;
   font: inherit;
   font-size: 12px;
   padding: 1px 6px;
-  border: 1px solid var(--accent, #4a90d9);
+  border: 1px solid var(--primary);
   border-radius: 6px;
   background: var(--surface);
   color: var(--text);
@@ -182,7 +182,7 @@ button.library-usage-badge:hover {
   white-space: nowrap;
 }
 .library-owner-value.manual {
-  color: var(--accent, #4a90d9);
+  color: var(--primary);
   font-weight: 600;
 }
 .library-owner-edit {
@@ -198,7 +198,7 @@ button.library-usage-badge:hover {
   font: inherit;
   font-size: 12px;
   padding: 1px 6px;
-  border: 1px solid var(--accent, #4a90d9);
+  border: 1px solid var(--primary);
   border-radius: 6px;
   background: var(--surface);
   color: var(--text);

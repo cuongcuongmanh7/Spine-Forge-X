@@ -5,6 +5,7 @@
 - **Gộp tab "Phiên bản" vào Inventory** — thay bằng chip lọc **"Lệch version"** (chỉ hiện khi có folder lẫn version editor), bớt một tab mà vẫn giữ chức năng.
 - **Đổi tên tab "Ảnh thừa" → "Dọn ảnh"** và bỏ tab "Coverage" chưa dùng.
 - **Sidebar Thư viện thêm icon thư mục** cho đồng bộ giao diện với Workspace.
+- **Tinh chỉnh giao diện Inventory** — thẻ thống kê gọn hơn, vùng tìm kiếm/bộ lọc và nút "Tạo project" có nền tách khỏi danh sách để dành thêm chỗ cho list; nút chuyển Theo thư mục / Theo ID và Bảng / Lưới đổi sang màu xanh chủ đạo (thay xanh lá), chip lọc nhỏ gọn hơn, thẻ ở chế độ Lưới nổi nhẹ khi rê chuột.
 
 ## v0.4.5
 - **Thư viện: xem trước skeleton ngay trong app** — mỗi file đã export có nút 👁 ở cột riêng; bấm để mở cửa sổ preview render skeleton thật (trình phát của Spine), chọn **animation** và **skin** để xem chuyển động. Hỗ trợ cả file bản 3.8 lẫn 4.x.
