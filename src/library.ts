@@ -303,6 +303,17 @@ export function versionMixGroups(entries: LibraryEntry[]): VersionMixGroup[] {
     });
 }
 
+/** Set of `.spine` files that diverge from their folder group's majority version (flat filter helper). */
+export function divergingFileSet(entries: LibraryEntry[]): Set<string> {
+  const set = new Set<string>();
+  for (const g of versionMixGroups(entries)) {
+    for (const { entry, diverges } of g.entries) {
+      if (diverges) set.add(entry.spineFile);
+    }
+  }
+  return set;
+}
+
 /** Normalize a path for cross-source comparison: forward slashes, lower-cased, no trailing sep. */
 export function normalizePath(p: string): string {
   return p.replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase();

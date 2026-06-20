@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { FolderSearch, Plus, RotateCw, Trash2 } from 'lucide-react';
+import { Folder, FolderSearch, Plus, RotateCw, Trash2 } from 'lucide-react';
 import { useApp } from '../useAppController';
 import { useSidebarWidth, SIDEBAR_MIN, SIDEBAR_MAX, SIDEBAR_DEFAULT, clampWidth } from '../useSidebarWidth';
 import { useLibraryFilter } from '../useLibraryFilter';
@@ -7,12 +7,11 @@ import { ModeToggle } from './ModeToggle';
 import { SidebarFooter } from './SidebarFooter';
 import { LibraryInventory } from './LibraryInventory';
 import { LibraryClean } from './LibraryClean';
-import { LibraryVersion } from './LibraryVersion';
 import { LibrarySpinePreviewModal } from './LibrarySpinePreviewModal';
 import type { LibraryEntry } from '../config';
 import './LibraryView.css';
 
-type Tab = 'inventory' | 'version' | 'clean' | 'coverage';
+type Tab = 'inventory' | 'clean';
 type CleanScopeRequest = { id: number; spineFiles: string[] };
 
 /** Asset Library main view: master-folder list (left) + tabbed inventory/clean (right). */
@@ -70,6 +69,7 @@ export function LibraryView() {
                 tabIndex={0}
                 title={l.rootPath}
               >
+                <Folder className="library-lib-icon" size={15} />
                 <span className="library-lib-name">{l.name}</span>
                 {isScanningLibrary && l.id === activeLibraryId && (
                   <RotateCw size={13} className="spin library-lib-scan" aria-hidden="true" />
@@ -145,14 +145,8 @@ export function LibraryView() {
                 <button className={`library-tab ${tab === 'inventory' ? 'active' : ''}`} onClick={() => setTab('inventory')}>
                   {t.libraryTabInventory}
                 </button>
-                <button className={`library-tab ${tab === 'version' ? 'active' : ''}`} onClick={() => setTab('version')}>
-                  {t.libraryTabVersion}
-                </button>
                 <button className={`library-tab ${tab === 'clean' ? 'active' : ''}`} onClick={() => setTab('clean')}>
                   {t.libraryTabClean}
-                </button>
-                <button className="library-tab" disabled title={t.libraryTabCoverageSoon}>
-                  {t.libraryTabCoverage}
                 </button>
               </div>
             </div>
@@ -161,9 +155,6 @@ export function LibraryView() {
               {/* Both panes stay mounted so Inventory filters + Clean scan survive a tab switch. */}
               <div className="library-tabpane" style={{ display: tab === 'inventory' ? 'block' : 'none' }}>
                 <LibraryInventory filter={filter} onPrepareCleanScan={prepareCleanScan} onPreview={setPreviewEntry} />
-              </div>
-              <div className="library-tabpane" style={{ display: tab === 'version' ? 'block' : 'none' }}>
-                <LibraryVersion />
               </div>
               <div className="library-tabpane" style={{ display: tab === 'clean' ? 'block' : 'none' }}>
                 <LibraryClean filter={filter} scopeRequest={cleanScopeRequest} />

@@ -69,10 +69,12 @@
   font-size: 13px;
   font-weight: 600;
 }
+.library-lib-icon,
 .library-lib-scan {
   flex: 0 0 auto;
-  color: var(--primary);
 }
+.library-lib-icon { color: var(--text-muted); }
+.library-lib-scan { color: var(--primary); }
 .library-lib-del {
   width: 26px;
   height: 26px;

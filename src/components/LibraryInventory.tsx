@@ -2,7 +2,6 @@ import { Fragment, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import {
   AlertTriangle,
-  Boxes,
   CheckCircle2,
   ChevronDown,
   ChevronRight,
@@ -10,7 +9,6 @@ import {
   ChevronsUpDown,
   CloudDownload,
   FolderPlus,
-  Images,
   Layers,
   ListChecks,
   Circle,
@@ -20,7 +18,7 @@ import {
   Users
 } from 'lucide-react';
 import { useApp } from '../useAppController';
-import { StatCard } from './StatCard';
+import { LibraryStatCards } from './LibraryStatCards';
 import { basename } from '../sessions';
 import { formatBytes, formatDate } from '../time';
 import type { LibraryEntry } from '../config';
@@ -43,7 +41,7 @@ import {
   matchedNames,
   parseQuery,
   usageByEntry,
-  versionLabel,
+  divergingFileSet,
   versionSummary,
   versionTags,
   type LibraryThresholds
@@ -114,6 +112,9 @@ export function LibraryInventory({
   const [unusedOnly, setUnusedOnly] = useState(false);
   // Tags/ownership (#4): tag-chip filter selection.
   const [selectedTags, setSelectedTags] = useState<Set<string>>(new Set());
+  // Version-mix triage (folded in from the old Version tab): show only files that diverge from
+  // their folder group's majority editor version.
+  const [divergingOnly, setDivergingOnly] = useState(false);
 
   // Tags + manual owner per asset (localStorage mirror + synced sidecar) — see useLibraryTags.
   const { tagList, metaFor, addEntryTag, removeEntryTag, setEntryOwner } = useLibraryTags({ syncRoot, syncConnected });
@@ -147,12 +148,16 @@ export function LibraryInventory({
   const projectName = useMemo(() => new Map(projects.map((p) => [p.id, p.name])), [projects]);
   const sessionById = useMemo(() => new Map(sessions.map((s) => [s.id, s])), [sessions]);
 
+  // Files that diverge from their folder group's majority version — drives the "diverging only" chip.
+  const divergingSet = useMemo(() => divergingFileSet(entries), [entries]);
+
   const filtered = useMemo(() => {
     let base = entries.filter((e) => entryMatchesFilter(e, { facet, selectedCats, selectedVersions, query }));
     if (unusedOnly) base = base.filter((e) => (usage.get(e.spineFile)?.projectIds.length ?? 0) === 0);
+    if (divergingOnly) base = base.filter((e) => divergingSet.has(e.spineFile));
     if (selectedTags.size > 0) base = base.filter((e) => entryMatchesTags(metaFor(e), selectedTags));
     return base;
-  }, [entries, facet, selectedCats, selectedVersions, query, unusedOnly, usage, selectedTags, metaFor]);
+  }, [entries, facet, selectedCats, selectedVersions, query, unusedOnly, usage, divergingOnly, divergingSet, selectedTags, metaFor]);
 
   // Parsed search (scope + term) drives chip highlighting and auto-expanding the anim/skin panel.
   const parsedQuery = useMemo(() => parseQuery(query), [query]);
@@ -381,21 +386,13 @@ export function LibraryInventory({
   return (
     <div className="library-pane">
       <div className="library-pane-head">
-      <div className="stat-cards">
-        <StatCard icon={<Boxes size={18} />} label={t.libraryTotalEntries} value={entries.length} />
-        {buckets.map((b) => (
-          <StatCard key={b.major} icon={<Tag size={18} />} label={versionLabel(b.major)} value={b.count} />
-        ))}
-        <StatCard icon={<Images size={18} />} label={t.libraryTotalImages} value={formatBytes(libraryScan?.totalImageBytes ?? 0)} />
-        <StatCard icon={<Circle size={18} />} label={t.libraryStatNotScanned} value={scanCounts.unknown} />
-        <StatCard icon={<CheckCircle2 size={18} />} label={t.libraryStatClean} value={scanCounts.clean} tone={scanCounts.clean > 0 ? 'ok' : 'default'} />
-        <StatCard
-          icon={<AlertTriangle size={18} />}
-          label={t.libraryStatNeedsReview}
-          value={scanCounts.warning}
-          tone={scanCounts.warning > 0 ? 'warn' : 'default'}
-        />
-      </div>
+      <LibraryStatCards
+        t={t}
+        totalEntries={entries.length}
+        buckets={buckets}
+        totalImageBytes={libraryScan?.totalImageBytes ?? 0}
+        scanCounts={scanCounts}
+      />
 
       <div className="library-search-row">
         <Search size={15} />
@@ -476,6 +473,16 @@ export function LibraryInventory({
               </button>
             );
           })}
+          {divergingSet.size > 0 && (
+            <button
+              className={`library-chip mixed ${divergingOnly ? 'active' : ''}`}
+              onClick={() => setDivergingOnly((v) => !v)}
+              aria-pressed={divergingOnly}
+              title={t.libraryWarnMixed}
+            >
+              <AlertTriangle size={12} /> {t.libraryVersionOnlyDiverging} <em>{divergingSet.size}</em>
+            </button>
+          )}
         </div>
       </div>
 
