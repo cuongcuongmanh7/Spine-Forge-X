@@ -35,6 +35,11 @@ tauri-plugin-updater = "2.10.1"
 tauri-plugin-process = "2.3.1"
 tauri-plugin-single-instance = "2.3.4"
 
+# Windows 11 native window chrome: rounded corners + subtle border via DWM.
+# Pinned to the same major as Tauri's own `windows` dep so the HWND type unifies.
+[target.'cfg(windows)'.dependencies]
+windows = { version = "0.61", features = ["Win32_Graphics_Dwm", "Win32_Foundation"] }
+
 [dev-dependencies]
 proptest = "1"
 # The test profile unifies features such that tauri-utils' `schema` feature gets

@@ -399,6 +399,41 @@ fn set_run_in_background(state: State<'_, Arc<AppState>>, enabled: bool) {
     state.run_in_background.store(enabled, Ordering::SeqCst);
 }
 
+/// Round the corners of the borderless main window and tint its 1px frame, using the
+/// Windows 11 DWM. The OS draws this (so it survives maximize/snap and stays crisp at any
+/// DPI) and pairs with `"shadow": true` in tauri.conf.json for the drop shadow. No-op on
+/// other platforms and on Windows 10 (the corner attribute is simply ignored there).
+#[cfg(windows)]
+fn apply_native_window_chrome(window: &tauri::WebviewWindow) {
+    use windows::Win32::Graphics::Dwm::{
+        DwmSetWindowAttribute, DWMWA_BORDER_COLOR, DWMWA_WINDOW_CORNER_PREFERENCE, DWMWCP_ROUND,
+        DWM_WINDOW_CORNER_PREFERENCE,
+    };
+
+    let Ok(hwnd) = window.hwnd() else { return };
+    unsafe {
+        let pref = DWMWCP_ROUND;
+        let _ = DwmSetWindowAttribute(
+            hwnd,
+            DWMWA_WINDOW_CORNER_PREFERENCE,
+            &pref as *const DWM_WINDOW_CORNER_PREFERENCE as *const core::ffi::c_void,
+            std::mem::size_of::<DWM_WINDOW_CORNER_PREFERENCE>() as u32,
+        );
+        // Let the system manage the frame (DWMWA_COLOR_DEFAULT): Windows 11 then draws a
+        // focus-aware border — tinted with the accent color while focused, faint/none when not.
+        let border: u32 = 0xFFFFFFFF;
+        let _ = DwmSetWindowAttribute(
+            hwnd,
+            DWMWA_BORDER_COLOR,
+            &border as *const u32 as *const core::ffi::c_void,
+            std::mem::size_of::<u32>() as u32,
+        );
+    }
+}
+
+#[cfg(not(windows))]
+fn apply_native_window_chrome(_window: &tauri::WebviewWindow) {}
+
 pub fn run() {
     let state = Arc::new(AppState::default());
 
@@ -411,6 +446,7 @@ pub fn run() {
         .manage(state)
         .setup(|app| {
             if let Some(window) = app.get_webview_window("main") {
+                apply_native_window_chrome(&window);
                 let _ = window.emit("spine-log", "SpineForge X ready.");
             }
             tray::build(app.handle())?;
