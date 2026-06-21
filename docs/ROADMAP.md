@@ -6,6 +6,25 @@ Source-of-truth tiến độ toàn dự án.
 
 ---
 
+## v0.4.8 — Shared app-data root + sync v2 (per-user workspace, shared library) ✅ Done
+
+> Bump `0.4.7 → 0.4.8`; tag `v0.4.8`. Chi tiết sync: [sync.md](sync.md).
+
+- [x] **App-data root cố định, tự dò**: `…\Shared drives\Pamvis\spine_app_data` qua Rust `system::resolve_app_data_dir` + hook `src/useAppData.ts`; banner cảnh báo trong tab Thư viện khi không mount được ([spine-app-data-path](../../memory)).
+- [x] **Thumbnail dùng chung qua Drive**: cache `spine_app_data/thumbs`, key theo `relPath`+size+version (độc lập máy); fallback `app_cache_dir` khi không có Drive. `thumb_cache_get/put` nhận `dir`.
+- [x] **Sync v2** — bỏ picker chọn folder; tách **workspace per-user** (`workspaces/<emailSlug>/profile.json`, theo email Google, cần đăng nhập) khỏi **library dùng chung** (`library/libraries.json` + sidecar tag/owner + drive-meta + thumbs). `sync.ts` tách build/apply workspace+library; `useSync` reconcile kép (timestamp riêng mỗi scope), thêm `syncNeedsSignIn`. `useLibraryTags`/`useLibraryDrive` nhận `libraryDir`.
+- [x] Verify: `tsc` + `npm test` (85) + `npm run build` xanh.
+
+## v0.4.7 — Inventory thumbnails (phase 2) + UI polish + sync dot merge ✅ Done
+
+> Bump `0.4.6 → 0.4.7`; tag `v0.4.7`.
+
+- [x] **B4 phase 2 — thumbnail skeleton thật trên card Lưới**: render off-screen bằng Spine player (`preserveDrawingBuffer` → `toDataURL`), queue 1-slot tránh cạn WebGL context, lazy bằng IntersectionObserver + debounce; reject ảnh trống. Hook `useSpineThumbnail` + `spineRuntime.ts` (tách loader dùng chung với preview modal) + `LibraryCardThumb`. Nút 👁 dời lên góc thumbnail.
+- [x] **Polish UI Inventory**: stat card gọn, segmented control active đổi xanh-lá → **primary**, header/footer có nền tách list, chip lọc gọn, table header/group row dịu, grid card bo 8px + hover nhấc nhẹ; badge/tag/pill về token `--primary`.
+- [x] **Gộp chấm sync vào nút tài khoản** (bỏ `SyncStatusDot` ở titlebar) — pip trạng thái nằm trên `AccountBadge` ở sidebar.
+
+---
+
 ## v0.4.6 — Library UI: Card/Grid view + dọn tab ✅ Done
 
 > Bump `0.4.5 → 0.4.6`; tag `v0.4.6`. Polish UI tab Library (không đổi backend).
