@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { AlertTriangle, Folder, FolderSearch, Plus, RotateCw, Trash2 } from 'lucide-react';
+import { AlertTriangle, Folder, Plus, RotateCw, Trash2 } from 'lucide-react';
 import { useApp } from '../useAppController';
 import { useSidebarWidth, SIDEBAR_MIN, SIDEBAR_MAX, SIDEBAR_DEFAULT, clampWidth } from '../useSidebarWidth';
 import { useLibraryFilter } from '../useLibraryFilter';
@@ -8,6 +8,7 @@ import { SidebarFooter } from './SidebarFooter';
 import { LibraryInventory } from './LibraryInventory';
 import { LibraryClean } from './LibraryClean';
 import { LibrarySpinePreviewModal } from './LibrarySpinePreviewModal';
+import { LibraryScanningOverlay } from './LibraryScanningOverlay';
 import type { LibraryEntry } from '../config';
 import './LibraryView.css';
 
@@ -128,22 +129,7 @@ export function LibraryView() {
           </div>
         ) : isScanningLibrary && entries.length === 0 ? (
           <div className="library-empty">
-            <div className="library-scanning" role="status" aria-live="polite">
-              <span className="library-scanning-icon">
-                <FolderSearch size={28} />
-              </span>
-              <div className="library-scanning-text">
-                <span className="library-scanning-title">{t.libraryScanning}</span>
-                {activeLibrary && (
-                  <span className="library-scanning-path" title={activeLibrary.rootPath}>
-                    {activeLibrary.rootPath}
-                  </span>
-                )}
-              </div>
-              <div className="library-scanning-bar" aria-hidden="true">
-                <span />
-              </div>
-            </div>
+            <LibraryScanningOverlay title={t.libraryScanning} subtitle={activeLibrary?.rootPath} />
           </div>
         ) : (
           <>

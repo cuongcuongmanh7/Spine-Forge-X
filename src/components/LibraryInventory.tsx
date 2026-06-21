@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { AlertTriangle, CloudDownload, Layers, RotateCw, Search, Tag, Users } from 'lucide-react';
 import { useApp } from '../useAppController';
@@ -75,6 +75,8 @@ export function LibraryInventory({
   const [unusedOnly, setUnusedOnly] = useState(false);
   // Tags/ownership: tag-chip filter selection.
   const [selectedTags, setSelectedTags] = useState<Set<string>>(new Set());
+  // Filter by responsible person: manual owner OR Drive owner/last-editor name.
+  const [selectedUsers, setSelectedUsers] = useState<Set<string>>(new Set());
   // Version-mix triage: show only files that diverge from their folder group's majority version.
   const [divergingOnly, setDivergingOnly] = useState(false);
 
@@ -108,13 +110,34 @@ export function LibraryInventory({
   // Files that diverge from their folder group's majority version — drives the "diverging only" chip.
   const divergingSet = useMemo(() => divergingFileSet(entries), [entries]);
 
+  // Effective person for a file: manual owner first, else the Drive owner/last-editor name.
+  // (Drive names need "Load Drive data" pressed; manual owners are always available.)
+  const effectiveOwner = useCallback(
+    (e: LibraryEntry): string => {
+      const d = basicFor(e);
+      return metaFor(e)?.owner || d?.ownerName || d?.ownerEmail || d?.lastEditorName || d?.lastEditorEmail || '';
+    },
+    [metaFor, basicFor]
+  );
+
+  // Distinct users present across the library, with counts — sorted by count desc then name.
+  const userChips = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const e of entries) {
+      const owner = effectiveOwner(e);
+      if (owner) counts.set(owner, (counts.get(owner) ?? 0) + 1);
+    }
+    return [...counts.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+  }, [entries, effectiveOwner]);
+
   const filtered = useMemo(() => {
     let base = entries.filter((e) => entryMatchesFilter(e, { facet, selectedCats, selectedVersions, query }));
     if (unusedOnly) base = base.filter((e) => (usage.get(e.spineFile)?.projectIds.length ?? 0) === 0);
     if (divergingOnly) base = base.filter((e) => divergingSet.has(e.spineFile));
     if (selectedTags.size > 0) base = base.filter((e) => entryMatchesTags(metaFor(e), selectedTags));
+    if (selectedUsers.size > 0) base = base.filter((e) => selectedUsers.has(effectiveOwner(e)));
     return base;
-  }, [entries, facet, selectedCats, selectedVersions, query, unusedOnly, usage, divergingOnly, divergingSet, selectedTags, metaFor]);
+  }, [entries, facet, selectedCats, selectedVersions, query, unusedOnly, usage, divergingOnly, divergingSet, selectedTags, metaFor, selectedUsers, effectiveOwner]);
 
   const parsedQuery = useMemo(() => parseQuery(query), [query]);
 
@@ -440,6 +463,24 @@ export function LibraryInventory({
             </button>
           </div>
         </div>
+
+        {userChips.length > 0 && (
+          <div className="library-chip-row">
+            <span className="library-chip-label">{t.libraryFilterUser}</span>
+            <div className="library-chip-set">
+              {userChips.map(([name, count]) => (
+                <button
+                  key={name}
+                  className={`library-chip ${selectedUsers.has(name) ? 'active' : ''}`}
+                  onClick={() => toggleSet(setSelectedUsers, name)}
+                  aria-pressed={selectedUsers.has(name)}
+                >
+                  <Users size={11} /> {name} <em>{count}</em>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
 
         {tagList.length > 0 && (
           <div className="library-chip-row">

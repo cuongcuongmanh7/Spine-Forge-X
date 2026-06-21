@@ -1,6 +1,9 @@
 # Changelog
 
 ## v0.4.9
+- **Tab "Dọn ảnh": hiệu ứng khi đang quét/dọn** — hiện lớp phủ chuyển động và chặn thao tác trong lúc quét hoặc dọn ảnh (giống tab Inventory), tránh bấm nhầm giữa chừng.
+- **Tách dữ liệu bản dev và bản chính thức** — bản chạy thử (`tauri dev`) ghi vào thư mục `spine_app_data\dev` riêng, không đụng dữ liệu thật của nhóm (vẫn cùng tài khoản Google); thanh tiêu đề hiện nhãn "dev" để khỏi nhầm.
+- **Lọc theo người dùng ở "Used by"** — thêm hàng chip "Người dùng": chọn một/nhiều người (người phụ trách đặt tay hoặc tên Google Drive) để lọc nhanh file theo người. Tên Drive hiện sau khi bấm "Tải dữ liệu Drive".
 - **Báo trạng thái đồng bộ rõ hơn** — khi đang lưu/đang đồng bộ, hiện một dòng trạng thái nhỏ ngay dưới nút tài khoản (tự ẩn khi đã đồng bộ xong — trạng thái bình thường vẫn gọn). Khi mở app mà có bản mới hơn từ máy khác, app báo "Đang tải workspace mới nhất…" trước khi tự refresh, không còn bị giật mình.
 
 ## v0.4.8

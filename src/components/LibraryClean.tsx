@@ -3,6 +3,7 @@ import { invoke } from '@tauri-apps/api/core';
 import { ChevronDown, ChevronRight, Eraser, HardDrive, RotateCw, Trash2 } from 'lucide-react';
 import { useApp } from '../useAppController';
 import { StatCard } from './StatCard';
+import { LibraryScanningOverlay } from './LibraryScanningOverlay';
 import { formatBytes } from '../time';
 import { entryMatchesFilter, groupByFolder, groupByIdBand, selectionSummary } from '../library';
 import type { LibraryFilterApi } from '../useLibraryFilter';
@@ -70,7 +71,9 @@ export function LibraryClean({ filter, scopeRequest }: { filter: LibraryFilterAp
     pushToast
   } = useApp();
 
-  const [working, setWorking] = useState(false);
+  // Label of the in-flight long op (scan/clean); null = idle. Drives the blocking overlay + disables.
+  const [busyLabel, setBusyLabel] = useState<string | null>(null);
+  const working = busyLabel !== null;
   const [checked, setChecked] = useState<Set<string>>(new Set());
   const [scanChecked, setScanChecked] = useState<Set<string>>(new Set());
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
@@ -141,7 +144,7 @@ export function LibraryClean({ filter, scopeRequest }: { filter: LibraryFilterAp
 
   async function scanOffline(sourceEntries = libraryScan?.entries) {
     if (selectedScanEntries.length === 0) return;
-    setWorking(true);
+    setBusyLabel(t.libraryCleanScanning);
     try {
       const result = await invoke<BatchScanSummary>('scan_library_unused', {
         root,
@@ -152,13 +155,13 @@ export function LibraryClean({ filter, scopeRequest }: { filter: LibraryFilterAp
     } catch (error) {
       pushToast(`${t.cleanSourceFailed}: ${String(error)}`, 'error');
     } finally {
-      setWorking(false);
+      setBusyLabel(null);
     }
   }
 
   async function scanCli(sourceEntries = libraryScan?.entries) {
     if (selectedScanEntries.length === 0) return;
-    setWorking(true);
+    setBusyLabel(t.libraryCleanScanning);
     try {
       const selected = new Set(selectedScanEntries.map((e) => e.spineFile));
       const excluded = entries.filter((e) => !selected.has(e.spineFile)).map((e) => e.spineFile);
@@ -166,7 +169,7 @@ export function LibraryClean({ filter, scopeRequest }: { filter: LibraryFilterAp
       applySummary(result);
       if (result) markLibraryEntriesScanned(result.units, sourceEntries);
     } finally {
-      setWorking(false);
+      setBusyLabel(null);
     }
   }
 
@@ -186,7 +189,7 @@ export function LibraryClean({ filter, scopeRequest }: { filter: LibraryFilterAp
   const selectedUnits = cleanable.filter((u) => checked.has(u.spineFile));
   async function cleanSelected() {
     if (selectedUnits.length === 0) return;
-    setWorking(true);
+    setBusyLabel(t.libraryCleanCleaning);
     let moved = 0;
     const cleanedSpineFiles: string[] = [];
     try {
@@ -204,7 +207,7 @@ export function LibraryClean({ filter, scopeRequest }: { filter: LibraryFilterAp
       if (cleanedSpineFiles.length > 0) markLibraryEntriesClean(cleanedSpineFiles, refreshed?.entries);
       await scanOffline(refreshed?.entries);
     } finally {
-      setWorking(false);
+      setBusyLabel(null);
     }
   }
 
@@ -426,6 +429,8 @@ export function LibraryClean({ filter, scopeRequest }: { filter: LibraryFilterAp
           </button>
         </div>
       )}
+
+      {working && <LibraryScanningOverlay overlay title={busyLabel ?? ''} />}
     </div>
   );
 }

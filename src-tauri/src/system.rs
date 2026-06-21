@@ -275,8 +275,13 @@ pub(crate) fn resolve_app_data_dir() -> Option<String> {
         for letter in b'A'..=b'Z' {
             let pamvis = format!("{}:\\Shared drives\\Pamvis", letter as char);
             if std::path::Path::new(&pamvis).is_dir() {
-                let dir = std::path::Path::new(&format!("{}:\\Shared drives", letter as char))
+                let mut dir = std::path::Path::new(&format!("{}:\\Shared drives", letter as char))
                     .join(APP_DATA_SUBPATH.replace('/', "\\"));
+                // Dev builds (`tauri dev`) write into a `dev` subfolder so testing never touches the
+                // team's production data; release builds (`tauri build`) use the root. Same account.
+                if cfg!(debug_assertions) {
+                    dir = dir.join("dev");
+                }
                 return Some(path_to_string(&dir));
             }
         }

@@ -31,6 +31,25 @@ export function Titlebar() {
           >
             {appVersionLabel}
           </button>
+          {import.meta.env.DEV && (
+            <span
+              className="titlebar-dev"
+              title="Dev build — syncs to a separate spine_app_data/dev folder"
+              style={{
+                marginLeft: 6,
+                padding: '1px 6px',
+                borderRadius: 6,
+                fontSize: 10,
+                fontWeight: 700,
+                letterSpacing: '0.04em',
+                textTransform: 'uppercase',
+                color: 'var(--warning)',
+                background: 'color-mix(in srgb, var(--warning), transparent 86%)'
+              }}
+            >
+              dev
+            </span>
+          )}
           <button
             className="titlebar-update-check"
             title="Check for update"
