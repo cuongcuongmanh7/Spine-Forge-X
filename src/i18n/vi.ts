@@ -209,6 +209,7 @@ export const vi = {
   syncStatusPending: 'Có thay đổi chưa lưu',
   syncStatusSyncing: 'Đang đồng bộ…',
   syncStatusError: 'Lỗi đồng bộ',
+  syncPullingRemote: 'Đang tải workspace mới nhất…',
   syncErrorRead: 'Không đọc được file đồng bộ.',
   syncErrorWrite: 'Không ghi được file đồng bộ.',
   // Tier B — Google Drive API (owner / lịch sử sửa)

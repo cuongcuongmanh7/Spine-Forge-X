@@ -47,23 +47,37 @@ export function AccountBadge() {
     syncLastSyncedAt && syncStatus !== 'error' ? `\n${t.syncLastSynced}: ${formatDateTime(syncLastSyncedAt)}` : '';
   const syncTitle = `${t.syncTitle} — ${syncLabel}${lastLine}`;
 
+  // Transient state shown as an inline line under the badge — visible only while something is
+  // happening (saving / syncing / error), so the steady "synced" state stays quiet (pip only).
+  const transient = syncEnabled && (syncStatus === 'pending' || syncStatus === 'syncing' || syncStatus === 'error');
+  const lineLabel =
+    syncStatus === 'syncing' ? t.syncStatusSyncing : syncStatus === 'pending' ? t.syncStatusPending : t.syncStatusError;
+
   return (
-    <button
-      className="sidebar-settings account-badge"
-      onClick={onClick}
-      title={driveAccount ? `${t.driveSignedInAs}: ${driveAccount.email}` : t.driveSignInHelp}
-    >
-      {showPhoto ? (
-        <img className="account-avatar" src={driveAccount!.photoLink!} alt="" onError={() => setImgFailed(true)} />
-      ) : driveBusy ? (
-        <RotateCw className="spin" size={18} />
-      ) : (
-        <UserCircle2 size={18} className={driveAccount ? undefined : 'muted'} />
+    <>
+      <button
+        className="sidebar-settings account-badge"
+        onClick={onClick}
+        title={driveAccount ? `${t.driveSignedInAs}: ${driveAccount.email}` : t.driveSignInHelp}
+      >
+        {showPhoto ? (
+          <img className="account-avatar" src={driveAccount!.photoLink!} alt="" onError={() => setImgFailed(true)} />
+        ) : driveBusy ? (
+          <RotateCw className="spin" size={18} />
+        ) : (
+          <UserCircle2 size={18} className={driveAccount ? undefined : 'muted'} />
+        )}
+        <span className={`account-email ${driveAccount ? '' : 'muted'}`}>{label}</span>
+        {syncEnabled && (
+          <span className={`account-sync-pip status-${syncStatus}`} title={syncTitle} aria-label={syncTitle} />
+        )}
+      </button>
+      {transient && (
+        <span className={`account-sync-line status-${syncStatus}`} role="status" title={syncError ?? undefined}>
+          {syncStatus === 'syncing' && <RotateCw className="spin" size={11} aria-hidden="true" />}
+          {lineLabel}
+        </span>
       )}
-      <span className={`account-email ${driveAccount ? '' : 'muted'}`}>{label}</span>
-      {syncEnabled && (
-        <span className={`account-sync-pip status-${syncStatus}`} title={syncTitle} aria-label={syncTitle} />
-      )}
-    </button>
+    </>
   );
 }

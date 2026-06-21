@@ -73,6 +73,9 @@ export function useSync({ data, t, pushToast, appDataDir, userEmail }: Args) {
   // Gate pushes until the first reconcile establishes a baseline (else a fresh machine clobbers remote).
   const reconcilingRef = useRef(false);
   const syncedOnceRef = useRef(false);
+  // Set while we're about to reload after adopting a newer remote — blocks pushLocal in the brief
+  // window before the page navigates away (we show a toast first so the reload isn't a surprise).
+  const reloadingRef = useRef(false);
 
   const wsBody = (p: { appConfig: unknown; projects: unknown; sessions: unknown }) =>
     JSON.stringify({ appConfig: p.appConfig, projects: p.projects, sessions: p.sessions });
@@ -95,7 +98,7 @@ export function useSync({ data, t, pushToast, appDataDir, userEmail }: Args) {
   const pushLocal = useCallback(async () => {
     const { appDataDir: dir, userEmail: email } = settingsRef.current;
     if (!dir) return;
-    if (reconcilingRef.current || !syncedOnceRef.current) return;
+    if (reconcilingRef.current || reloadingRef.current || !syncedOnceRef.current) return;
     const anchor = deriveAnchor(dir);
     try {
       if (email) {
@@ -178,8 +181,16 @@ export function useSync({ data, t, pushToast, appDataDir, userEmail }: Args) {
 
       syncedOnceRef.current = true;
       setError(null);
-      if (needReload) window.location.reload();
-      else setStatus('synced');
+      if (needReload) {
+        // Adopted a newer remote → re-hydrate via reload. Flag it + toast first so the user knows
+        // why the window refreshes, then reload after a beat (long enough to read the toast).
+        reloadingRef.current = true;
+        setStatus('syncing');
+        pushToastRef.current(tRef.current.syncPullingRemote);
+        window.setTimeout(() => window.location.reload(), 800);
+      } else {
+        setStatus('synced');
+      }
     } catch (e) {
       setError(String(e));
       setStatus('error');

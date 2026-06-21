@@ -211,6 +211,7 @@ export const en: Translations = {
   syncStatusPending: 'Unsaved changes',
   syncStatusSyncing: 'Syncing…',
   syncStatusError: 'Sync error',
+  syncPullingRemote: 'Loading the latest workspace…',
   syncErrorRead: 'Could not read the sync file.',
   syncErrorWrite: 'Could not write the sync file.',
   // Tier B — Google Drive API (owner / edit history)

@@ -1,5 +1,8 @@
 # Changelog
 
+## v0.4.9
+- **Báo trạng thái đồng bộ rõ hơn** — khi đang lưu/đang đồng bộ, hiện một dòng trạng thái nhỏ ngay dưới nút tài khoản (tự ẩn khi đã đồng bộ xong — trạng thái bình thường vẫn gọn). Khi mở app mà có bản mới hơn từ máy khác, app báo "Đang tải workspace mới nhất…" trước khi tự refresh, không còn bị giật mình.
+
 ## v0.4.8
 - **Đồng bộ kiểu mới: workspace riêng theo người, thư viện dùng chung** — không còn chọn thư mục sync (app tự dùng `Shared drives\Pamvis\spine_app_data`). Mỗi người đăng nhập Google Drive có workspace (project/session) riêng theo email, không đè nhau; còn danh sách thư viện + tag/người phụ trách + thumbnail thì cả nhóm dùng chung. Chưa đăng nhập thì vẫn xem được thư viện chung, chỉ workspace cần đăng nhập để đồng bộ.
 - **Thumbnail xem trước dùng chung qua Google Drive** — ảnh skeleton giờ lưu vào thư mục dữ liệu chung `Shared drives\Pamvis\spine_app_data\thumbs` (app tự dò đúng ổ Drive trên từng máy) thay vì cache riêng từng máy; nên máy khác trong nhóm mở lên là thấy ngay, không phải render lại.
