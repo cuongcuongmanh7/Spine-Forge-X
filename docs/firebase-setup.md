@@ -5,6 +5,11 @@ Kiến trúc & lý do: xem [docs/sync.md ▸ "Bảo vệ dữ liệu"](sync.md).
 
 > Dùng lại **GCP project `spineforge-x`** đã tạo cho Tier B (Google Drive API) — không cần project mới.
 
+> ✅ **ĐÃ CẤU HÌNH XONG trên project `spineforge-x` (2026-06-21).** Firestore (Native + PITR + delete-protection),
+> Cloud Storage (`spineforge-x.firebasestorage.app`, US-EAST1), Google sign-in, web app + rules đã deploy,
+> doc `config/roles` đã seed, và 215 thumbnail prod đã backfill lên `envs/prod/thumbs`. GitHub secrets
+> `VITE_FIREBASE_*` cũng đã thêm. Phần dưới giữ làm tài liệu tái lập (nếu tạo lại / đổi project).
+
 ---
 
 ## 1. Bật Firebase trên project sẵn có
@@ -75,11 +80,12 @@ npm run tauri dev            # bản dev ghi vào envs/dev (tách prod)
 
 ---
 
-### Checklist nhanh
-- [ ] Firestore (Production) + PITR
-- [ ] Storage (Production)
-- [ ] Auth ▸ Google enabled + whitelist Desktop client ID
-- [ ] Web app → `.env.local` (6 biến)
-- [ ] `config/roles.leaderEmails = ["cuongdm@ondigames.com"]`
-- [ ] `firebase deploy --only firestore:rules,storage`
-- [ ] 6 GitHub secrets `VITE_FIREBASE_*` (cho CI)
+### Checklist nhanh (đã hoàn tất 2026-06-21)
+- [x] Firestore (Production) + PITR (+ delete-protection)
+- [x] Storage (Production) — `spineforge-x.firebasestorage.app`
+- [x] Auth ▸ Google enabled
+- [x] Web app → `.env.local` (6 biến)
+- [x] `config/roles.leaderEmails = ["cuongdm@ondigames.com"]`
+- [x] `firestore.rules` + `storage.rules` deployed
+- [x] 215 thumbnail prod backfilled → `envs/prod/thumbs`
+- [x] 6 GitHub secrets `VITE_FIREBASE_*` (cho CI)

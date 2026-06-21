@@ -105,7 +105,7 @@ Nếu bất kỳ scope nào apply remote → báo toast "Đang tải workspace m
 
 > Đăng nhập: tái dùng OAuth Google của Tier B — luồng Rust lấy thêm scope `openid email profile`, trả `id_token`, frontend đổi sang phiên Firebase (`signInWithCredential`). **Không đăng nhập 2 lần.** Tài khoản đăng nhập trước khi thêm scope này cần **đăng nhập Drive lại một lần** để cấp `openid`. Khi chưa đăng nhập, sync ở trạng thái "cần đăng nhập" (trước đây library xem chung được cả khi signed-out; giờ mọi truy cập metadata qua Firestore đều cần đăng nhập — dữ liệu cache cục bộ vẫn hiển thị).
 
-**Set-up Firebase — DEV làm một lần.** (Các bước bấm-từng-nút chi tiết: [docs/firebase-setup.md](firebase-setup.md).)
+**Set-up Firebase — DEV làm một lần.** ✅ Đã cấu hình & live trên project `spineforge-x` (2026-06-21). Các bước bấm-từng-nút / tái lập: [docs/firebase-setup.md](firebase-setup.md).
 - Dùng lại GCP project của Tier B → bật **Firestore** (Native mode) + **Point-in-time recovery**, và bật **Cloud Storage**.
 - Deploy rules: `firestore.rules` + `storage.rules`.
 - **Seed leader:** tạo doc `config/roles` = `{ leaderEmails: ["cuongdm@ondigames.com"] }` (lowercase) trên Console. Đổi leader sau này = sửa doc này, không động code.

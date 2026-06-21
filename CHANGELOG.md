@@ -1,6 +1,6 @@
 # Changelog
 
-## Chưa phát hành
+## v0.4.10
 - **Bảo vệ dữ liệu đồng bộ** — workspace và danh sách thư viện giờ được lưu an toàn hơn: không ai xoá được dữ liệu của người khác, lỡ tay vẫn khôi phục lại được, và mất mạng vẫn làm việc bình thường (nối mạng lại tự đồng bộ). File `.spine` gốc vẫn nằm trên Google Drive như cũ. Lưu ý: giờ cần đăng nhập Google để đồng bộ; ai đã đăng nhập từ trước có thể cần đăng nhập lại một lần.
 - **Quyền quản lý thư viện** — chỉ trưởng nhóm mới thêm/xoá được thư viện trong danh sách chung; các thành viên khác xem và dùng danh sách đó (không còn nút thêm/xoá), tránh sửa nhầm danh sách của cả nhóm.
 - **Ảnh xem trước (thumbnail) dùng chung qua đám mây** — thumbnail giờ được chia sẻ qua dịch vụ lưu trữ đám mây thay vì thư mục Drive: máy khác mở lên là thấy ngay không phải dựng lại, và xem được cả khi chưa kết nối ổ Drive chung.
