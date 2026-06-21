@@ -59,22 +59,23 @@ async function writeMetaSidecar(folder: string, meta: LibraryMeta): Promise<void
   await invoke('write_text_file', { path: metaFilePath(folder), content: JSON.stringify(meta) });
 }
 
-type Args = { syncRoot: string; syncConnected: boolean };
+type Args = { libraryDir: string };
 
 /**
  * Library ▸ tags/ownership state. Kept out of LibraryInventory so that component stays thin.
- * Every edit updates the local mirror immediately, then (when synced) re-reads the sidecar and
- * writes back only the touched key on top of the latest remote — so a teammate's concurrent edit
- * to a different asset is preserved.
+ * Every edit updates the local mirror immediately, then (when the shared drive is available)
+ * re-reads the sidecar and writes back only the touched key on top of the latest remote — so a
+ * teammate's concurrent edit to a different asset is preserved. `libraryDir` is the shared
+ * `…\spine_app_data\library` folder (empty when the drive isn't mounted).
  */
-export function useLibraryTags({ syncRoot, syncConnected }: Args) {
+export function useLibraryTags({ libraryDir }: Args) {
   const [meta, setMeta] = useState<LibraryMeta>(loadLocalMeta);
 
   // Merge the cross-machine snapshot from the sidecar on open / when the folder changes.
   useEffect(() => {
-    if (!syncConnected || !syncRoot) return;
+    if (!libraryDir) return;
     let cancelled = false;
-    void readMetaSidecar(syncRoot).then((remote) => {
+    void readMetaSidecar(libraryDir).then((remote) => {
       if (cancelled || Object.keys(remote).length === 0) return;
       setMeta((prev) => {
         // Remote wins for keys it carries (it's the shared source of truth across the team).
@@ -86,19 +87,19 @@ export function useLibraryTags({ syncRoot, syncConnected }: Args) {
     return () => {
       cancelled = true;
     };
-  }, [syncConnected, syncRoot]);
+  }, [libraryDir]);
 
   // Apply a pure edit, persist locally, then push just the touched key to the shared sidecar.
   function commit(key: string, next: LibraryMeta) {
     setMeta(next);
     persistLocalMeta(next);
-    if (!syncConnected || !syncRoot) return;
+    if (!libraryDir) return;
     void (async () => {
-      const remote = await readMetaSidecar(syncRoot).catch(() => ({}) as LibraryMeta);
+      const remote = await readMetaSidecar(libraryDir).catch(() => ({}) as LibraryMeta);
       const merged = { ...remote };
       if (next[key]) merged[key] = next[key];
       else delete merged[key];
-      await writeMetaSidecar(syncRoot, merged).catch(() => undefined);
+      await writeMetaSidecar(libraryDir, merged).catch(() => undefined);
     })();
   }
 

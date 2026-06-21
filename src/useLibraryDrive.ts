@@ -49,8 +49,9 @@ type Args = {
   t: Translations;
   pushToast: (text: string, kind?: ToastKind) => void;
   driveAccount: unknown | null;
-  syncRoot: string;
-  syncConnected: boolean;
+  /** Shared `…\spine_app_data\library` folder — holds the drive-meta sidecar AND anchors the Drive
+   *  relPath (deriveAnchor walks up to the Shared drives mount). Empty when the drive isn't mounted. */
+  libraryDir: string;
   spinePath: string;
   openSettings: () => void;
 };
@@ -65,7 +66,7 @@ type DriveInfoState = Record<
  * (owner/last-modified, cached locally + synced via a sidecar in the Drive folder), and opening a
  * past revision in Spine. Kept out of LibraryInventory to keep that component thin.
  */
-export function useLibraryDrive({ t, pushToast, driveAccount, syncRoot, syncConnected, spinePath, openSettings }: Args) {
+export function useLibraryDrive({ t, pushToast, driveAccount, libraryDir, spinePath, openSettings }: Args) {
   const [driveInfo, setDriveInfo] = useState<DriveInfoState>({});
   const [expandedInfo, setExpandedInfo] = useState<Set<string>>(new Set());
   const [driveBasics, setDriveBasics] = useState<Record<string, DriveBasic>>(loadDriveBasicsCache);
@@ -74,9 +75,9 @@ export function useLibraryDrive({ t, pushToast, driveAccount, syncRoot, syncConn
 
   // Merge the cross-machine snapshot from the Drive sidecar on open / when the folder changes.
   useEffect(() => {
-    if (!syncConnected || !syncRoot) return;
+    if (!libraryDir) return;
     let cancelled = false;
-    void readDriveMetaSidecar(syncRoot).then((remote) => {
+    void readDriveMetaSidecar(libraryDir).then((remote) => {
       if (cancelled || Object.keys(remote).length === 0) return;
       setDriveBasics((prev) => {
         const next = { ...prev, ...remote };
@@ -87,14 +88,14 @@ export function useLibraryDrive({ t, pushToast, driveAccount, syncRoot, syncConn
     return () => {
       cancelled = true;
     };
-  }, [syncConnected, syncRoot]);
+  }, [libraryDir]);
 
   const basicFor = useCallback(
     (entry: LibraryEntry): DriveBasic | undefined => {
-      const rel = toDriveRelPath(entry.spineFile, syncRoot);
+      const rel = toDriveRelPath(entry.spineFile, libraryDir);
       return rel ? driveBasics[rel] : undefined;
     },
-    [driveBasics, syncRoot]
+    [driveBasics, libraryDir]
   );
 
   // Toggle the per-row Drive panel, fetching owner/history on first open.
@@ -114,7 +115,7 @@ export function useLibraryDrive({ t, pushToast, driveAccount, syncRoot, syncConn
       openSettings();
       return;
     }
-    const relPath = toDriveRelPath(entry.spineFile, syncRoot);
+    const relPath = toDriveRelPath(entry.spineFile, libraryDir);
     if (!relPath) {
       setDriveInfo((prev) => ({ ...prev, [key]: { notOnDrive: true } }));
       return;
@@ -133,7 +134,7 @@ export function useLibraryDrive({ t, pushToast, driveAccount, syncRoot, syncConn
       return;
     }
     const relPaths = entries
-      .map((e) => toDriveRelPath(e.spineFile, syncRoot))
+      .map((e) => toDriveRelPath(e.spineFile, libraryDir))
       .filter((r): r is string => Boolean(r));
     if (relPaths.length === 0) {
       pushToast(t.driveNotOnDrive, 'warning');
@@ -151,9 +152,9 @@ export function useLibraryDrive({ t, pushToast, driveAccount, syncRoot, syncConn
       });
       // Sync to the shared sidecar. Re-read + merge so a concurrent writer's entries aren't dropped
       // (our just-fetched values win for the files we refreshed).
-      if (syncRoot) {
-        const remote = await readDriveMetaSidecar(syncRoot).catch(() => ({}) as Record<string, DriveBasic>);
-        await writeDriveMetaSidecar(syncRoot, { ...remote, ...fresh }).catch(() => undefined);
+      if (libraryDir) {
+        const remote = await readDriveMetaSidecar(libraryDir).catch(() => ({}) as Record<string, DriveBasic>);
+        await writeDriveMetaSidecar(libraryDir, { ...remote, ...fresh }).catch(() => undefined);
       }
       const now = Date.now();
       setBasicsLoadedAt(now);
@@ -167,7 +168,7 @@ export function useLibraryDrive({ t, pushToast, driveAccount, syncRoot, syncConn
 
   // Download a past revision to temp and open it in Spine (regression review).
   async function openRevisionInSpine(entry: LibraryEntry, rev: DriveRevision) {
-    const relPath = toDriveRelPath(entry.spineFile, syncRoot);
+    const relPath = toDriveRelPath(entry.spineFile, libraryDir);
     if (!relPath) return;
     try {
       const localPath = await downloadDriveRevision(relPath, rev.id);

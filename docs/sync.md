@@ -1,8 +1,13 @@
 # Đồng bộ dữ liệu app qua Google Drive (Sync — Tier A)
 
-**Sync** giúp animator làm việc xen kẽ giữa máy công ty và máy nhà: toàn bộ **project / session / cấu hình** được mirror vào một file JSON đặt trong thư mục Google Drive dùng chung, nên mở app ở máy khác là có sẵn workspace, không phải set-up lại. Đường dẫn source spine được lưu **tương đối** so với một gốc Drive chung và **tự ghép lại** cho đúng ổ đĩa của từng máy (G:\ vs H:\).
+**Sync** giúp animator làm việc xen kẽ giữa máy công ty và máy nhà. **Mô hình v2:**
+- **Path cố định, không phải chọn**: dữ liệu nằm dưới `…\Shared drives\Pamvis\spine_app_data` (app **tự dò** đúng ổ trên mỗi máy — xem `resolve_app_data_dir`/`useAppData`).
+- **Workspace riêng theo người**: project / session / cấu hình của mỗi user lưu ở folder con riêng theo **email Google Drive** (`workspaces/<emailSlug>/profile.json`) — hai người không đè nhau.
+- **Library dùng chung**: danh sách thư viện + tag/người phụ trách + owner Drive + thumbnail là một nguồn chung cho cả nhóm (`library/…`).
 
-> Đây là **Tier A** (file-based, không cần mạng/OAuth) — dựa vào Google Drive for desktop tự đồng bộ file giữa các máy. Tier B (lấy owner/lịch sử/version qua Drive API) là việc tương lai, xem [ROADMAP.md](ROADMAP.md).
+Đường dẫn source spine được lưu **tương đối** so với mount Shared drives và **tự ghép lại** cho đúng ổ đĩa của từng máy (G:\ vs H:\).
+
+> Tier A là file-based (Google Drive for desktop tự đồng bộ file). **Workspace cần đăng nhập Drive** để lấy email định danh; library chung thì xem được cả khi chưa đăng nhập. Tier B (owner/lịch sử/version qua Drive API) ở mục 7.
 
 ---
 
@@ -10,19 +15,20 @@
 
 | Khái niệm | Ý nghĩa |
 |-----------|---------|
-| **Google Drive folder** | Thư mục **ghi được** để đặt file profile — chọn **bên trong một shared drive** (vd `G:\Shared drives\FD`). ⚠️ KHÔNG chọn cấp ảo `G:\Shared drives` vì Google Drive for desktop **không cho ghi file** ở cấp đó (chỉ ghi được bên trong từng shared drive). |
-| **Rebase anchor (tự suy ra)** | Gốc quy đổi đường dẫn, **tự suy** từ folder đã chọn: nếu folder nằm dưới một mount `…\Shared drives` thì anchor = chính mount đó (`G:\Shared drives`) — nhờ vậy project ở các drive khác (FD/DH) đều portable; ngược lại anchor = folder đã chọn. |
-| **Profile file** | `spineforge-profile.json` nằm trong folder đã chọn; chứa appConfig (trừ `spinePath`), projects, sessions, libraries. Có bản backup `spineforge-profile.bak.json`. |
-| **`${SPINE_ROOT}` token** | Mọi path nằm dưới rebase anchor được lưu dạng `${SPINE_ROOT}/...`; khi load ở máy khác, token được thay bằng anchor của máy đó. |
+| **App-data root (cố định)** | `<ổ>:\Shared drives\Pamvis\spine_app_data` — gốc dữ liệu chung, **tự dò** đúng ổ trên mỗi máy. Không có UI chọn folder. Không mount được → banner cảnh báo. |
+| **Workspace profile (per-user)** | `workspaces/<emailSlug>/profile.json` (+ `.bak`); chứa appConfig (trừ `spinePath`), projects, sessions. `emailSlug` = email Google sanitize. |
+| **Library list (shared)** | `library/libraries.json` (+ `.bak`); danh sách thư viện đăng ký, dùng chung. Sidecar tag/owner (`library/spineforge-library-meta.json`) + drive-meta (`library/spineforge-drive-meta.json`) cũng nằm trong `library/`. |
+| **Rebase anchor (tự suy ra)** | Mount `…\Shared drives` suy từ app-data root (`deriveAnchor`) — project ở các drive khác (FD/DH) đều portable. |
+| **`${SPINE_ROOT}` token** | Mọi path dưới anchor lưu dạng `${SPINE_ROOT}/...`; load ở máy khác token được thay bằng anchor của máy đó. |
 
-**Không bao giờ đồng bộ** (machine-local, lưu riêng mỗi máy): đường dẫn Spine.exe (`spinePath`), bản thân vị trí gốc Drive, theme/ngôn ngữ.
+**Không bao giờ đồng bộ** (machine-local): Spine.exe (`spinePath`), cache quét thư viện + trạng thái clean, theme/ngôn ngữ, active project/session id.
 
 ## 2. Cách dùng
 
-1. Settings ▸ **Sync (Google Drive)**. Toggle **mặc định bật**.
-2. **Google Drive folder**: lần đầu app **tự dò** shared drive **ghi được** đầu tiên (vd `G:\Shared drives\FD`) và điền sẵn. Không dò được → cảnh báo, chọn thủ công một folder bên trong shared drive.
-3. Tạo/sửa project, session… → app **debounce ~1.5s** rồi ghi vào profile. Chấm trạng thái trên nút tài khoản (sidebar): **xám** = tắt/chưa cấu hình · **vàng** = chưa lưu/đang ghi · **xanh** = đã đồng bộ · **đỏ** = lỗi.
-4. Máy thứ hai: bật sync + đặt gốc Drive = `<ổ>:\Shared drives` của máy đó → app đọc profile, rebase path, **reload một lần** để hiện đủ workspace.
+1. App **tự dò** ổ Pamvis. Không thấy `Shared drives\Pamvis` → tab Thư viện hiện **banner cảnh báo** (dữ liệu chung không đồng bộ).
+2. **Đăng nhập Google Drive** (nút tài khoản góc dưới sidebar) để đồng bộ workspace riêng của bạn. Chưa đăng nhập: vẫn xem được thư viện chung, workspace không ghi.
+3. Tạo/sửa project, session… → app **debounce ~1.5s** rồi ghi vào workspace profile; thêm/sửa thư viện → ghi `library/libraries.json`. Chấm trạng thái trên nút tài khoản: **xám** = tắt · **vàng** = đang ghi · **xanh** = đã đồng bộ · **đỏ** = lỗi.
+4. Máy/người khác: workspace của họ **riêng** (theo email); thư viện + tag + thumbnail **thấy chung**. Remote mới hơn → **reload một lần** để nạp lại.
 
 ## 3. Nhiều project ở các nhánh khác nhau
 
@@ -39,14 +45,14 @@ G:\Shared drives\DH\[DH] Animation\...  →  ${SPINE_ROOT}/DH/[DH] Animation/...
 
 ## 4. Quy tắc hợp nhất (reconcile)
 
-Khi khởi động hoặc bấm **Đồng bộ ngay**, lấy bản mới hơn giữa (local, remote):
+Khi khởi động (hoặc khi đổi định danh: ổ Drive / email) và khi bấm **Đồng bộ ngay**, reconcile chạy **độc lập cho 2 scope** — workspace (theo email) và library list — mỗi cái lấy bản mới hơn giữa (local, remote):
 
-1. Chưa có profile remote → **seed** bằng dữ liệu local.
-2. Local và remote giống nhau (bỏ qua `updatedAt`) → chỉ nhận timestamp, không ghi/không reload.
-3. `remote.updatedAt > lastSyncedAt` → **remote thắng**: apply + `window.location.reload()` để nạp lại.
-4. Ngược lại → **local đi trước**: ghi local lên profile.
+1. Chưa có file remote → **seed** bằng dữ liệu local.
+2. Local và remote giống nhau (bỏ qua `updatedAt`) → chỉ nhận timestamp.
+3. `remote.updatedAt > <stamp scope đó>` → **remote thắng**: apply.
+4. Ngược lại → **local đi trước**: ghi local lên.
 
-Sau đó mọi thay đổi local được debounce ghi lên (last-write-wins theo `updatedAt`).
+Nếu bất kỳ scope nào apply remote → `window.location.reload()` **một lần** ở cuối. Mỗi scope có timestamp riêng (`workspaceSyncedAt` / `librarySyncedAt`). Sau đó thay đổi local được debounce ghi lên scope tương ứng.
 
 **An toàn:** không ghi lên profile trước khi reconcile đầu tiên thiết lập baseline, cũng không ghi khi đang reconcile → máy mới (rỗng) không thể đè dữ liệu rỗng lên profile của máy cũ.
 
@@ -54,13 +60,15 @@ Sau đó mọi thay đổi local được debounce ghi lên (last-write-wins the
 
 | Phần | File |
 |------|------|
-| Logic thuần (tokenize/rebase, build/apply profile, IPC) | `src/sync.ts` |
-| Hook điều phối (reconcile, debounce, auto-detect) | `src/useSync.ts` (wire trong `src/useAppController.tsx`) |
+| Logic thuần (tokenize/rebase, build/apply workspace+library profile, path helpers, IPC) | `src/sync.ts` |
+| Hook điều phối (reconcile kép, debounce) | `src/useSync.ts` (wire trong `src/useAppController.tsx`) |
+| Dò app-data root | `src/useAppData.ts` ↔ Rust `system::resolve_app_data_dir` |
+| Sidecar tag/owner + drive-meta (folder `library/`) | `src/useLibraryTags.ts`, `src/drive.ts`, `src/useLibraryDrive.ts` |
 | Chấm trạng thái (trong nút tài khoản) | `src/components/AccountBadge.tsx` + `.css` |
-| Settings ▸ Sync | `src/components/SettingsModal.tsx` |
-| Đọc/ghi file + dò Drive | Rust `system::read_text_file`, `system::write_text_file`, `system::detect_drive_root` |
+| Settings ▸ Sync (hiện path + trạng thái, không picker) | `src/components/SettingsModal.tsx` |
+| Đọc/ghi file | Rust `system::read_text_file`, `system::write_text_file` |
 | i18n | `src/i18n/{vi,en}.ts` (key `sync*`) |
-| Test | `src/sync.test.ts` (rebase round-trip, profile round-trip) |
+| Test | `src/sync.test.ts` (rebase + workspace/library profile round-trip, path helpers) |
 
 ## 6. Giới hạn đã biết / hướng mở rộng
 

@@ -1,18 +1,24 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { invoke } from '@tauri-apps/api/core';
-import { open } from '@tauri-apps/plugin-dialog';
 import type { Translations } from './i18n';
 import type { ToastKind } from './types';
 import {
-  buildProfile,
-  applyProfile,
+  applyLibraryProfile,
+  applyWorkspaceProfile,
+  buildLibraryProfile,
+  buildWorkspaceProfile,
   deriveAnchor,
-  isVirtualMount,
+  libraryListBackupPath,
+  libraryListPath,
   loadSyncSettings,
   persistSyncSettings,
-  readProfileFile,
-  sameProfileBody,
-  writeProfileFile,
+  readLibraryProfile,
+  readWorkspaceProfile,
+  sameLibraryBody,
+  sameWorkspaceBody,
+  workspaceBackupPath,
+  workspaceProfilePath,
+  writeLibraryProfile,
+  writeWorkspaceProfile,
   type SyncData
 } from './sync';
 
@@ -24,176 +30,178 @@ type Args = {
   data: SyncData;
   t: Translations;
   pushToast: (text: string, kind?: ToastKind) => void;
+  /** Shared app-data root (`…\Pamvis\spine_app_data`), auto-detected; null if the drive isn't mounted. */
+  appDataDir: string | null;
+  /** Signed-in Google account email — identifies this user's workspace folder; null if signed out. */
+  userEmail: string | null;
 };
 
 /**
- * Orchestrates Tier-A app-data sync. A single `root` (a shared Google Drive folder like
- * `G:\Shared drives`) is BOTH where the profile file lives AND the `${SPINE_ROOT}` rebasing
- * anchor. Sync defaults ON and auto-detects a "Shared drives" mount on first run. Reconciles
- * with the remote profile at startup (newer-wins) and debounce-writes local edits back; adopting
- * a newer remote reloads the window so module-scope `loadPersistedState` re-runs with it.
+ * Orchestrates Tier-A sync v2. The base folder is the auto-detected shared app-data root (no user
+ * picker). Two scopes reconcile independently (newer-wins): the per-user WORKSPACE profile (keyed by
+ * the signed-in email) and the shared LIBRARY list. Reconciles at startup / on identity change, and
+ * debounce-writes local edits; adopting a newer remote reloads the window so module-scope
+ * `loadPersistedState` re-runs with it.
  */
-export function useSync({ data, t, pushToast }: Args) {
+export function useSync({ data, t, pushToast, appDataDir, userEmail }: Args) {
   const initial = loadSyncSettings();
   const [enabled, setEnabled] = useState(initial.enabled);
-  const [root, setRoot] = useState(initial.root);
-  const [lastSyncedAt, setLastSyncedAt] = useState<number | null>(initial.lastSyncedAt);
   const [status, setStatus] = useState<SyncStatus>('idle');
   const [error, setError] = useState<string | null>(null);
+  const [workspaceSyncedAt, setWorkspaceSyncedAt] = useState<number | null>(initial.workspaceSyncedAt);
+  const [librarySyncedAt, setLibrarySyncedAt] = useState<number | null>(initial.librarySyncedAt);
+
+  // Workspace sync needs both the shared drive AND a signed-in identity; the library list only needs the drive.
+  const connected = enabled && Boolean(appDataDir);
+  const workspaceReady = connected && Boolean(userEmail);
 
   // Async callbacks read live values through refs so they never close over stale state.
   const dataRef = useRef(data);
   dataRef.current = data;
-  const settingsRef = useRef({ enabled, root, lastSyncedAt });
-  settingsRef.current = { enabled, root, lastSyncedAt };
-  // t and pushToast are recreated every render by the controller; read them through refs so
-  // pushLocal/reconcile keep a STABLE identity. Otherwise the debounce effect re-subscribes every
-  // render and its cleanup cancels the pending timer before it can fire → stuck on "pending".
+  const settingsRef = useRef({ enabled, appDataDir, userEmail, workspaceSyncedAt, librarySyncedAt });
+  settingsRef.current = { enabled, appDataDir, userEmail, workspaceSyncedAt, librarySyncedAt };
+  // t/pushToast are recreated each render; read through refs so the callbacks keep a STABLE identity
+  // (otherwise the debounce effect re-subscribes every render and cancels the pending timer).
   const tRef = useRef(t);
   tRef.current = t;
   const pushToastRef = useRef(pushToast);
   pushToastRef.current = pushToast;
-  // Body of the profile we last read/wrote — lets the debounced writer skip no-op pushes.
-  const lastBodyRef = useRef<string | null>(null);
+  // Bodies we last read/wrote — let the debounced writer skip no-op pushes.
+  const lastWsBodyRef = useRef<string | null>(null);
+  const lastLibBodyRef = useRef<string | null>(null);
   const debounceRef = useRef<number | null>(null);
-  // True while a reconcile is in flight; gates pushLocal so a slow startup read can't be
-  // overtaken by a debounced write. syncedOnce guards against pushing this machine's (possibly
-  // empty) local data up BEFORE the first reconcile established a baseline — which on a freshly
-  // set-up machine would clobber the remote profile with nothing.
+  // Gate pushes until the first reconcile establishes a baseline (else a fresh machine clobbers remote).
   const reconcilingRef = useRef(false);
   const syncedOnceRef = useRef(false);
 
-  // A bare `G:\Shared drives` mount can't hold files → not a usable root.
-  const connected = enabled && Boolean(root) && !isVirtualMount(root);
+  const wsBody = (p: { appConfig: unknown; projects: unknown; sessions: unknown }) =>
+    JSON.stringify({ appConfig: p.appConfig, projects: p.projects, sessions: p.sessions });
 
-  // Update state + storage + the ref synchronously, so a reconcile fired right after sees it.
-  const applySetting = useCallback((patch: Partial<{ enabled: boolean; root: string }>) => {
-    if (patch.enabled !== undefined) setEnabled(patch.enabled);
-    if (patch.root !== undefined) setRoot(patch.root);
-    persistSyncSettings(patch);
-    settingsRef.current = { ...settingsRef.current, ...patch };
+  const markWorkspace = useCallback((at: number, body: string | null) => {
+    persistSyncSettings({ workspaceSyncedAt: at });
+    setWorkspaceSyncedAt(at);
+    settingsRef.current = { ...settingsRef.current, workspaceSyncedAt: at };
+    if (body !== null) lastWsBodyRef.current = body;
   }, []);
 
-  const markSynced = useCallback((at: number, body: string | null) => {
-    persistSyncSettings({ lastSyncedAt: at });
-    setLastSyncedAt(at);
-    settingsRef.current = { ...settingsRef.current, lastSyncedAt: at };
-    if (body !== null) lastBodyRef.current = body;
-    syncedOnceRef.current = true;
-    setError(null);
-    setStatus('synced');
+  const markLibrary = useCallback((at: number, body: string | null) => {
+    persistSyncSettings({ librarySyncedAt: at });
+    setLibrarySyncedAt(at);
+    settingsRef.current = { ...settingsRef.current, librarySyncedAt: at };
+    if (body !== null) lastLibBodyRef.current = body;
   }, []);
 
-  // Push the local workspace up to the profile file (no reload). Skips identical content.
+  // Push local edits up (no reload). Writes only the scope(s) whose body changed.
   const pushLocal = useCallback(async () => {
-    const { root: r } = settingsRef.current;
-    if (!r) return;
-    // Never write before the first reconcile set a baseline, nor while one is running.
+    const { appDataDir: dir, userEmail: email } = settingsRef.current;
+    if (!dir) return;
     if (reconcilingRef.current || !syncedOnceRef.current) return;
-    // File lives in `r` (writable folder); paths rebase against the wider Drive mount (anchor).
-    const profile = buildProfile(dataRef.current, deriveAnchor(r), Date.now());
-    const body = JSON.stringify({
-      appConfig: profile.appConfig,
-      projects: profile.projects,
-      sessions: profile.sessions,
-      libraries: profile.libraries
-    });
-    if (body === lastBodyRef.current) {
-      setStatus('synced');
-      return;
-    }
-    setStatus('syncing');
+    const anchor = deriveAnchor(dir);
     try {
-      await writeProfileFile(r, profile);
-      markSynced(profile.updatedAt, body);
+      if (email) {
+        const ws = buildWorkspaceProfile(dataRef.current, anchor, Date.now());
+        const body = wsBody(ws);
+        if (body !== lastWsBodyRef.current) {
+          setStatus('syncing');
+          await writeWorkspaceProfile(workspaceProfilePath(dir, email), workspaceBackupPath(dir, email), ws);
+          markWorkspace(ws.updatedAt, body);
+        }
+      }
+      const lib = buildLibraryProfile(dataRef.current.libraries, anchor, Date.now());
+      const libBody = JSON.stringify(lib.libraries);
+      if (libBody !== lastLibBodyRef.current) {
+        setStatus('syncing');
+        await writeLibraryProfile(libraryListPath(dir), libraryListBackupPath(dir), lib);
+        markLibrary(lib.updatedAt, libBody);
+      }
+      setStatus('synced');
     } catch (e) {
       setError(String(e));
       setStatus('error');
       pushToastRef.current(tRef.current.syncErrorWrite, 'error');
     }
-  }, [markSynced]);
+  }, [markWorkspace, markLibrary]);
 
-  // Startup / manual reconcile: newer of (local edits, remote profile) wins.
+  // Startup / manual reconcile: newer of (local, remote) wins, per scope.
   const reconcile = useCallback(async () => {
-    const { enabled: on, root: r, lastSyncedAt: last } = settingsRef.current;
-    if (!on || !r) {
+    const { enabled: on, appDataDir: dir, userEmail: email, workspaceSyncedAt: wsAt, librarySyncedAt: libAt } =
+      settingsRef.current;
+    if (!on || !dir) {
       setStatus('idle');
       return;
     }
     reconcilingRef.current = true;
     setStatus('syncing');
-    const anchor = deriveAnchor(r);
+    const anchor = deriveAnchor(dir);
+    const spinePath = dataRef.current.appConfig.spinePath;
+    let needReload = false;
     try {
-      const remote = await readProfileFile(r);
-      const local = buildProfile(dataRef.current, anchor, Date.now());
-      const localBody = JSON.stringify({
-        appConfig: local.appConfig,
-        projects: local.projects,
-        sessions: local.sessions,
-        libraries: local.libraries
-      });
-      if (!remote) {
-        // First time: seed the Drive folder with our local workspace.
-        await writeProfileFile(r, local);
-        markSynced(local.updatedAt, localBody);
-        return;
+      // --- workspace (per-user) — only when signed in ---
+      if (email) {
+        const wsPath = workspaceProfilePath(dir, email);
+        const remote = await readWorkspaceProfile(wsPath);
+        const local = buildWorkspaceProfile(dataRef.current, anchor, Date.now());
+        const localBody = wsBody(local);
+        if (!remote) {
+          await writeWorkspaceProfile(wsPath, workspaceBackupPath(dir, email), local);
+          markWorkspace(local.updatedAt, localBody);
+        } else if (sameWorkspaceBody(remote, local)) {
+          markWorkspace(remote.updatedAt, localBody);
+        } else if (remote.updatedAt > (wsAt ?? 0)) {
+          persistSyncSettings({ workspaceSyncedAt: remote.updatedAt });
+          applyWorkspaceProfile(remote, anchor, spinePath);
+          needReload = true;
+        } else {
+          await writeWorkspaceProfile(wsPath, workspaceBackupPath(dir, email), local);
+          markWorkspace(local.updatedAt, localBody);
+        }
       }
-      if (sameProfileBody(remote, local)) {
-        // Already in agreement — just adopt the remote stamp, no write, no reload.
-        markSynced(remote.updatedAt, localBody);
-        return;
+
+      // --- library list (shared) ---
+      const libPath = libraryListPath(dir);
+      const remoteLib = await readLibraryProfile(libPath);
+      const localLib = buildLibraryProfile(dataRef.current.libraries, anchor, Date.now());
+      const localLibBody = JSON.stringify(localLib.libraries);
+      if (!remoteLib) {
+        await writeLibraryProfile(libPath, libraryListBackupPath(dir), localLib);
+        markLibrary(localLib.updatedAt, localLibBody);
+      } else if (sameLibraryBody(remoteLib, localLib)) {
+        markLibrary(remoteLib.updatedAt, localLibBody);
+      } else if (remoteLib.updatedAt > (libAt ?? 0)) {
+        persistSyncSettings({ librarySyncedAt: remoteLib.updatedAt });
+        applyLibraryProfile(remoteLib, anchor);
+        needReload = true;
+      } else {
+        await writeLibraryProfile(libPath, libraryListBackupPath(dir), localLib);
+        markLibrary(localLib.updatedAt, localLibBody);
       }
-      if (remote.updatedAt > (last ?? 0)) {
-        // Remote changed since we last synced → it wins. Apply and reload to re-hydrate.
-        // Keep reconcilingRef set: the reload tears everything down, no push should slip in.
-        persistSyncSettings({ lastSyncedAt: remote.updatedAt });
-        applyProfile(remote, anchor, dataRef.current.appConfig.spinePath);
-        window.location.reload();
-        return;
-      }
-      // Local is ahead of the last sync → push it up.
-      await writeProfileFile(r, local);
-      markSynced(local.updatedAt, localBody);
+
+      syncedOnceRef.current = true;
+      setError(null);
+      if (needReload) window.location.reload();
+      else setStatus('synced');
     } catch (e) {
       setError(String(e));
       setStatus('error');
       pushToastRef.current(tRef.current.syncErrorRead, 'error');
     } finally {
-      // Safe to clear on the reload path too: syncedOnce is still false there, so pushLocal
-      // stays guarded in the brief window before the page actually navigates away.
       reconcilingRef.current = false;
     }
-  }, [markSynced]);
+  }, [markWorkspace, markLibrary]);
 
-  // On mount: reconcile if a root is set, otherwise try to auto-detect a Shared drives mount.
-  const didMountRef = useRef(false);
-  // Reconcile if we have a usable root; otherwise (no root, or a non-writable virtual mount)
-  // auto-detect a writable shared drive and use that. Shared between mount + enabling the toggle.
-  const ensureRootAndSync = useCallback(async () => {
-    const r = settingsRef.current.root;
-    if (r && !isVirtualMount(r)) {
-      void reconcile();
+  // Reconcile when sync becomes usable, and again whenever the identity (drive/email) changes.
+  useEffect(() => {
+    if (!connected) {
+      setStatus('idle');
       return;
     }
-    setStatus('idle');
-    const detected = await invoke<string | null>('detect_drive_root').catch(() => null);
-    if (detected) {
-      applySetting({ root: detected });
-      pushToastRef.current(`${tRef.current.syncAutoDetected}: ${detected}`);
-      void reconcile();
-    } else if (isVirtualMount(r)) {
-      // Drop the unusable virtual mount so the "pick a writable folder" banner shows.
-      applySetting({ root: '' });
-    }
-  }, [applySetting, reconcile]);
-
-  useEffect(() => {
-    if (didMountRef.current) return;
-    didMountRef.current = true;
-    if (!enabled) setStatus('idle');
-    else void ensureRootAndSync();
+    // New identity → re-establish baseline before any push can fire.
+    syncedOnceRef.current = false;
+    lastWsBodyRef.current = null;
+    lastLibBodyRef.current = null;
+    void reconcile();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [connected, appDataDir, userEmail]);
 
   // Debounce-write whenever the synced data changes (skip the initial mount render).
   const skipWriteRef = useRef(true);
@@ -211,40 +219,25 @@ export function useSync({ data, t, pushToast }: Args) {
     };
   }, [data.appConfig, data.projects, data.sessions, data.libraries, connected, pushLocal]);
 
-  const setSyncEnabled = useCallback(
-    (value: boolean) => {
-      applySetting({ enabled: value });
-      if (value) void ensureRootAndSync();
-      else setStatus('idle');
-    },
-    [applySetting, ensureRootAndSync]
-  );
-
-  const chooseRoot = useCallback(async () => {
-    const picked = await open({ directory: true, multiple: false, defaultPath: root || undefined });
-    if (typeof picked !== 'string') return;
-    if (isVirtualMount(picked)) {
-      // The bare Shared drives mount isn't writable — make the user pick inside a drive.
-      pushToastRef.current(tRef.current.syncRootMissing, 'warning');
-      return;
-    }
-    applySetting({ root: picked });
-    if (settingsRef.current.enabled) void reconcile();
-  }, [root, applySetting, reconcile]);
+  const setSyncEnabled = useCallback((value: boolean) => {
+    setEnabled(value);
+    persistSyncSettings({ enabled: value });
+    settingsRef.current = { ...settingsRef.current, enabled: value };
+    if (!value) setStatus('idle');
+    else void reconcile();
+  }, [reconcile]);
 
   const syncNow = useCallback(() => void reconcile(), [reconcile]);
 
   return {
     syncEnabled: enabled,
-    syncRoot: root,
-    syncLastSyncedAt: lastSyncedAt,
+    syncLastSyncedAt: Math.max(workspaceSyncedAt ?? 0, librarySyncedAt ?? 0) || null,
     syncStatus: status,
     syncError: error,
     syncConnected: connected,
-    /** Enabled but no usable root (none picked, auto-detect failed, or a non-writable mount). */
-    syncNeedsRoot: enabled && (!root || isVirtualMount(root)),
+    /** Sync is on and the drive is mounted, but the user hasn't signed in → workspace can't sync. */
+    syncNeedsSignIn: connected && !workspaceReady,
     setSyncEnabled,
-    chooseRoot,
     syncNow
   };
 }

@@ -1,6 +1,7 @@
 # Changelog
 
 ## v0.4.8
+- **Đồng bộ kiểu mới: workspace riêng theo người, thư viện dùng chung** — không còn chọn thư mục sync (app tự dùng `Shared drives\Pamvis\spine_app_data`). Mỗi người đăng nhập Google Drive có workspace (project/session) riêng theo email, không đè nhau; còn danh sách thư viện + tag/người phụ trách + thumbnail thì cả nhóm dùng chung. Chưa đăng nhập thì vẫn xem được thư viện chung, chỉ workspace cần đăng nhập để đồng bộ.
 - **Thumbnail xem trước dùng chung qua Google Drive** — ảnh skeleton giờ lưu vào thư mục dữ liệu chung `Shared drives\Pamvis\spine_app_data\thumbs` (app tự dò đúng ổ Drive trên từng máy) thay vì cache riêng từng máy; nên máy khác trong nhóm mở lên là thấy ngay, không phải render lại.
 - **Cảnh báo khi không thấy ổ dữ liệu chung** — nếu máy chưa mount được `Shared drives\Pamvis`, tab Thư viện hiện banner báo dữ liệu chung sẽ không đồng bộ (lúc đó thumbnail tạm lưu cache cục bộ).
 

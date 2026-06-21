@@ -33,7 +33,7 @@ import { useLibrary } from './useLibrary';
 import { useSync } from './useSync';
 import { useDrive } from './useDrive';
 import { useAppData } from './useAppData';
-import type { SyncData } from './sync';
+import { libraryDataDir, type SyncData } from './sync';
 import { useScanInput } from './useScanInput';
 import { useExportEngine } from './useExportEngine';
 import type { Language, ThemeMode, Toast, ToastKind, ValidateResult } from './types';
@@ -193,30 +193,31 @@ export function useAppControllerValue() {
     deleteLibrary
   } = useLibrary({ t, pushToast });
 
-  // App-data sync (Tier A): mirror workspace to a profile file in a Google Drive folder so the
-  // same projects/sessions appear on another machine, with `${SPINE_ROOT}` path rebasing.
+  // App-data sync (Tier B): Google Drive account — identifies the user (workspace folder) AND
+  // powers owner/history metadata of `.spine` files.
+  const { driveAccount, driveBusy, driveSignIn, driveCancelSignIn, driveSignOut } = useDrive({ t, pushToast });
+
+  // Shared app-data root on the Pamvis drive (auto-detected); base for sync + library + thumbnails.
+  const { appDataDir, appDataResolved, appDataMissing } = useAppData();
+  // Shared library data folder (list + tag/owner & drive-meta sidecars live here).
+  const libraryDir = appDataDir ? libraryDataDir(appDataDir) : '';
+
+  // App-data sync (Tier A v2): per-user workspace + shared library list under the fixed app-data
+  // root, keyed by the signed-in email, with `${SPINE_ROOT}` path rebasing.
   const syncData = useMemo<SyncData>(
     () => ({ appConfig, projects, sessions, libraries }),
     [appConfig, projects, sessions, libraries]
   );
   const {
     syncEnabled,
-    syncRoot,
     syncLastSyncedAt,
     syncStatus,
     syncError,
     syncConnected,
-    syncNeedsRoot,
+    syncNeedsSignIn,
     setSyncEnabled,
-    chooseRoot,
     syncNow
-  } = useSync({ data: syncData, t, pushToast });
-
-  // App-data sync (Tier B): Google Drive account for owner/history metadata of `.spine` files.
-  const { driveAccount, driveBusy, driveSignIn, driveCancelSignIn, driveSignOut } = useDrive({ t, pushToast });
-
-  // Shared app-data root on the Pamvis drive (thumbnails today; default home for future shared data).
-  const { appDataDir, appDataResolved, appDataMissing } = useAppData();
+  } = useSync({ data: syncData, t, pushToast, appDataDir, userEmail: driveAccount?.email ?? null });
 
   const merged = useMemo<MergedConfig>(() => ({ ...appConfig, ...sessionConfig }), [appConfig, sessionConfig]);
 
@@ -580,20 +581,19 @@ export function useAppControllerValue() {
     settingsFocusSync,
     openSettings,
 
-    // App-data sync (Tier A)
+    // App-data sync (Tier A v2)
     syncEnabled,
-    syncRoot,
     syncLastSyncedAt,
     syncStatus,
     syncError,
     syncConnected,
-    syncNeedsRoot,
+    syncNeedsSignIn,
     setSyncEnabled,
-    chooseRoot,
     syncNow,
 
     // Shared app-data root (Pamvis drive)
     appDataDir,
+    libraryDir,
     appDataResolved,
     appDataMissing,
 

@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { AlertTriangle, FolderOpen, LogOut, RotateCw, Search, UserCircle2, X } from 'lucide-react';
+import { AlertTriangle, LogOut, RotateCw, Search, UserCircle2, X } from 'lucide-react';
 import { Section, FieldStatus, Hint } from './common';
 import { useApp } from '../useAppController';
 import { formatDateTime } from '../time';
@@ -21,13 +21,13 @@ export function SettingsModal() {
     setSettingsOpen,
     settingsFocusSync,
     syncEnabled,
-    syncRoot,
     syncLastSyncedAt,
     syncStatus,
-    syncNeedsRoot,
+    syncNeedsSignIn,
     setSyncEnabled,
-    chooseRoot,
     syncNow,
+    appDataDir,
+    appDataMissing,
     driveAccount,
     driveBusy,
     driveSignIn,
@@ -106,21 +106,27 @@ export function SettingsModal() {
                 <>
                   <div className="sync-field">
                     <span className="sync-field-label">
-                      {t.syncRoot}
-                      <Hint text={t.syncRootHelp} />
+                      {t.syncDataPath}
+                      <Hint text={t.syncDataPathHelp} />
                     </span>
                     <div className="sync-field-input">
-                      <input value={syncRoot} readOnly placeholder={t.syncRootPlaceholder} />
-                      <button className="icon-button" title={t.syncChooseRoot} aria-label={t.syncChooseRoot} onClick={() => void chooseRoot()}>
-                        <FolderOpen size={18} />
-                      </button>
+                      <input value={appDataDir ?? ''} readOnly placeholder={t.libraryDataPathMissing} />
                     </div>
                   </div>
-                  {syncNeedsRoot && (
+                  {appDataMissing && (
                     <div className="notice warning">
                       <AlertTriangle size={18} />
-                      <span>{t.syncRootMissing}</span>
+                      <span>{t.libraryDataPathMissing}</span>
                     </div>
+                  )}
+                  {syncNeedsSignIn && (
+                    <div className="notice warning">
+                      <AlertTriangle size={18} />
+                      <span>{t.syncNeedsSignIn}</span>
+                    </div>
+                  )}
+                  {driveAccount && !appDataMissing && (
+                    <span className="muted">{t.syncWorkspaceOf.replace('{email}', driveAccount.email)}</span>
                   )}
                   <div className="sync-foot">
                     <span className={`sync-status-text status-${syncStatus}`}>
@@ -129,7 +135,7 @@ export function SettingsModal() {
                     </span>
                     <button
                       className="secondary-button small"
-                      disabled={!syncRoot || syncStatus === 'syncing'}
+                      disabled={!appDataDir || syncStatus === 'syncing'}
                       onClick={() => syncNow()}
                     >
                       <RotateCw className={syncStatus === 'syncing' ? 'spin' : undefined} size={15} />

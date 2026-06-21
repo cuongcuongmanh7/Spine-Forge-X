@@ -57,8 +57,7 @@ export function LibraryInventory({
     setViewMode,
     pushToast,
     driveAccount,
-    syncRoot,
-    syncConnected,
+    libraryDir,
     openSettings,
     sessions,
     projects,
@@ -79,15 +78,14 @@ export function LibraryInventory({
   // Version-mix triage: show only files that diverge from their folder group's majority version.
   const [divergingOnly, setDivergingOnly] = useState(false);
 
-  const { tagList, metaFor, addEntryTag, removeEntryTag, setEntryOwner } = useLibraryTags({ syncRoot, syncConnected });
+  const { tagList, metaFor, addEntryTag, removeEntryTag, setEntryOwner } = useLibraryTags({ libraryDir });
 
   const { driveInfo, expandedInfo, loadingBasics, basicsLoadedAt, basicFor, toggleDriveInfo, loadDriveBasics, openRevisionInSpine } =
     useLibraryDrive({
       t,
       pushToast,
       driveAccount,
-      syncRoot,
-      syncConnected,
+      libraryDir,
       spinePath: merged.spinePath,
       openSettings: () => openSettings(true)
     });

@@ -1,11 +1,12 @@
-// Tier-A app-data sync: mirror projects/sessions/config to a single JSON profile in a
-// Google-Drive-backed folder so the same workspace shows up on another machine. Paths that
-// live under the shared source tree are stored relative to a `${SPINE_ROOT}` token and
-// rebased to each machine's own Spine root on load (drive letters differ: G:\ vs F:\).
-//
-// This module is pure logic + thin IPC; the orchestration (when to read/write) lives in
-// useSync.ts. Machine-local settings (sync folder, Spine root, Spine.exe path) are NEVER
-// written into the profile — they differ per machine.
+// Tier-A app-data sync (v2): mirror data to JSON files under the team's shared app-data root
+// (`…\Shared drives\Pamvis\spine_app_data`, auto-detected — see useAppData). Two scopes:
+//   • per-user WORKSPACE (`workspaces/<emailSlug>/profile.json`) — appConfig/projects/sessions,
+//     keyed by the signed-in Google account so users don't clobber each other.
+//   • shared LIBRARY (`library/libraries.json` + the tag/owner & drive-meta sidecars + thumbs) —
+//     one source of truth for the whole team.
+// Paths under the shared source tree are stored relative to `${SPINE_ROOT}` and rebased to each
+// machine's drive letter on load. This module is pure logic + thin IPC; orchestration lives in
+// useSync.ts. Machine-local settings (Spine.exe path) are NEVER written into a profile.
 
 import { invoke } from '@tauri-apps/api/core';
 import {
@@ -18,31 +19,27 @@ import {
 } from './config';
 import { persistAppConfig, persistLibraries, persistProjects, persistSessions } from './sessions';
 
-const PROFILE_FILE = 'spineforge-profile.json';
-const BACKUP_FILE = 'spineforge-profile.bak.json';
+const WORKSPACE_FILE = 'profile.json';
+const WORKSPACE_BACKUP = 'profile.bak.json';
+const LIBRARY_LIST_FILE = 'libraries.json';
+const LIBRARY_LIST_BACKUP = 'libraries.bak.json';
 const SCHEMA = 1;
 const TOKEN = '${SPINE_ROOT}';
 
 const SYNC_KEYS = {
   enabled: 'spineforge.sync.enabled',
-  root: 'spineforge.sync.root',
-  lastSyncedAt: 'spineforge.sync.lastSyncedAt',
-  // Legacy keys (pre-merge) read once for migration into `root`.
-  legacyFolder: 'spineforge.sync.folder',
-  legacySpineRoot: 'spineforge.sync.spineRoot'
+  workspaceSyncedAt: 'spineforge.sync.workspaceSyncedAt',
+  librarySyncedAt: 'spineforge.sync.librarySyncedAt'
 } as const;
 
 export type SyncSettings = {
   enabled: boolean;
-  /** The shared Google Drive root: BOTH where the profile file lives AND the `${SPINE_ROOT}`
-   *  rebasing anchor. A common parent like `G:\Shared drives` so every project's source sits
-   *  under it. */
-  root: string;
-  /** updatedAt of the profile we last read or wrote; drives newer-wins reconciliation. */
-  lastSyncedAt: number | null;
+  /** updatedAt of the workspace/library profile we last read or wrote; drives newer-wins. */
+  workspaceSyncedAt: number | null;
+  librarySyncedAt: number | null;
 };
 
-/** Live app data the profile is built from (passed in by the controller). */
+/** Live app data the profiles are built from (passed in by the controller). */
 export type SyncData = {
   appConfig: AppConfig;
   projects: Project[];
@@ -50,46 +47,51 @@ export type SyncData = {
   libraries: Library[];
 };
 
-/** On-disk profile. `appConfig` omits the machine-local `spinePath`. */
-export type SyncProfile = {
+/** Per-user workspace profile. `appConfig` omits the machine-local `spinePath`. */
+export type WorkspaceProfile = {
   schema: number;
   updatedAt: number;
   appConfig: Omit<AppConfig, 'spinePath'>;
   projects: Project[];
   sessions: Session[];
+};
+
+/** Shared library list (team-wide). */
+export type LibraryProfile = {
+  schema: number;
+  updatedAt: number;
   libraries: Library[];
 };
 
 // ---- machine-local settings -------------------------------------------------
 
 export function loadSyncSettings(): SyncSettings {
-  const lastRaw = localStorage.getItem(SYNC_KEYS.lastSyncedAt);
-  const last = lastRaw ? Number(lastRaw) : NaN;
+  const num = (key: string): number | null => {
+    const raw = localStorage.getItem(key);
+    const n = raw ? Number(raw) : NaN;
+    return Number.isFinite(n) ? n : null;
+  };
   // Default ON: the team works off a shared Drive, so sync is the expected mode.
   const enabledRaw = localStorage.getItem(SYNC_KEYS.enabled);
-  // Merged `root` falls back to the legacy spineRoot (the rebasing anchor mattered most), then folder.
-  const root =
-    localStorage.getItem(SYNC_KEYS.root) ??
-    localStorage.getItem(SYNC_KEYS.legacySpineRoot) ??
-    localStorage.getItem(SYNC_KEYS.legacyFolder) ??
-    '';
   return {
     enabled: enabledRaw === null ? true : enabledRaw === 'true',
-    root,
-    lastSyncedAt: Number.isFinite(last) ? last : null
+    workspaceSyncedAt: num(SYNC_KEYS.workspaceSyncedAt),
+    librarySyncedAt: num(SYNC_KEYS.librarySyncedAt)
   };
 }
 
 export function persistSyncSettings(patch: Partial<SyncSettings>): void {
+  const stamp = (key: string, value: number | null | undefined) => {
+    if (value === undefined) return;
+    if (value === null) localStorage.removeItem(key);
+    else localStorage.setItem(key, String(value));
+  };
   if (patch.enabled !== undefined) localStorage.setItem(SYNC_KEYS.enabled, String(patch.enabled));
-  if (patch.root !== undefined) localStorage.setItem(SYNC_KEYS.root, patch.root);
-  if (patch.lastSyncedAt !== undefined) {
-    if (patch.lastSyncedAt === null) localStorage.removeItem(SYNC_KEYS.lastSyncedAt);
-    else localStorage.setItem(SYNC_KEYS.lastSyncedAt, String(patch.lastSyncedAt));
-  }
+  stamp(SYNC_KEYS.workspaceSyncedAt, patch.workspaceSyncedAt);
+  stamp(SYNC_KEYS.librarySyncedAt, patch.librarySyncedAt);
 }
 
-// ---- path tokenize / rebase -------------------------------------------------
+// ---- path helpers -----------------------------------------------------------
 
 function normSlashes(p: string): string {
   return p.replace(/\\/g, '/');
@@ -102,6 +104,36 @@ function stripTrailing(p: string): string {
 function looksWindows(p: string): boolean {
   return p.includes('\\') || /^[a-zA-Z]:/.test(p);
 }
+
+function joinPath(folder: string, file: string): string {
+  const sep = looksWindows(folder) ? '\\' : '/';
+  return stripTrailing(folder) + sep + file;
+}
+
+/** Filesystem-safe folder name for a user's workspace, derived from their Google account email. */
+export function slugifyEmail(email: string): string {
+  return email.trim().toLowerCase().replace(/[^a-z0-9._-]+/g, '_');
+}
+
+/** `<appDataDir>/library` — the shared library data folder (list + sidecars + thumbs live here). */
+export function libraryDataDir(appDataDir: string): string {
+  return joinPath(appDataDir, 'library');
+}
+
+export function workspaceProfilePath(appDataDir: string, email: string): string {
+  return joinPath(joinPath(joinPath(appDataDir, 'workspaces'), slugifyEmail(email)), WORKSPACE_FILE);
+}
+export function workspaceBackupPath(appDataDir: string, email: string): string {
+  return joinPath(joinPath(joinPath(appDataDir, 'workspaces'), slugifyEmail(email)), WORKSPACE_BACKUP);
+}
+export function libraryListPath(appDataDir: string): string {
+  return joinPath(libraryDataDir(appDataDir), LIBRARY_LIST_FILE);
+}
+export function libraryListBackupPath(appDataDir: string): string {
+  return joinPath(libraryDataDir(appDataDir), LIBRARY_LIST_BACKUP);
+}
+
+// ---- path tokenize / rebase -------------------------------------------------
 
 /** Absolute path → `${SPINE_ROOT}/rel` when it lives under `spineRoot` (case-insensitive,
  *  Windows-friendly); otherwise the path is left absolute. */
@@ -117,26 +149,16 @@ export function tokenizePath(abs: string, spineRoot: string): string {
 }
 
 /**
- * The rebasing anchor derived from the chosen sync folder. The Google Drive "Shared drives" mount
- * (`G:\Shared drives`) is a virtual listing — you can't write files at that level, only inside a
- * specific shared drive. So the user points the sync FILE at a writable folder (e.g.
- * `G:\Shared drives\FD`), while paths must still rebase against the whole mount so projects in
- * sibling drives (FD, DH) stay portable. When `root` sits under a `Shared drives` mount, anchor at
- * that mount; otherwise the folder itself is the anchor.
+ * The rebasing anchor: the Google Drive "Shared drives" mount (`G:\Shared drives`). When a path
+ * sits under such a mount, anchor at the mount so projects in sibling drives stay portable across
+ * machines (drive letters differ: G:\ vs F:\); otherwise the path itself is the anchor.
  */
-/** True for the bare `G:\Shared drives` mount — a virtual listing you can't write files into,
- *  so it must not be used as the sync folder (treated as "unconfigured"). */
-export function isVirtualMount(root: string): boolean {
-  return /^[A-Za-z]:[\\/]Shared drives[\\/]*$/i.test(root.trim());
-}
-
 export function deriveAnchor(root: string): string {
   if (!root) return root;
   const match = normSlashes(root).match(/^(.*?\/Shared drives)(?:\/.*)?$/i);
   if (!match) return root;
   return looksWindows(root) ? match[1].replace(/\//g, '\\') : match[1];
 }
-
 
 /** Reverse of tokenizePath against the local machine's Spine root. */
 export function resolvePath(token: string, spineRoot: string): string {
@@ -158,61 +180,84 @@ function mapConfigPaths(config: SessionConfig, fn: (p: string) => string): Sessi
 
 // ---- build / apply ----------------------------------------------------------
 
-export function buildProfile(data: SyncData, spineRoot: string, updatedAt: number): SyncProfile {
+export function buildWorkspaceProfile(data: SyncData, anchor: string, updatedAt: number): WorkspaceProfile {
   const { spinePath: _omit, ...appConfig } = data.appConfig;
   return {
     schema: SCHEMA,
     updatedAt,
     appConfig,
     projects: data.projects,
-    sessions: data.sessions.map((s) => ({ ...s, config: mapConfigPaths(s.config, (p) => tokenizePath(p, spineRoot)) })),
-    libraries: data.libraries.map((l) => ({ ...l, rootPath: tokenizePath(l.rootPath, spineRoot) }))
+    sessions: data.sessions.map((s) => ({ ...s, config: mapConfigPaths(s.config, (p) => tokenizePath(p, anchor)) }))
   };
 }
 
-/** Write a profile into localStorage (preserving the machine-local spinePath). Caller reloads. */
-export function applyProfile(profile: SyncProfile, spineRoot: string, localSpinePath: string): void {
+/** Write a workspace profile into localStorage (preserving the machine-local spinePath). Caller reloads. */
+export function applyWorkspaceProfile(profile: WorkspaceProfile, anchor: string, localSpinePath: string): void {
   const appConfig = { ...defaultAppConfig, ...profile.appConfig, spinePath: localSpinePath } as AppConfig;
   persistAppConfig(appConfig);
   persistProjects(profile.projects);
-  persistSessions(profile.sessions.map((s) => ({ ...s, config: mapConfigPaths(s.config, (p) => resolvePath(p, spineRoot)) })));
-  persistLibraries(profile.libraries.map((l) => ({ ...l, rootPath: resolvePath(l.rootPath, spineRoot) })));
+  persistSessions(profile.sessions.map((s) => ({ ...s, config: mapConfigPaths(s.config, (p) => resolvePath(p, anchor)) })));
 }
 
-/** Stable comparison of two profiles ignoring `updatedAt` — used to skip no-op writes. */
-export function sameProfileBody(a: SyncProfile, b: SyncProfile): boolean {
-  const body = (p: SyncProfile) =>
-    JSON.stringify({ appConfig: p.appConfig, projects: p.projects, sessions: p.sessions, libraries: p.libraries });
+export function buildLibraryProfile(libraries: Library[], anchor: string, updatedAt: number): LibraryProfile {
+  return {
+    schema: SCHEMA,
+    updatedAt,
+    libraries: libraries.map((l) => ({ ...l, rootPath: tokenizePath(l.rootPath, anchor) }))
+  };
+}
+
+/** Write the shared library list into localStorage. Caller reloads. */
+export function applyLibraryProfile(profile: LibraryProfile, anchor: string): void {
+  persistLibraries(profile.libraries.map((l) => ({ ...l, rootPath: resolvePath(l.rootPath, anchor) })));
+}
+
+/** Stable comparison ignoring `updatedAt` — used to skip no-op writes. */
+export function sameWorkspaceBody(a: WorkspaceProfile, b: WorkspaceProfile): boolean {
+  const body = (p: WorkspaceProfile) => JSON.stringify({ appConfig: p.appConfig, projects: p.projects, sessions: p.sessions });
   return body(a) === body(b);
 }
-
-// ---- IPC: read / write the profile file ------------------------------------
-
-function joinPath(folder: string, file: string): string {
-  const sep = looksWindows(folder) ? '\\' : '/';
-  return stripTrailing(folder) + sep + file;
+export function sameLibraryBody(a: LibraryProfile, b: LibraryProfile): boolean {
+  return JSON.stringify(a.libraries) === JSON.stringify(b.libraries);
 }
 
-export async function readProfileFile(folder: string): Promise<SyncProfile | null> {
-  if (!folder) return null;
-  const content = await invoke<string | null>('read_text_file', { path: joinPath(folder, PROFILE_FILE) });
+// ---- IPC: read / write profile files ---------------------------------------
+
+async function readJson<T>(path: string): Promise<T | null> {
+  if (!path) return null;
+  const content = await invoke<string | null>('read_text_file', { path }).catch(() => null);
   if (!content) return null;
   try {
-    const parsed = JSON.parse(content) as SyncProfile;
-    if (!parsed || typeof parsed !== 'object' || typeof parsed.updatedAt !== 'number') return null;
-    if (!Array.isArray(parsed.projects) || !Array.isArray(parsed.sessions)) return null;
-    return parsed;
+    return JSON.parse(content) as T;
   } catch {
     return null;
   }
 }
 
-export async function writeProfileFile(folder: string, profile: SyncProfile): Promise<void> {
-  const body = JSON.stringify(profile, null, 2);
-  // Best-effort backup of the previous profile before overwriting.
-  const existing = await invoke<string | null>('read_text_file', { path: joinPath(folder, PROFILE_FILE) }).catch(() => null);
-  if (existing) {
-    await invoke('write_text_file', { path: joinPath(folder, BACKUP_FILE), content: existing }).catch(() => undefined);
+async function writeJson(path: string, data: unknown, backupPath?: string): Promise<void> {
+  const body = JSON.stringify(data, null, 2);
+  if (backupPath) {
+    const existing = await invoke<string | null>('read_text_file', { path }).catch(() => null);
+    if (existing) await invoke('write_text_file', { path: backupPath, content: existing }).catch(() => undefined);
   }
-  await invoke('write_text_file', { path: joinPath(folder, PROFILE_FILE), content: body });
+  await invoke('write_text_file', { path, content: body });
+}
+
+export async function readWorkspaceProfile(path: string): Promise<WorkspaceProfile | null> {
+  const parsed = await readJson<WorkspaceProfile>(path);
+  if (!parsed || typeof parsed.updatedAt !== 'number') return null;
+  if (!Array.isArray(parsed.projects) || !Array.isArray(parsed.sessions)) return null;
+  return parsed;
+}
+export function writeWorkspaceProfile(path: string, backupPath: string, profile: WorkspaceProfile): Promise<void> {
+  return writeJson(path, profile, backupPath);
+}
+
+export async function readLibraryProfile(path: string): Promise<LibraryProfile | null> {
+  const parsed = await readJson<LibraryProfile>(path);
+  if (!parsed || typeof parsed.updatedAt !== 'number' || !Array.isArray(parsed.libraries)) return null;
+  return parsed;
+}
+export function writeLibraryProfile(path: string, backupPath: string, profile: LibraryProfile): Promise<void> {
+  return writeJson(path, profile, backupPath);
 }
