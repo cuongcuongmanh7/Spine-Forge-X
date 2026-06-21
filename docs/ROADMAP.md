@@ -6,6 +6,16 @@ Source-of-truth tiến độ toàn dự án.
 
 ---
 
+## v0.4.9 — Sync feedback + Cleanup scan motion + dev/prod data split + user filter ✅ Done
+
+> Bump `0.4.8 → 0.4.9`; tag `v0.4.9`.
+
+- [x] **Phản hồi đồng bộ rõ hơn**: dòng trạng thái transient dưới nút tài khoản (chỉ khi pending/syncing/error, tự ẩn khi synced); toast "Đang tải workspace mới nhất…" + delay trước khi reconcile reload (kèm `reloadingRef` chặn ghi trong lúc chờ). [AccountBadge.tsx](../src/components/AccountBadge.tsx), [useSync.ts](../src/useSync.ts).
+- [x] **Tab "Dọn ảnh": overlay chặn khi quét/dọn** — tách `LibraryScanningOverlay` dùng chung (Inventory empty-state + Cleanup overlay); `working` → `busyLabel`. [LibraryScanningOverlay.tsx](../src/components/LibraryScanningOverlay.tsx), [LibraryClean.tsx](../src/components/LibraryClean.tsx).
+- [x] **Tách data dev/prod**: `resolve_app_data_dir` thêm subfolder `dev` khi `cfg!(debug_assertions)` → `tauri dev` ghi `spine_app_data\dev\…`, `tauri build` ghi root (cùng gmail). Badge "dev" ở titlebar khi `import.meta.env.DEV`. [system.rs](../src-tauri/src/system.rs), [Titlebar.tsx](../src/components/Titlebar.tsx).
+- [x] **Lọc theo người dùng** ở hàng "Used by": chip "Người dùng" theo owner hiệu lực (đặt tay / Drive owner-editor), multi-select + count. [LibraryInventory.tsx](../src/components/LibraryInventory.tsx).
+- [x] Verify: `tsc` + `npm test` (85) + `npm run build` + `cargo check` xanh.
+
 ## v0.4.8 — Shared app-data root + sync v2 (per-user workspace, shared library) ✅ Done
 
 > Bump `0.4.7 → 0.4.8`; tag `v0.4.8`. Chi tiết sync: [sync.md](sync.md).

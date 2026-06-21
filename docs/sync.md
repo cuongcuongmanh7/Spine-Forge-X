@@ -15,7 +15,7 @@
 
 | Khái niệm | Ý nghĩa |
 |-----------|---------|
-| **App-data root (cố định)** | `<ổ>:\Shared drives\Pamvis\spine_app_data` — gốc dữ liệu chung, **tự dò** đúng ổ trên mỗi máy. Không có UI chọn folder. Không mount được → banner cảnh báo. |
+| **App-data root (cố định)** | `<ổ>:\Shared drives\Pamvis\spine_app_data` — gốc dữ liệu chung, **tự dò** đúng ổ trên mỗi máy. Không có UI chọn folder. Không mount được → banner cảnh báo. **Bản dev** (`tauri dev`, `cfg!(debug_assertions)`) ghi vào subfolder `…\spine_app_data\dev\` riêng để khỏi đụng dữ liệu thật; bản `tauri build` dùng root. Titlebar hiện badge "dev". |
 | **Workspace profile (per-user)** | `workspaces/<emailSlug>/profile.json` (+ `.bak`); chứa appConfig (trừ `spinePath`), projects, sessions. `emailSlug` = email Google sanitize. |
 | **Library list (shared)** | `library/libraries.json` (+ `.bak`); danh sách thư viện đăng ký, dùng chung. Sidecar tag/owner (`library/spineforge-library-meta.json`) + drive-meta (`library/spineforge-drive-meta.json`) cũng nằm trong `library/`. |
 | **Rebase anchor (tự suy ra)** | Mount `…\Shared drives` suy từ app-data root (`deriveAnchor`) — project ở các drive khác (FD/DH) đều portable. |
@@ -52,7 +52,7 @@ Khi khởi động (hoặc khi đổi định danh: ổ Drive / email) và khi b
 3. `remote.updatedAt > <stamp scope đó>` → **remote thắng**: apply.
 4. Ngược lại → **local đi trước**: ghi local lên.
 
-Nếu bất kỳ scope nào apply remote → `window.location.reload()` **một lần** ở cuối. Mỗi scope có timestamp riêng (`workspaceSyncedAt` / `librarySyncedAt`). Sau đó thay đổi local được debounce ghi lên scope tương ứng.
+Nếu bất kỳ scope nào apply remote → báo toast "Đang tải workspace mới nhất…" rồi `window.location.reload()` **một lần** sau ~0.8s (đỡ giật mình; `reloadingRef` chặn ghi trong lúc chờ). Mỗi scope có timestamp riêng (`workspaceSyncedAt` / `librarySyncedAt`). Sau đó thay đổi local được debounce ghi lên scope tương ứng; trạng thái đang ghi/chờ hiện dòng transient dưới nút tài khoản (xem [AccountBadge](../src/components/AccountBadge.tsx)).
 
 **An toàn:** không ghi lên profile trước khi reconcile đầu tiên thiết lập baseline, cũng không ghi khi đang reconcile → máy mới (rỗng) không thể đè dữ liệu rỗng lên profile của máy cũ.
 
