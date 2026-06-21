@@ -75,6 +75,17 @@ Nếu bất kỳ scope nào apply remote → báo toast "Đang tải workspace m
 - **Một gốc duy nhất**: chỉ rebase được path dưới một cha chung. Nếu source trải trên nhiều mount khác hẳn nhau (vd có cả `My Drive` lẫn ổ local), cần nâng cấp **multi-root mapping** (đã cân nhắc, tạm hoãn — dùng cha chung là đủ cho setup Shared drives hiện tại).
 - ~~**Tier B**~~ → đã làm, xem mục dưới.
 
+### Bảo vệ dữ liệu trên Drive (DỰ KIẾN — chưa làm)
+
+Dữ liệu sync là file thường trong `spine_app_data`, ai có quyền cũng có thể xoá/đổi folder → rủi ro mất dữ liệu (vô tình hoặc cố ý). Đã khảo sát (nguồn: Google Workspace support):
+
+- **Phát hiện then chốt:** app ghi qua **Google Drive for desktop**, mà trên desktop **vai trò Contributor chỉ ĐỌC** — muốn tạo/sửa file phải là **Content manager / Manager**; **Content manager TRASH được** file/folder, **chỉ Manager xoá vĩnh viễn**, Trash shared drive **khôi phục ~25 ngày**. ⇒ Không thể vừa-cho-ghi vừa-chặn-xoá chỉ bằng phân quyền nếu còn dùng filesystem.
+- **Hướng khuyến nghị (mức 1+2, ít/không code):**
+  1. Cấu hình Shared Drive: member = **Content manager**, **leader = Manager duy nhất** → không member nào xoá **vĩnh viễn**; lỡ trash thì leader khôi phục từ Trash.
+  2. App: tận dụng cơ chế sẵn có "remote mất → seed lại từ localStorage của máy" (dữ liệu re-tạo được); thêm **backup JSON có dấu thời gian**; đảm bảo remote thiếu **không bao giờ** xoá local. Lưu ý: `spine_app_data` là metadata/cache tái tạo được, **không phải** source `.spine`.
+- **Mức 3 (chặn cứng, nặng):** rewrite Tier A sang **Drive API** + member = **Contributor** (qua API thì Contributor tạo/sửa được nhưng **không trash được**). Giá: cần scope ghi, viết lại toàn bộ IO qua file-id, **bắt buộc đăng nhập** cho mọi sync, mất tiện ích mirror offline của Drive-for-desktop → tách thành sub-plan riêng.
+- Mức cụ thể sẽ chốt khi triển khai. Nguồn: [How file access works in shared drives](https://support.google.com/a/users/answer/12380484).
+
 ---
 
 ## 7. Tier B — Owner / lịch sử sửa / version (Google Drive API)
