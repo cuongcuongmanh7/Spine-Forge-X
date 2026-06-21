@@ -5,12 +5,50 @@
   flex-direction: column;
   width: min(900px, 92vw);
   height: 86vh;
-  max-height: 86vh;
+  max-height: 96vh;
+  max-width: 96vw;
+  min-width: 360px;
+  min-height: 300px;
   overflow: hidden;
+  /* User can drag the bottom-right corner to resize; the player auto-refits. */
+  resize: both;
+}
+
+/* Native fullscreen fills the screen edge-to-edge. */
+.spine-preview-modal:fullscreen {
+  width: 100vw;
+  height: 100vh;
+  max-width: none;
+  max-height: none;
+  border-radius: 0;
+  resize: none;
 }
 
 .spine-preview-modal .modal-header {
   flex: 0 0 auto;
+}
+
+.spine-preview-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* Live FPS / playback time readout, top-left over the canvas. */
+.spine-preview-stats {
+  position: absolute;
+  top: 10px;
+  left: 12px;
+  z-index: 2;
+  padding: 3px 8px;
+  border-radius: 7px;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-muted);
+  background: color-mix(in srgb, var(--surface), transparent 25%);
+  border: 1px solid var(--border);
+  pointer-events: none;
+  white-space: nowrap;
 }
 
 .spine-preview-body {

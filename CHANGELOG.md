@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.4.11
+- **Xem trước Spine: thêm điều khiển khung nhìn** — phóng to/thu nhỏ bằng nút hoặc lăn chuột, **giữ chuột phải để kéo di chuyển** (con trỏ thành bàn tay), nút đưa khung hình về mặc định, nút phóng to toàn màn hình, và kéo giãn được kích thước cửa sổ (nhớ lại cho lần sau). Góc khung hiện thêm FPS và thời lượng animation.
+- **Tự chọn skin/animation khi xem trước** — ưu tiên skin `skin_default` (không có thì `default`) và animation `idle` nếu có.
+
 ## v0.4.10
 - **Bảo vệ dữ liệu đồng bộ** — workspace và danh sách thư viện giờ được lưu an toàn hơn: không ai xoá được dữ liệu của người khác, lỡ tay vẫn khôi phục lại được, và mất mạng vẫn làm việc bình thường (nối mạng lại tự đồng bộ). File `.spine` gốc vẫn nằm trên Google Drive như cũ. Lưu ý: giờ cần đăng nhập Google để đồng bộ; ai đã đăng nhập từ trước có thể cần đăng nhập lại một lần.
 - **Quyền quản lý thư viện** — chỉ trưởng nhóm mới thêm/xoá được thư viện trong danh sách chung; các thành viên khác xem và dùng danh sách đó (không còn nút thêm/xoá), tránh sửa nhầm danh sách của cả nhóm.
