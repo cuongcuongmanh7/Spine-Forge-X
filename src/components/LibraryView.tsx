@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Folder, FolderSearch, Plus, RotateCw, Trash2 } from 'lucide-react';
+import { AlertTriangle, Folder, FolderSearch, Plus, RotateCw, Trash2 } from 'lucide-react';
 import { useApp } from '../useAppController';
 import { useSidebarWidth, SIDEBAR_MIN, SIDEBAR_MAX, SIDEBAR_DEFAULT, clampWidth } from '../useSidebarWidth';
 import { useLibraryFilter } from '../useLibraryFilter';
@@ -25,7 +25,8 @@ export function LibraryView() {
     isScanningLibrary,
     importLibrary,
     selectLibrary,
-    deleteLibrary
+    deleteLibrary,
+    appDataMissing
   } = useApp();
 
   const [tab, setTab] = useState<Tab>('inventory');
@@ -115,6 +116,12 @@ export function LibraryView() {
       </aside>
 
       <div className="library-main">
+        {appDataMissing && (
+          <div className="library-data-warning" role="alert">
+            <AlertTriangle size={15} aria-hidden="true" />
+            <span>{t.libraryDataPathMissing}</span>
+          </div>
+        )}
         {!activeLibrary ? (
           <div className="library-empty">
             <p className="helper-text">{t.libraryEmpty}</p>

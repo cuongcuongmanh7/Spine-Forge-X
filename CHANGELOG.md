@@ -1,7 +1,8 @@
 # Changelog
 
 ## v0.4.8
-- **Thumbnail xem trước dùng chung qua Google Drive** — ảnh skeleton giờ lưu vào `Shared drives\Pamvis\spine_app_data\thumbs` (theo đúng ổ Drive trên từng máy) thay vì cache riêng từng máy; nên máy khác trong nhóm mở lên là thấy ngay, không phải render lại. Chưa bật Drive thì vẫn cache cục bộ như trước.
+- **Thumbnail xem trước dùng chung qua Google Drive** — ảnh skeleton giờ lưu vào thư mục dữ liệu chung `Shared drives\Pamvis\spine_app_data\thumbs` (app tự dò đúng ổ Drive trên từng máy) thay vì cache riêng từng máy; nên máy khác trong nhóm mở lên là thấy ngay, không phải render lại.
+- **Cảnh báo khi không thấy ổ dữ liệu chung** — nếu máy chưa mount được `Shared drives\Pamvis`, tab Thư viện hiện banner báo dữ liệu chung sẽ không đồng bộ (lúc đó thumbnail tạm lưu cache cục bộ).
 
 ## v0.4.7
 - **Thẻ ở chế độ Lưới hiện ảnh xem trước thật** — mỗi thẻ render thumbnail skeleton (skin/animation mặc định) ngay trên đầu thẻ, chỉ dựng khi thẻ cuộn vào tầm nhìn và lưu lại vào cache nên mở lại app không phải dựng lại; file chưa export vẫn hiện icon như cũ. Nút xem trước (👁) chuyển lên góc thumbnail.

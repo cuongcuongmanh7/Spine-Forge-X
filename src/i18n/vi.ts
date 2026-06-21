@@ -135,6 +135,8 @@ export const vi = {
   libraryNoSpine: 'Không tìm thấy file .spine nào trong folder này.',
   libraryScanning: 'Đang quét…',
   libraryScanDone: 'Đã quét {count} file .spine.',
+  libraryDataPathMissing:
+    'Không thấy thư mục dữ liệu chung trên Drive (Shared drives\\Pamvis\\spine_app_data). Thumbnail và dữ liệu chung sẽ không đồng bộ cho đến khi máy này mount được ổ Pamvis.',
   libraryScanFailed: 'Quét thư viện thất bại',
   libraryLastScan: 'Quét lần cuối',
   libraryNeverScanned: 'Chưa quét',

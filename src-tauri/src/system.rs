@@ -261,12 +261,35 @@ fn safe_cache_key(key: &str) -> Result<&str, String> {
     }
 }
 
-/// Resolve the thumbnail cache folder. When the frontend passes a `dir` (the shared Google Drive
-/// thumbs folder, resolved per-machine), use it so the whole team reuses thumbnails; otherwise fall
-/// back to the per-machine app cache dir.
+/// Subpath (under the `Shared drives` mount) of the team's shared app-data root. The drive letter
+/// varies per machine, so we resolve the mount rather than hardcode it.
+const APP_DATA_SUBPATH: &str = "Pamvis/spine_app_data";
+
+/// Resolve the team's shared app-data folder (`<letter>:\Shared drives\Pamvis\spine_app_data`) on
+/// this machine by scanning for the Pamvis shared-drive mount. Returns `None` when the Pamvis drive
+/// isn't mounted/visible — the UI then warns the user. Windows-only; other platforms return `None`.
+#[tauri::command]
+pub(crate) fn resolve_app_data_dir() -> Option<String> {
+    #[cfg(windows)]
+    {
+        for letter in b'A'..=b'Z' {
+            let pamvis = format!("{}:\\Shared drives\\Pamvis", letter as char);
+            if std::path::Path::new(&pamvis).is_dir() {
+                let dir = std::path::Path::new(&format!("{}:\\Shared drives", letter as char))
+                    .join(APP_DATA_SUBPATH.replace('/', "\\"));
+                return Some(path_to_string(&dir));
+            }
+        }
+    }
+    None
+}
+
+/// Resolve the thumbnail cache folder. When the frontend passes a `dir` (the shared app-data root
+/// resolved per-machine), thumbnails live in `<dir>/thumbs` so the whole team reuses them; otherwise
+/// fall back to the per-machine app cache dir.
 fn thumb_cache_dir(app: &AppHandle, dir: &Option<String>) -> Result<PathBuf, String> {
     if let Some(d) = dir.as_deref().map(str::trim).filter(|s| !s.is_empty()) {
-        return Ok(parse_quoted_path(d));
+        return Ok(parse_quoted_path(d).join("thumbs"));
     }
     app.path()
         .app_cache_dir()

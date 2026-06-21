@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import type { ExportAssets, LibraryEntry } from './config';
 import { type DisposablePlayer, basename, buildRawDataURIs, loadSpine38, loadSpine4 } from './spineRuntime';
-import { driveThumbsDir } from './sync';
 import { useApp } from './useAppController';
 
 /**
@@ -143,12 +142,12 @@ async function renderThumbnail(assets: ExportAssets, rawDataURIs: Record<string,
 }
 
 export function useSpineThumbnail(entry: LibraryEntry | null, enabled: boolean) {
-  const { syncRoot } = useApp();
+  const { appDataDir } = useApp();
   const [status, setStatus] = useState<ThumbStatus>('idle');
   const [dataUrl, setDataUrl] = useState<string | null>(null);
 
-  // Shared Drive cache folder (rides across machines); '' → fall back to the per-machine app cache.
-  const dir = driveThumbsDir(syncRoot);
+  // Shared app-data root (rides across machines via Drive); null → fall back to per-machine app cache.
+  const dir = appDataDir ?? undefined;
 
   useEffect(() => {
     if (!enabled || !entry || !entry.exported) {

@@ -137,6 +137,8 @@ export const en: Translations = {
   libraryNoSpine: 'No .spine files found in this folder.',
   libraryScanning: 'Scanning…',
   libraryScanDone: 'Scanned {count} .spine files.',
+  libraryDataPathMissing:
+    "Shared data folder not found on Drive (Shared drives\\Pamvis\\spine_app_data). Thumbnails and shared data won't sync until the Pamvis drive is mounted on this machine.",
   libraryScanFailed: 'Library scan failed',
   libraryLastScan: 'Last scan',
   libraryNeverScanned: 'Never',

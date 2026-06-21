@@ -32,6 +32,7 @@ import { useWorkspace } from './useWorkspace';
 import { useLibrary } from './useLibrary';
 import { useSync } from './useSync';
 import { useDrive } from './useDrive';
+import { useAppData } from './useAppData';
 import type { SyncData } from './sync';
 import { useScanInput } from './useScanInput';
 import { useExportEngine } from './useExportEngine';
@@ -213,6 +214,9 @@ export function useAppControllerValue() {
 
   // App-data sync (Tier B): Google Drive account for owner/history metadata of `.spine` files.
   const { driveAccount, driveBusy, driveSignIn, driveCancelSignIn, driveSignOut } = useDrive({ t, pushToast });
+
+  // Shared app-data root on the Pamvis drive (thumbnails today; default home for future shared data).
+  const { appDataDir, appDataResolved, appDataMissing } = useAppData();
 
   const merged = useMemo<MergedConfig>(() => ({ ...appConfig, ...sessionConfig }), [appConfig, sessionConfig]);
 
@@ -587,6 +591,11 @@ export function useAppControllerValue() {
     setSyncEnabled,
     chooseRoot,
     syncNow,
+
+    // Shared app-data root (Pamvis drive)
+    appDataDir,
+    appDataResolved,
+    appDataMissing,
 
     // Google Drive (Tier B)
     driveAccount,
