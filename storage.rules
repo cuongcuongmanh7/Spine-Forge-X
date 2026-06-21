@@ -1,0 +1,30 @@
+rules_version = '2';
+
+// SpineForge X — Cloud Storage (shared thumbnail cache).
+// Thumbnails are recreatable cache, so any verified @ondigames.com member may read/write them
+// (members generate previews as they browse). Never deletable from the client — stale thumbnails
+// are simply superseded by a new key (path includes asset bytes + version).
+//   envs/{env}/thumbs/{key}.png
+
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    function org() {
+      return request.auth != null
+        && request.auth.token.email_verified == true
+        && request.auth.token.email.matches('.*@ondigames[.]com$');
+    }
+
+    match /envs/{env}/thumbs/{file} {
+      allow read: if org();
+      allow create, update: if org()
+        && request.resource.size < 2 * 1024 * 1024
+        && request.resource.contentType.matches('image/png');
+      allow delete: if false;
+    }
+
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

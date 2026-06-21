@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import type { ExportAssets, LibraryEntry } from './config';
+import { firebaseConfigured, getThumbDownloadUrl, uploadThumb } from './firebase';
 import { type DisposablePlayer, basename, buildRawDataURIs, loadSpine38, loadSpine4 } from './spineRuntime';
 import { useApp } from './useAppController';
 
@@ -171,7 +172,7 @@ export function useSpineThumbnail(entry: LibraryEntry | null, enabled: boolean) 
     const folder = entry.folder;
 
     (async () => {
-      // Cache hit is cheap and shouldn't wait behind the render queue — check it first.
+      // L1 — per-machine local cache (fast, works offline, no Drive needed). Check it first.
       try {
         const cached = await invoke<string | null>('thumb_cache_get', { key, dir });
         if (cancelled) return;
@@ -184,9 +185,22 @@ export function useSpineThumbnail(entry: LibraryEntry | null, enabled: boolean) 
       }
       if (cancelled) return;
 
-      // Everything expensive (asset reads + WebGL render) runs INSIDE the single-slot queue and
-      // bails the moment the card has scrolled out of view — so fast scrolling past dozens of
-      // cards doesn't flood IPC with base64 reads or churn through renders nobody is looking at.
+      // L2 — shared Cloud Storage. A teammate already rendered this revision → use its download URL
+      // directly as the <img> src (no Drive mount required, works on a future web/mobile client).
+      if (firebaseConfigured()) {
+        const remoteUrl = await getThumbDownloadUrl(key);
+        if (cancelled) return;
+        if (remoteUrl) {
+          done(remoteUrl);
+          return;
+        }
+      }
+      if (cancelled) return;
+
+      // Miss everywhere → render. Everything expensive (asset reads + WebGL render) runs INSIDE the
+      // single-slot queue and bails the moment the card has scrolled out of view — so fast scrolling
+      // past dozens of cards doesn't flood IPC with base64 reads or churn through renders nobody is
+      // looking at.
       try {
         const url = await enqueue(async () => {
           if (cancelled) return null;
@@ -202,6 +216,8 @@ export function useSpineThumbnail(entry: LibraryEntry | null, enabled: boolean) 
         done(url);
         // Persist for next time; failures here are non-fatal (we already showed the image).
         void invoke('thumb_cache_put', { key, data: url, dir }).catch(() => undefined);
+        // Share with the team so other machines skip the render. Best-effort (offline → skipped).
+        if (firebaseConfigured()) void uploadThumb(key, url).catch(() => undefined);
       } catch {
         fail();
       }

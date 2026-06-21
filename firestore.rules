@@ -1,0 +1,56 @@
+rules_version = '2';
+
+// SpineForge X — sync metadata protection.
+// Only verified @ondigames.com accounts may read/write; documents are NEVER deletable (protection
+// is soft-delete + Firestore point-in-time recovery, not client deletes). A user may write only
+// their own workspace doc; the shared library list is writable by the whole org.
+//
+// Layout (env-scoped so dev builds can't touch prod data — see src/firebase.ts ▸ ENV):
+//   envs/{env}/workspaces/{uid}   — per-user workspace profile (uid = Firebase Auth uid)
+//   envs/{env}/library/list       — shared team library list
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function org() {
+      return request.auth != null
+        && request.auth.token.email_verified == true
+        && request.auth.token.email.matches('.*@ondigames[.]com$');
+    }
+
+    // Library leaders — may curate the shared library list. The leader list lives in `config/roles`
+    // ({ leaderEmails: [..] }, lowercased), managed in the Firebase Console — NOT hardcoded here.
+    function rolesDoc() {
+      return /databases/$(database)/documents/config/roles;
+    }
+    function isLeader() {
+      return org()
+        && exists(rolesDoc())
+        && (request.auth.token.email.lower() in get(rolesDoc()).data.leaderEmails);
+    }
+
+    // Role list: org may read (app gates UI on it); only the Console/admin writes it.
+    match /config/roles {
+      allow read: if org();
+      allow write: if false;
+    }
+
+    match /envs/{env}/workspaces/{uid} {
+      allow read: if org();
+      allow create, update: if org() && request.auth.uid == uid;
+      allow delete: if false;
+    }
+
+    // Shared library list is leader-curated: org reads, only a leader writes (add/remove projects).
+    match /envs/{env}/library/{doc} {
+      allow read: if org();
+      allow create, update: if isLeader();
+      allow delete: if false;
+    }
+
+    // Everything else is denied by default.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

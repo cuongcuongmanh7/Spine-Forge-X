@@ -1,14 +1,16 @@
-// Tier-A app-data sync (v2): mirror data to JSON files under the team's shared app-data root
-// (`…\Shared drives\Pamvis\spine_app_data`, auto-detected — see useAppData). Two scopes:
-//   • per-user WORKSPACE (`workspaces/<emailSlug>/profile.json`) — appConfig/projects/sessions,
-//     keyed by the signed-in Google account so users don't clobber each other.
-//   • shared LIBRARY (`library/libraries.json` + the tag/owner & drive-meta sidecars + thumbs) —
-//     one source of truth for the whole team.
-// Paths under the shared source tree are stored relative to `${SPINE_ROOT}` and rebased to each
-// machine's drive letter on load. This module is pure logic + thin IPC; orchestration lives in
-// useSync.ts. Machine-local settings (Spine.exe path) are NEVER written into a profile.
+// Tier-A app-data sync (v2): mirror data to Firestore (the sync *metadata* layer). Two scopes:
+//   • per-user WORKSPACE (`envs/{env}/workspaces/{uid}`) — appConfig/projects/sessions, keyed by the
+//     signed-in user's Firebase uid so users don't clobber each other (and rules enforce it).
+//   • shared LIBRARY (`envs/{env}/library/list`) — one source of truth for the whole team.
+// Source `.spine` assets + thumbnails stay on the Shared Drive; only this small recreatable
+// metadata lives in Firestore so security rules can block deletion. Paths under the shared source
+// tree are still stored relative to `${SPINE_ROOT}` and rebased to each machine's drive letter on
+// load (the anchor is derived from the mounted app-data root). This module is pure logic + thin
+// Firestore IO; orchestration lives in useSync.ts. Machine-local settings (Spine.exe path) are
+// NEVER written into a profile.
 
-import { invoke } from '@tauri-apps/api/core';
+import { getDoc, serverTimestamp, setDoc, Timestamp } from 'firebase/firestore';
+import { currentUid, envDoc } from './firebase';
 import {
   defaultAppConfig,
   type AppConfig,
@@ -19,10 +21,9 @@ import {
 } from './config';
 import { persistAppConfig, persistLibraries, persistProjects, persistSessions } from './sessions';
 
+// Legacy filesystem names kept only for the path helpers used by callers/tests (sidecars + tests).
 const WORKSPACE_FILE = 'profile.json';
-const WORKSPACE_BACKUP = 'profile.bak.json';
 const LIBRARY_LIST_FILE = 'libraries.json';
-const LIBRARY_LIST_BACKUP = 'libraries.bak.json';
 const SCHEMA = 1;
 const TOKEN = '${SPINE_ROOT}';
 
@@ -120,17 +121,13 @@ export function libraryDataDir(appDataDir: string): string {
   return joinPath(appDataDir, 'library');
 }
 
+// Legacy filesystem paths — retained for the one-time migration importer (reads the old JSON files)
+// and the sidecars that still live under `library/`. The live sync IO now targets Firestore.
 export function workspaceProfilePath(appDataDir: string, email: string): string {
   return joinPath(joinPath(joinPath(appDataDir, 'workspaces'), slugifyEmail(email)), WORKSPACE_FILE);
 }
-export function workspaceBackupPath(appDataDir: string, email: string): string {
-  return joinPath(joinPath(joinPath(appDataDir, 'workspaces'), slugifyEmail(email)), WORKSPACE_BACKUP);
-}
 export function libraryListPath(appDataDir: string): string {
   return joinPath(libraryDataDir(appDataDir), LIBRARY_LIST_FILE);
-}
-export function libraryListBackupPath(appDataDir: string): string {
-  return joinPath(libraryDataDir(appDataDir), LIBRARY_LIST_BACKUP);
 }
 
 // ---- path tokenize / rebase -------------------------------------------------
@@ -221,43 +218,67 @@ export function sameLibraryBody(a: LibraryProfile, b: LibraryProfile): boolean {
   return JSON.stringify(a.libraries) === JSON.stringify(b.libraries);
 }
 
-// ---- IPC: read / write profile files ---------------------------------------
+// ---- Firestore IO: read / write profile documents --------------------------
+// `updatedAt` is written with the server clock (`serverTimestamp()`) so newer-wins reconcile no
+// longer depends on each machine's local clock; we read the resolved value back as millis and
+// return it so the caller stamps the exact same value it'll later compare against (no drift →
+// no spurious reload). Documents are never deleted — protection is via security rules + PITR.
 
-async function readJson<T>(path: string): Promise<T | null> {
-  if (!path) return null;
-  const content = await invoke<string | null>('read_text_file', { path }).catch(() => null);
-  if (!content) return null;
-  try {
-    return JSON.parse(content) as T;
-  } catch {
-    return null;
-  }
-}
-
-async function writeJson(path: string, data: unknown, backupPath?: string): Promise<void> {
-  const body = JSON.stringify(data, null, 2);
-  if (backupPath) {
-    const existing = await invoke<string | null>('read_text_file', { path }).catch(() => null);
-    if (existing) await invoke('write_text_file', { path: backupPath, content: existing }).catch(() => undefined);
-  }
-  await invoke('write_text_file', { path, content: body });
+/** Firestore `Timestamp` (or a legacy numeric) → epoch millis; null if neither. */
+function tsToMillis(value: unknown): number | null {
+  if (value instanceof Timestamp) return value.toMillis();
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  return null;
 }
 
-export async function readWorkspaceProfile(path: string): Promise<WorkspaceProfile | null> {
-  const parsed = await readJson<WorkspaceProfile>(path);
-  if (!parsed || typeof parsed.updatedAt !== 'number') return null;
-  if (!Array.isArray(parsed.projects) || !Array.isArray(parsed.sessions)) return null;
-  return parsed;
-}
-export function writeWorkspaceProfile(path: string, backupPath: string, profile: WorkspaceProfile): Promise<void> {
-  return writeJson(path, profile, backupPath);
+/** Reads the signed-in user's own workspace doc (`envs/{env}/workspaces/{uid}`). */
+export async function readWorkspaceProfile(): Promise<WorkspaceProfile | null> {
+  const uid = currentUid();
+  if (!uid) return null;
+  const snap = await getDoc(envDoc('workspaces', uid));
+  if (!snap.exists()) return null;
+  const d = snap.data();
+  const updatedAt = tsToMillis(d.updatedAt);
+  if (updatedAt === null || !Array.isArray(d.projects) || !Array.isArray(d.sessions)) return null;
+  return {
+    schema: typeof d.schema === 'number' ? d.schema : SCHEMA,
+    updatedAt,
+    appConfig: d.appConfig,
+    projects: d.projects,
+    sessions: d.sessions
+  };
 }
 
-export async function readLibraryProfile(path: string): Promise<LibraryProfile | null> {
-  const parsed = await readJson<LibraryProfile>(path);
-  if (!parsed || typeof parsed.updatedAt !== 'number' || !Array.isArray(parsed.libraries)) return null;
-  return parsed;
+/** Writes the workspace doc; returns the server-resolved `updatedAt` in millis. */
+export async function writeWorkspaceProfile(profile: WorkspaceProfile): Promise<number> {
+  const uid = currentUid();
+  if (!uid) throw new Error('Chưa đăng nhập Firebase — không thể đồng bộ workspace.');
+  const ref = envDoc('workspaces', uid);
+  await setDoc(ref, {
+    schema: profile.schema,
+    appConfig: profile.appConfig,
+    projects: profile.projects,
+    sessions: profile.sessions,
+    updatedAt: serverTimestamp()
+  });
+  const snap = await getDoc(ref);
+  return tsToMillis(snap.get('updatedAt')) ?? profile.updatedAt;
 }
-export function writeLibraryProfile(path: string, backupPath: string, profile: LibraryProfile): Promise<void> {
-  return writeJson(path, profile, backupPath);
+
+/** Reads the shared library list doc (`envs/{env}/library/list`). */
+export async function readLibraryProfile(): Promise<LibraryProfile | null> {
+  const snap = await getDoc(envDoc('library', 'list'));
+  if (!snap.exists()) return null;
+  const d = snap.data();
+  const updatedAt = tsToMillis(d.updatedAt);
+  if (updatedAt === null || !Array.isArray(d.libraries)) return null;
+  return { schema: typeof d.schema === 'number' ? d.schema : SCHEMA, updatedAt, libraries: d.libraries };
+}
+
+/** Writes the shared library list doc; returns the server-resolved `updatedAt` in millis. */
+export async function writeLibraryProfile(profile: LibraryProfile): Promise<number> {
+  const ref = envDoc('library', 'list');
+  await setDoc(ref, { schema: profile.schema, libraries: profile.libraries, updatedAt: serverTimestamp() });
+  const snap = await getDoc(ref);
+  return tsToMillis(snap.get('updatedAt')) ?? profile.updatedAt;
 }

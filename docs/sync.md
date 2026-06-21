@@ -75,16 +75,47 @@ Nếu bất kỳ scope nào apply remote → báo toast "Đang tải workspace m
 - **Một gốc duy nhất**: chỉ rebase được path dưới một cha chung. Nếu source trải trên nhiều mount khác hẳn nhau (vd có cả `My Drive` lẫn ổ local), cần nâng cấp **multi-root mapping** (đã cân nhắc, tạm hoãn — dùng cha chung là đủ cho setup Shared drives hiện tại).
 - ~~**Tier B**~~ → đã làm, xem mục dưới.
 
-### Bảo vệ dữ liệu trên Drive (DỰ KIẾN — chưa làm)
+### Bảo vệ dữ liệu — lớp metadata chuyển sang Firestore (hybrid, ĐÃ LÀM)
 
-Dữ liệu sync là file thường trong `spine_app_data`, ai có quyền cũng có thể xoá/đổi folder → rủi ro mất dữ liệu (vô tình hoặc cố ý). Đã khảo sát (nguồn: Google Workspace support):
+**Vấn đề:** khi metadata sync là file thường trong `spine_app_data`, ai có quyền cũng xoá/đổi folder được, và **không thể vừa-cho-ghi vừa-chặn-xoá chỉ bằng phân quyền** Drive-for-desktop (Contributor trên desktop chỉ ĐỌC; muốn ghi phải Content manager — mà Content manager thì TRASH được). Nguồn: [How file access works in shared drives](https://support.google.com/a/users/answer/12380484).
 
-- **Phát hiện then chốt:** app ghi qua **Google Drive for desktop**, mà trên desktop **vai trò Contributor chỉ ĐỌC** — muốn tạo/sửa file phải là **Content manager / Manager**; **Content manager TRASH được** file/folder, **chỉ Manager xoá vĩnh viễn**, Trash shared drive **khôi phục ~25 ngày**. ⇒ Không thể vừa-cho-ghi vừa-chặn-xoá chỉ bằng phân quyền nếu còn dùng filesystem.
-- **Hướng khuyến nghị (mức 1+2, ít/không code):**
-  1. Cấu hình Shared Drive: member = **Content manager**, **leader = Manager duy nhất** → không member nào xoá **vĩnh viễn**; lỡ trash thì leader khôi phục từ Trash.
-  2. App: tận dụng cơ chế sẵn có "remote mất → seed lại từ localStorage của máy" (dữ liệu re-tạo được); thêm **backup JSON có dấu thời gian**; đảm bảo remote thiếu **không bao giờ** xoá local. Lưu ý: `spine_app_data` là metadata/cache tái tạo được, **không phải** source `.spine`.
-- **Mức 3 (chặn cứng, nặng):** rewrite Tier A sang **Drive API** + member = **Contributor** (qua API thì Contributor tạo/sửa được nhưng **không trash được**). Giá: cần scope ghi, viết lại toàn bộ IO qua file-id, **bắt buộc đăng nhập** cho mọi sync, mất tiện ích mirror offline của Drive-for-desktop → tách thành sub-plan riêng.
-- Mức cụ thể sẽ chốt khi triển khai. Nguồn: [How file access works in shared drives](https://support.google.com/a/users/answer/12380484).
+**Giải pháp đã chọn (hybrid):** chuyển **lớp metadata** (workspace profile + library list) sang **Firebase Firestore** và **thumbnail** sang **Cloud Storage**; **chỉ source `.spine` ở lại Shared Drive** (Spine.exe mở trực tiếp qua filesystem — Firebase không thay thế được phần này).
+
+| Dữ liệu | Lưu ở |
+|---|---|
+| Workspace profile (per-user) | Firestore `envs/{dev\|prod}/workspaces/{uid}` (uid = Firebase Auth) |
+| Library list (shared) | Firestore `envs/{dev\|prod}/library/list` — **leader-curated** |
+| Thumbnail (cache) | **Cloud Storage** `envs/{dev\|prod}/thumbs/{key}.png` (L2 chung) + cache cục bộ L1 mỗi máy |
+| Source `.spine` / atlas / png | **Shared Drive** (filesystem) — không đổi |
+| Sidecar tag/owner + drive-meta | **Shared Drive** (`library/…`) — chưa chuyển (pha sau) |
+
+**Role leader/member (library leader-curated).** Chỉ **leader** được **thêm/xoá library** trong danh sách chung; member nhận **list chỉ đọc** (nút thêm `+`/xoá ẩn) và dùng chung. App: member **pull-only** cho scope library (không bao giờ ghi `library/list`); reconcile chỉ kéo bản leader về. Server: `firestore.rules` cho `library/list` chỉ leader ghi được — đây mới là ranh giới thật, UI chỉ là UX. Workspace vẫn riêng từng người (ai cũng ghi của mình). *(Lưu ý: khi cắt sang Firestore, list của leader là nguồn chuẩn — library chỉ-local của member sẽ bị thay bằng list leader khi pull.)*
+
+> **Leader KHÔNG hardcode.** Danh sách leader nằm trong doc Firestore **`config/roles`** = `{ leaderEmails: ["cuongdm@ondigames.com"] }` (lowercase). App đọc live qua `subscribeLeaderEmails` (onSnapshot) để gate UI; `firestore.rules` cũng `get()` chính doc đó cho `isLeader()`. **Đổi leader = sửa 1 document trên Firebase Console**, không động code/redeploy, có hiệu lực ngay. Doc này client **chỉ đọc** (`allow write: if false`) — chỉ sửa qua Console; seed lần đầu cũng bằng Console.
+
+**Thumbnail (Cloud Storage, 3 tầng).** Mở thẻ Library: (1) **L1** cache cục bộ mỗi máy (Rust `thumb_cache_*`, nhanh, chạy offline, không cần Drive) → trúng thì dùng luôn; (2) **L2** Cloud Storage — dùng thẳng download URL làm `<img>` src (không cần mount Drive, dùng được trên web/mobile sau này); (3) miss cả hai → render WebGL rồi lưu L1 + upload L2 để máy khác khỏi render lại. Không migration: 215 thumb cũ tự tái sinh dần khi duyệt (cache tái tạo được). Thumbnail là cache nên rule cho **mọi member** ghi (`storage.rules`), `delete:false`.
+
+**Vì sao an toàn hơn filesystem:**
+- **Security rules chặn xoá ở server** (`firestore.rules`): chỉ tài khoản `@ondigames.com` đã đăng nhập mới đọc/ghi; `delete` **luôn bị từ chối**; workspace chỉ **chủ sở hữu** (uid) ghi được. Không còn lỗ hổng phân quyền của filesystem.
+- **Point-in-time recovery (7 ngày)** + ghi luôn qua rules ⇒ khôi phục được khi lỡ tay.
+- **Server timestamp** cho `updatedAt` ⇒ newer-wins không còn phụ thuộc giờ máy (đọc lại giá trị server đã chốt nên không lệch/không reload thừa).
+- **Offline cache (IndexedDB):** mất mạng vẫn sửa được, nối lại mạng tự đồng bộ.
+
+> ⚠️ **Ranh giới:** hybrid **chỉ bảo vệ metadata**. Source `.spine` vẫn trên Drive với đúng rủi ro trash/xoá như cũ → vẫn nên cấu hình **quyền Shared Drive** (member = Content manager, **leader = Manager duy nhất**) cho lớp assets.
+
+> Đăng nhập: tái dùng OAuth Google của Tier B — luồng Rust lấy thêm scope `openid email profile`, trả `id_token`, frontend đổi sang phiên Firebase (`signInWithCredential`). **Không đăng nhập 2 lần.** Tài khoản đăng nhập trước khi thêm scope này cần **đăng nhập Drive lại một lần** để cấp `openid`. Khi chưa đăng nhập, sync ở trạng thái "cần đăng nhập" (trước đây library xem chung được cả khi signed-out; giờ mọi truy cập metadata qua Firestore đều cần đăng nhập — dữ liệu cache cục bộ vẫn hiển thị).
+
+**Set-up Firebase — DEV làm một lần.** (Các bước bấm-từng-nút chi tiết: [docs/firebase-setup.md](firebase-setup.md).)
+- Dùng lại GCP project của Tier B → bật **Firestore** (Native mode) + **Point-in-time recovery**, và bật **Cloud Storage**.
+- Deploy rules: `firestore.rules` + `storage.rules`.
+- **Seed leader:** tạo doc `config/roles` = `{ leaderEmails: ["cuongdm@ondigames.com"] }` (lowercase) trên Console. Đổi leader sau này = sửa doc này, không động code.
+- Ở **Firebase Auth ▸ Sign-in method ▸ Google**, đảm bảo client ID OAuth "Desktop app" (của Tier B) được tin (whitelist) để `id_token` đổi được phiên.
+- Nhúng config web lúc build qua env (giống `SPINEFORGE_GOOGLE_CLIENT_ID`): `VITE_FIREBASE_API_KEY`, `VITE_FIREBASE_AUTH_DOMAIN`, `VITE_FIREBASE_PROJECT_ID`, `VITE_FIREBASE_APP_ID`, `VITE_FIREBASE_STORAGE_BUCKET`, `VITE_FIREBASE_MESSAGING_SENDER_ID`. Thiếu config → metadata sync + thumbnail-chung tắt (không crash, thumbnail về cache cục bộ). Bản dev ghi `envs/dev`, bản release ghi `envs/prod`.
+- *(Thumbnail hiển thị qua `<img src=downloadURL>` nên KHÔNG cần cấu hình CORS bucket; chỉ cần `img-src`/`connect-src` cho `firebasestorage.googleapis.com` — đã set trong `tauri.conf.json`.)*
+
+**Code:** init/auth/db/storage + `subscribeLeaderEmails` `src/firebase.ts`; IO Firestore + rebase `src/sync.ts`; điều phối + role-gate `src/useSync.ts`; helper role thuần `src/roles.ts` (`computeIsLeader`); auth + role live `src/useFirebaseAuth.ts` + lệnh Rust `drive_id_token` (`src-tauri/src/drive.rs`); thumbnail 3 tầng `src/useSpineThumbnail.ts`; UI gate thêm/xoá `src/components/LibraryView.tsx`; CSP (`tauri.conf.json`); rules `firestore.rules` (gồm `config/roles`) + `storage.rules`. Test: `src/sync.firestore.test.ts`, `src/roles.test.ts`.
+
+**Còn lại (pha sau):** chuyển sidecar tag/drive-meta sang Firestore; thay `window.location.reload()` bằng `onSnapshot` real-time.
 
 ---
 

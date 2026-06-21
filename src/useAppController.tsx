@@ -32,6 +32,7 @@ import { useWorkspace } from './useWorkspace';
 import { useLibrary } from './useLibrary';
 import { useSync } from './useSync';
 import { useDrive } from './useDrive';
+import { useFirebaseAuth } from './useFirebaseAuth';
 import { useAppData } from './useAppData';
 import { libraryDataDir, type SyncData } from './sync';
 import { useScanInput } from './useScanInput';
@@ -193,17 +194,22 @@ export function useAppControllerValue() {
     deleteLibrary
   } = useLibrary({ t, pushToast });
 
-  // App-data sync (Tier B): Google Drive account — identifies the user (workspace folder) AND
-  // powers owner/history metadata of `.spine` files.
+  // App-data sync (Tier B): Google Drive account — identifies the user AND powers owner/history
+  // metadata of `.spine` files.
   const { driveAccount, driveBusy, driveSignIn, driveCancelSignIn, driveSignOut } = useDrive({ t, pushToast });
+
+  // Bridge the Drive OAuth session into Firebase Auth (no second login); uid keys the workspace doc.
+  // `isLeader` comes from the Firestore-managed `config/roles` list (not hardcoded) — leaders may
+  // curate the shared library (add/remove); enforced in the UI + Firestore rules.
+  const { firebaseUid, isLeader } = useFirebaseAuth({ driveEmail: driveAccount?.email ?? null });
 
   // Shared app-data root on the Pamvis drive (auto-detected); base for sync + library + thumbnails.
   const { appDataDir, appDataResolved, appDataMissing } = useAppData();
   // Shared library data folder (list + tag/owner & drive-meta sidecars live here).
   const libraryDir = appDataDir ? libraryDataDir(appDataDir) : '';
 
-  // App-data sync (Tier A v2): per-user workspace + shared library list under the fixed app-data
-  // root, keyed by the signed-in email, with `${SPINE_ROOT}` path rebasing.
+  // App-data sync (Tier A v2): per-user workspace + shared library list in Firestore, keyed by the
+  // signed-in Firebase uid, with `${SPINE_ROOT}` path rebasing (anchor derived from appDataDir).
   const syncData = useMemo<SyncData>(
     () => ({ appConfig, projects, sessions, libraries }),
     [appConfig, projects, sessions, libraries]
@@ -217,7 +223,7 @@ export function useAppControllerValue() {
     syncNeedsSignIn,
     setSyncEnabled,
     syncNow
-  } = useSync({ data: syncData, t, pushToast, appDataDir, userEmail: driveAccount?.email ?? null });
+  } = useSync({ data: syncData, t, pushToast, appDataDir, userUid: firebaseUid, isLeader });
 
   const merged = useMemo<MergedConfig>(() => ({ ...appConfig, ...sessionConfig }), [appConfig, sessionConfig]);
 
@@ -603,6 +609,8 @@ export function useAppControllerValue() {
     driveSignIn,
     driveCancelSignIn,
     driveSignOut,
+    /** Library leader (may add/remove libraries); members get a read-only list. */
+    isLeader,
 
     // Clean source folder
     cleanSourceFolderOpen,

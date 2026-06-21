@@ -40,15 +40,19 @@ const GOOGLE_CLIENT_SECRET: &str = match option_env!("SPINEFORGE_GOOGLE_CLIENT_S
     Some(v) => v,
     None => "PASTE_CLIENT_SECRET",
 };
-const SCOPE: &str = "https://www.googleapis.com/auth/drive.readonly";
+// `openid email profile` so the token response includes a Google `id_token` we can exchange for a
+// Firebase Auth session (metadata sync); `drive.readonly` for Tier-B file metadata.
+const SCOPE: &str = "openid email profile https://www.googleapis.com/auth/drive.readonly";
 
 // Keyring location for the long-lived refresh token.
 const KEYRING_SERVICE: &str = "spineforge-x";
 const KEYRING_ACCOUNT: &str = "gdrive";
 
-/// Cached short-lived access token (refresh token lives in the keyring).
+/// Cached short-lived access token (refresh token lives in the keyring). `id_token` is the Google
+/// OpenID token used to mint a Firebase Auth session; present when `openid` scope was granted.
 pub(crate) struct DriveToken {
     pub(crate) access_token: String,
+    pub(crate) id_token: Option<String>,
     pub(crate) expires_at: Instant,
 }
 
@@ -107,6 +111,7 @@ struct TokenResponse {
     access_token: String,
     expires_in: u64,
     refresh_token: Option<String>,
+    id_token: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -227,7 +232,7 @@ pub(crate) async fn drive_sign_in(
         .clone()
         .ok_or("Google không trả refresh token — hãy thử đăng nhập lại.")?;
     write_refresh_token(&refresh)?;
-    cache_access_token(&state, tokens.access_token, tokens.expires_in).await;
+    cache_access_token(&state, tokens.access_token, tokens.id_token, tokens.expires_in).await;
 
     fetch_account(&state).await
 }
@@ -549,13 +554,32 @@ async fn access_token(state: &AppState) -> Result<String, String> {
     let refresh = read_refresh_token()?.ok_or("Chưa đăng nhập Google Drive.")?;
     let tokens = exchange_refresh(&refresh).await?;
     let access = tokens.access_token.clone();
-    cache_access_token(state, tokens.access_token, tokens.expires_in).await;
+    cache_access_token(state, tokens.access_token, tokens.id_token, tokens.expires_in).await;
     Ok(access)
 }
 
-async fn cache_access_token(state: &AppState, access_token: String, expires_in: u64) {
+/// Google OpenID `id_token` for the signed-in account, to mint a Firebase Auth session. Refreshes
+/// the token first (so it's fresh), then returns the cached id token. `None` if the grant carried
+/// no id token (e.g. an account that signed in before the `openid` scope was added — it re-signs
+/// in to grant it).
+#[tauri::command]
+pub(crate) async fn drive_id_token(state: State<'_, Arc<AppState>>) -> Result<Option<String>, String> {
+    access_token(&state).await?;
+    Ok(state.drive_token.lock().await.as_ref().and_then(|t| t.id_token.clone()))
+}
+
+async fn cache_access_token(
+    state: &AppState,
+    access_token: String,
+    id_token: Option<String>,
+    expires_in: u64,
+) {
+    // A refresh-token grant may omit `id_token`; keep the last one we saw so `drive_id_token`
+    // still has something to hand Firebase between full sign-ins.
+    let prev_id = state.drive_token.lock().await.as_ref().and_then(|t| t.id_token.clone());
     *state.drive_token.lock().await = Some(DriveToken {
         access_token,
+        id_token: id_token.or(prev_id),
         expires_at: Instant::now() + Duration::from_secs(expires_in),
     });
 }

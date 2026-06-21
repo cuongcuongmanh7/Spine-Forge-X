@@ -7,16 +7,12 @@ import {
   buildLibraryProfile,
   buildWorkspaceProfile,
   deriveAnchor,
-  libraryListBackupPath,
-  libraryListPath,
   loadSyncSettings,
   persistSyncSettings,
   readLibraryProfile,
   readWorkspaceProfile,
   sameLibraryBody,
   sameWorkspaceBody,
-  workspaceBackupPath,
-  workspaceProfilePath,
   writeLibraryProfile,
   writeWorkspaceProfile,
   type SyncData
@@ -30,20 +26,23 @@ type Args = {
   data: SyncData;
   t: Translations;
   pushToast: (text: string, kind?: ToastKind) => void;
-  /** Shared app-data root (`…\Pamvis\spine_app_data`), auto-detected; null if the drive isn't mounted. */
+  /** Shared app-data root (`…\Pamvis\spine_app_data`), auto-detected; null if the drive isn't
+   *  mounted. Still required: it's where the `${SPINE_ROOT}` rebase anchor is derived from. */
   appDataDir: string | null;
-  /** Signed-in Google account email — identifies this user's workspace folder; null if signed out. */
-  userEmail: string | null;
+  /** Firebase Auth uid of the signed-in user — keys this user's workspace doc; null if signed out. */
+  userUid: string | null;
+  /** Whether this user may curate the shared library list. Members are pull-only on that scope. */
+  isLeader: boolean;
 };
 
 /**
- * Orchestrates Tier-A sync v2. The base folder is the auto-detected shared app-data root (no user
- * picker). Two scopes reconcile independently (newer-wins): the per-user WORKSPACE profile (keyed by
- * the signed-in email) and the shared LIBRARY list. Reconciles at startup / on identity change, and
- * debounce-writes local edits; adopting a newer remote reloads the window so module-scope
- * `loadPersistedState` re-runs with it.
+ * Orchestrates Tier-A sync v2 over Firestore. Two scopes reconcile independently (newer-wins): the
+ * per-user WORKSPACE doc (keyed by the signed-in Firebase uid) and the shared LIBRARY list doc.
+ * Reconciles at startup / on identity change, and debounce-writes local edits; adopting a newer
+ * remote reloads the window so module-scope `loadPersistedState` re-runs with it. The app-data root
+ * is still needed to derive the `${SPINE_ROOT}` rebase anchor for source paths.
  */
-export function useSync({ data, t, pushToast, appDataDir, userEmail }: Args) {
+export function useSync({ data, t, pushToast, appDataDir, userUid, isLeader }: Args) {
   const initial = loadSyncSettings();
   const [enabled, setEnabled] = useState(initial.enabled);
   const [status, setStatus] = useState<SyncStatus>('idle');
@@ -51,15 +50,16 @@ export function useSync({ data, t, pushToast, appDataDir, userEmail }: Args) {
   const [workspaceSyncedAt, setWorkspaceSyncedAt] = useState<number | null>(initial.workspaceSyncedAt);
   const [librarySyncedAt, setLibrarySyncedAt] = useState<number | null>(initial.librarySyncedAt);
 
-  // Workspace sync needs both the shared drive AND a signed-in identity; the library list only needs the drive.
+  // Workspace sync needs both the shared drive (for the rebase anchor) AND a signed-in Firebase
+  // identity; the library list only needs the drive.
   const connected = enabled && Boolean(appDataDir);
-  const workspaceReady = connected && Boolean(userEmail);
+  const workspaceReady = connected && Boolean(userUid);
 
   // Async callbacks read live values through refs so they never close over stale state.
   const dataRef = useRef(data);
   dataRef.current = data;
-  const settingsRef = useRef({ enabled, appDataDir, userEmail, workspaceSyncedAt, librarySyncedAt });
-  settingsRef.current = { enabled, appDataDir, userEmail, workspaceSyncedAt, librarySyncedAt };
+  const settingsRef = useRef({ enabled, appDataDir, userUid, isLeader, workspaceSyncedAt, librarySyncedAt });
+  settingsRef.current = { enabled, appDataDir, userUid, isLeader, workspaceSyncedAt, librarySyncedAt };
   // t/pushToast are recreated each render; read through refs so the callbacks keep a STABLE identity
   // (otherwise the debounce effect re-subscribes every render and cancels the pending timer).
   const tRef = useRef(t);
@@ -96,26 +96,31 @@ export function useSync({ data, t, pushToast, appDataDir, userEmail }: Args) {
 
   // Push local edits up (no reload). Writes only the scope(s) whose body changed.
   const pushLocal = useCallback(async () => {
-    const { appDataDir: dir, userEmail: email } = settingsRef.current;
-    if (!dir) return;
+    const { appDataDir: dir, userUid: uid, isLeader: leader } = settingsRef.current;
+    // Firestore writes require a Firebase session (rules), so both scopes need sign-in now.
+    if (!dir || !uid) return;
     if (reconcilingRef.current || reloadingRef.current || !syncedOnceRef.current) return;
     const anchor = deriveAnchor(dir);
     try {
-      if (email) {
+      {
         const ws = buildWorkspaceProfile(dataRef.current, anchor, Date.now());
         const body = wsBody(ws);
         if (body !== lastWsBodyRef.current) {
           setStatus('syncing');
-          await writeWorkspaceProfile(workspaceProfilePath(dir, email), workspaceBackupPath(dir, email), ws);
-          markWorkspace(ws.updatedAt, body);
+          const at = await writeWorkspaceProfile(ws);
+          markWorkspace(at, body);
         }
       }
-      const lib = buildLibraryProfile(dataRef.current.libraries, anchor, Date.now());
-      const libBody = JSON.stringify(lib.libraries);
-      if (libBody !== lastLibBodyRef.current) {
-        setStatus('syncing');
-        await writeLibraryProfile(libraryListPath(dir), libraryListBackupPath(dir), lib);
-        markLibrary(lib.updatedAt, libBody);
+      // Library list is leader-curated: only a leader writes it (members are pull-only, and the
+      // Firestore rule would reject their write anyway).
+      if (leader) {
+        const lib = buildLibraryProfile(dataRef.current.libraries, anchor, Date.now());
+        const libBody = JSON.stringify(lib.libraries);
+        if (libBody !== lastLibBodyRef.current) {
+          setStatus('syncing');
+          const at = await writeLibraryProfile(lib);
+          markLibrary(at, libBody);
+        }
       }
       setStatus('synced');
     } catch (e) {
@@ -127,9 +132,11 @@ export function useSync({ data, t, pushToast, appDataDir, userEmail }: Args) {
 
   // Startup / manual reconcile: newer of (local, remote) wins, per scope.
   const reconcile = useCallback(async () => {
-    const { enabled: on, appDataDir: dir, userEmail: email, workspaceSyncedAt: wsAt, librarySyncedAt: libAt } =
+    const { enabled: on, appDataDir: dir, userUid: uid, isLeader: leader, workspaceSyncedAt: wsAt, librarySyncedAt: libAt } =
       settingsRef.current;
-    if (!on || !dir) {
+    // Firestore needs the shared drive (for the rebase anchor) AND a Firebase session (rules gate
+    // every read/write). Signed out → nothing to reconcile; the badge shows "needs sign-in".
+    if (!on || !dir || !uid) {
       setStatus('idle');
       return;
     }
@@ -139,15 +146,14 @@ export function useSync({ data, t, pushToast, appDataDir, userEmail }: Args) {
     const spinePath = dataRef.current.appConfig.spinePath;
     let needReload = false;
     try {
-      // --- workspace (per-user) — only when signed in ---
-      if (email) {
-        const wsPath = workspaceProfilePath(dir, email);
-        const remote = await readWorkspaceProfile(wsPath);
+      // --- workspace (per-user) ---
+      {
+        const remote = await readWorkspaceProfile();
         const local = buildWorkspaceProfile(dataRef.current, anchor, Date.now());
         const localBody = wsBody(local);
         if (!remote) {
-          await writeWorkspaceProfile(wsPath, workspaceBackupPath(dir, email), local);
-          markWorkspace(local.updatedAt, localBody);
+          const at = await writeWorkspaceProfile(local);
+          markWorkspace(at, localBody);
         } else if (sameWorkspaceBody(remote, local)) {
           markWorkspace(remote.updatedAt, localBody);
         } else if (remote.updatedAt > (wsAt ?? 0)) {
@@ -155,29 +161,42 @@ export function useSync({ data, t, pushToast, appDataDir, userEmail }: Args) {
           applyWorkspaceProfile(remote, anchor, spinePath);
           needReload = true;
         } else {
-          await writeWorkspaceProfile(wsPath, workspaceBackupPath(dir, email), local);
-          markWorkspace(local.updatedAt, localBody);
+          const at = await writeWorkspaceProfile(local);
+          markWorkspace(at, localBody);
         }
       }
 
-      // --- library list (shared) ---
-      const libPath = libraryListPath(dir);
-      const remoteLib = await readLibraryProfile(libPath);
+      // --- library list (shared, leader-curated) ---
+      const remoteLib = await readLibraryProfile();
       const localLib = buildLibraryProfile(dataRef.current.libraries, anchor, Date.now());
       const localLibBody = JSON.stringify(localLib.libraries);
-      if (!remoteLib) {
-        await writeLibraryProfile(libPath, libraryListBackupPath(dir), localLib);
-        markLibrary(localLib.updatedAt, localLibBody);
-      } else if (sameLibraryBody(remoteLib, localLib)) {
-        markLibrary(remoteLib.updatedAt, localLibBody);
-      } else if (remoteLib.updatedAt > (libAt ?? 0)) {
-        persistSyncSettings({ librarySyncedAt: remoteLib.updatedAt });
-        applyLibraryProfile(remoteLib, anchor);
-        needReload = true;
-      } else {
-        await writeLibraryProfile(libPath, libraryListBackupPath(dir), localLib);
-        markLibrary(localLib.updatedAt, localLibBody);
+      if (leader) {
+        // Leader: full newer-wins (seed / push / pull).
+        if (!remoteLib) {
+          const at = await writeLibraryProfile(localLib);
+          markLibrary(at, localLibBody);
+        } else if (sameLibraryBody(remoteLib, localLib)) {
+          markLibrary(remoteLib.updatedAt, localLibBody);
+        } else if (remoteLib.updatedAt > (libAt ?? 0)) {
+          persistSyncSettings({ librarySyncedAt: remoteLib.updatedAt });
+          applyLibraryProfile(remoteLib, anchor);
+          needReload = true;
+        } else {
+          const at = await writeLibraryProfile(localLib);
+          markLibrary(at, localLibBody);
+        }
+      } else if (remoteLib) {
+        // Member: pull-only — the leader's list is authoritative; never write.
+        if (sameLibraryBody(remoteLib, localLib)) {
+          markLibrary(remoteLib.updatedAt, localLibBody);
+        } else if (remoteLib.updatedAt > (libAt ?? 0)) {
+          persistSyncSettings({ librarySyncedAt: remoteLib.updatedAt });
+          applyLibraryProfile(remoteLib, anchor);
+          needReload = true;
+        }
+        // else: local diverges but remote isn't newer (e.g. member's stale lastScanAt) → leave it.
       }
+      // Member with no remote yet → nothing to do until the leader seeds the list.
 
       syncedOnceRef.current = true;
       setError(null);
@@ -212,7 +231,7 @@ export function useSync({ data, t, pushToast, appDataDir, userEmail }: Args) {
     lastLibBodyRef.current = null;
     void reconcile();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [connected, appDataDir, userEmail]);
+  }, [connected, appDataDir, userUid]);
 
   // Debounce-write whenever the synced data changes (skip the initial mount render).
   const skipWriteRef = useRef(true);
@@ -221,14 +240,14 @@ export function useSync({ data, t, pushToast, appDataDir, userEmail }: Args) {
       skipWriteRef.current = false;
       return;
     }
-    if (!connected) return;
+    if (!workspaceReady) return; // can't write to Firestore without a Firebase session
     setStatus('pending');
     if (debounceRef.current) window.clearTimeout(debounceRef.current);
     debounceRef.current = window.setTimeout(() => void pushLocal(), DEBOUNCE_MS);
     return () => {
       if (debounceRef.current) window.clearTimeout(debounceRef.current);
     };
-  }, [data.appConfig, data.projects, data.sessions, data.libraries, connected, pushLocal]);
+  }, [data.appConfig, data.projects, data.sessions, data.libraries, workspaceReady, pushLocal]);
 
   const setSyncEnabled = useCallback((value: boolean) => {
     setEnabled(value);

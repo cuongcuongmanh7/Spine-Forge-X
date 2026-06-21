@@ -27,7 +27,8 @@ export function LibraryView() {
     importLibrary,
     selectLibrary,
     deleteLibrary,
-    appDataMissing
+    appDataMissing,
+    isLeader
   } = useApp();
 
   const [tab, setTab] = useState<Tab>('inventory');
@@ -48,15 +49,18 @@ export function LibraryView() {
         <ModeToggle />
         <div className="library-sidebar-head">
           <span className="sidebar-title">{t.libraryFolder}</span>
-          <button
-            className="sidebar-new"
-            onClick={() => void importLibrary()}
-            disabled={isScanningLibrary}
-            title={t.libraryImport}
-            aria-label={t.libraryImport}
-          >
-            <Plus size={16} />
-          </button>
+          {/* Only a leader curates the shared library list; members get a read-only list. */}
+          {isLeader && (
+            <button
+              className="sidebar-new"
+              onClick={() => void importLibrary()}
+              disabled={isScanningLibrary}
+              title={t.libraryImport}
+              aria-label={t.libraryImport}
+            >
+              <Plus size={16} />
+            </button>
+          )}
         </div>
         <div className="library-sidebar-list">
           {libraries.length === 0 ? (
@@ -76,17 +80,19 @@ export function LibraryView() {
                 {isScanningLibrary && l.id === activeLibraryId && (
                   <RotateCw size={13} className="spin library-lib-scan" aria-hidden="true" />
                 )}
-                <button
-                  className="icon-button library-lib-del"
-                  title={t.libraryDeleteLib}
-                  aria-label={t.libraryDeleteLib}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    void deleteLibrary(l.id);
-                  }}
-                >
-                  <Trash2 size={14} />
-                </button>
+                {isLeader && (
+                  <button
+                    className="icon-button library-lib-del"
+                    title={t.libraryDeleteLib}
+                    aria-label={t.libraryDeleteLib}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      void deleteLibrary(l.id);
+                    }}
+                  >
+                    <Trash2 size={14} />
+                  </button>
+                )}
               </div>
             ))
           )}

@@ -456,6 +456,7 @@ pub fn run() {
             drive::drive_account,
             drive::drive_sign_in,
             drive::drive_sign_out,
+            drive::drive_id_token,
             drive::drive_file_metadata,
             drive::drive_files_basic,
             drive::drive_open_revision,
