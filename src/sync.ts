@@ -137,6 +137,25 @@ export function deriveAnchor(root: string): string {
   return looksWindows(root) ? match[1].replace(/\//g, '\\') : match[1];
 }
 
+/** Shared folder (relative to the Shared drives mount) where skeleton thumbnails are cached so the
+ *  whole team reuses them instead of each machine re-rendering. */
+const THUMBS_DRIVE_SUBPATH = 'Pamvis/spine_app_data/thumbs';
+
+/**
+ * Absolute thumbnail-cache folder on THIS machine's Drive mount, or '' when we can't resolve a
+ * Shared drives mount (then the caller falls back to the per-machine app cache). Anchored at the
+ * mount via {@link deriveAnchor}, so it lands at `<letter>:\Shared drives\Pamvis\spine_app_data\thumbs`
+ * regardless of which shared drive the sync root points at or which letter the mount uses.
+ */
+export function driveThumbsDir(syncRoot: string): string {
+  if (!syncRoot) return '';
+  const anchor = deriveAnchor(syncRoot);
+  // Only meaningful when anchored at a real "Shared drives" mount.
+  if (!/\/Shared drives$/i.test(normSlashes(anchor))) return '';
+  const joined = `${stripTrailing(normSlashes(anchor))}/${THUMBS_DRIVE_SUBPATH}`;
+  return looksWindows(anchor) ? joined.replace(/\//g, '\\') : joined;
+}
+
 /** Reverse of tokenizePath against the local machine's Spine root. */
 export function resolvePath(token: string, spineRoot: string): string {
   if (!token || !token.startsWith(TOKEN)) return token;

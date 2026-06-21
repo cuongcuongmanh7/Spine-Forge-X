@@ -261,7 +261,13 @@ fn safe_cache_key(key: &str) -> Result<&str, String> {
     }
 }
 
-fn thumb_cache_dir(app: &AppHandle) -> Result<PathBuf, String> {
+/// Resolve the thumbnail cache folder. When the frontend passes a `dir` (the shared Google Drive
+/// thumbs folder, resolved per-machine), use it so the whole team reuses thumbnails; otherwise fall
+/// back to the per-machine app cache dir.
+fn thumb_cache_dir(app: &AppHandle, dir: &Option<String>) -> Result<PathBuf, String> {
+    if let Some(d) = dir.as_deref().map(str::trim).filter(|s| !s.is_empty()) {
+        return Ok(parse_quoted_path(d));
+    }
     app.path()
         .app_cache_dir()
         .map(|path| path.join("thumbs"))
@@ -270,12 +276,12 @@ fn thumb_cache_dir(app: &AppHandle) -> Result<PathBuf, String> {
 
 /// Return a cached skeleton thumbnail as a PNG data URL, or `None` if not generated yet.
 /// Used by the Library grid to skip the (expensive) off-screen WebGL render when a thumbnail
-/// for this asset revision already exists on disk.
+/// for this asset revision already exists (locally or in the shared Drive folder).
 #[tauri::command]
-pub(crate) fn thumb_cache_get(app: AppHandle, key: String) -> Result<Option<String>, String> {
+pub(crate) fn thumb_cache_get(app: AppHandle, key: String, dir: Option<String>) -> Result<Option<String>, String> {
     use base64::Engine;
     let key = safe_cache_key(&key)?;
-    let file = thumb_cache_dir(&app)?.join(format!("{key}.png"));
+    let file = thumb_cache_dir(&app, &dir)?.join(format!("{key}.png"));
     if !file.exists() {
         return Ok(None);
     }
@@ -286,7 +292,7 @@ pub(crate) fn thumb_cache_get(app: AppHandle, key: String) -> Result<Option<Stri
 
 /// Persist a generated skeleton thumbnail (a `data:image/png;base64,...` URL) to the cache dir.
 #[tauri::command]
-pub(crate) fn thumb_cache_put(app: AppHandle, key: String, data: String) -> Result<(), String> {
+pub(crate) fn thumb_cache_put(app: AppHandle, key: String, data: String, dir: Option<String>) -> Result<(), String> {
     use base64::Engine;
     let key = safe_cache_key(&key)?;
     let b64 = data
@@ -296,7 +302,7 @@ pub(crate) fn thumb_cache_put(app: AppHandle, key: String, data: String) -> Resu
     let bytes = base64::engine::general_purpose::STANDARD
         .decode(b64)
         .str_err()?;
-    let dir = thumb_cache_dir(&app)?;
-    fs::create_dir_all(&dir).str_err()?;
-    fs::write(dir.join(format!("{key}.png")), bytes).str_err()
+    let base = thumb_cache_dir(&app, &dir)?;
+    fs::create_dir_all(&base).str_err()?;
+    fs::write(base.join(format!("{key}.png")), bytes).str_err()
 }

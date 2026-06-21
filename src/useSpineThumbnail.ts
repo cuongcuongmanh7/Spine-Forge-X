@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import type { ExportAssets, LibraryEntry } from './config';
 import { type DisposablePlayer, basename, buildRawDataURIs, loadSpine38, loadSpine4 } from './spineRuntime';
+import { driveThumbsDir } from './sync';
+import { useApp } from './useAppController';
 
 /**
  * Renders a small static thumbnail of a Library unit's exported skeleton for the grid
@@ -21,10 +23,11 @@ const THUMB_W = 240;
 const THUMB_H = 180;
 const RENDER_TIMEOUT_MS = 8000;
 
-/** Filesystem-safe cache key: a stable hash of the asset's identity. Re-export (new bytes)
- *  or an editor-version bump changes the key, so the old thumbnail is naturally superseded. */
+/** Filesystem-safe cache key: a stable hash of the asset's identity. Uses the library-relative
+ *  path (NOT the absolute path) so the key matches across machines sharing the same Drive folder.
+ *  Re-export (new bytes) or an editor-version bump changes the key, superseding the old thumbnail. */
 function thumbKey(entry: LibraryEntry): string {
-  const seed = `${entry.spineFile}|${entry.spineBytes}|${entry.version ?? ''}`;
+  const seed = `${entry.relPath.replace(/\\/g, '/')}|${entry.spineBytes}|${entry.version ?? ''}`;
   // cyrb53 — small, fast, good-enough distribution for a cache key.
   let h1 = 0xdeadbeef;
   let h2 = 0x41c6ce57;
@@ -140,8 +143,12 @@ async function renderThumbnail(assets: ExportAssets, rawDataURIs: Record<string,
 }
 
 export function useSpineThumbnail(entry: LibraryEntry | null, enabled: boolean) {
+  const { syncRoot } = useApp();
   const [status, setStatus] = useState<ThumbStatus>('idle');
   const [dataUrl, setDataUrl] = useState<string | null>(null);
+
+  // Shared Drive cache folder (rides across machines); '' → fall back to the per-machine app cache.
+  const dir = driveThumbsDir(syncRoot);
 
   useEffect(() => {
     if (!enabled || !entry || !entry.exported) {
@@ -167,7 +174,7 @@ export function useSpineThumbnail(entry: LibraryEntry | null, enabled: boolean) 
     (async () => {
       // Cache hit is cheap and shouldn't wait behind the render queue — check it first.
       try {
-        const cached = await invoke<string | null>('thumb_cache_get', { key });
+        const cached = await invoke<string | null>('thumb_cache_get', { key, dir });
         if (cancelled) return;
         if (cached) {
           done(cached);
@@ -195,7 +202,7 @@ export function useSpineThumbnail(entry: LibraryEntry | null, enabled: boolean) 
         if (cancelled || url == null) return;
         done(url);
         // Persist for next time; failures here are non-fatal (we already showed the image).
-        void invoke('thumb_cache_put', { key, data: url }).catch(() => undefined);
+        void invoke('thumb_cache_put', { key, data: url, dir }).catch(() => undefined);
       } catch {
         fail();
       }
@@ -205,7 +212,7 @@ export function useSpineThumbnail(entry: LibraryEntry | null, enabled: boolean) 
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [entry?.spineFile, entry?.spineBytes, entry?.version, entry?.exported, enabled]);
+  }, [entry?.relPath, entry?.spineBytes, entry?.version, entry?.exported, enabled, dir]);
 
   return { status, dataUrl };
 }
