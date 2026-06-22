@@ -497,6 +497,10 @@ pub fn run() {
             drive::drive_file_metadata,
             drive::drive_files_basic,
             drive::drive_open_revision,
+            drive::changes::drive_watch_start,
+            drive::changes::drive_watch_stop,
+            library::library_watch_start,
+            library::library_watch_stop,
             start_batch_export,
             stop_batch_export,
             set_run_in_background

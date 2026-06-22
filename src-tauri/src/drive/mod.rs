@@ -28,6 +28,7 @@ use crate::{error::ResultExt, model::AppState};
 // `pub(crate)` so `generate_handler!` in lib.rs can reach the commands' macro-generated items at
 // their defining path (`drive::auth::drive_sign_in`, …); a plain re-export wouldn't carry those.
 pub(crate) mod auth;
+pub(crate) mod changes;
 pub(crate) use auth::DriveToken;
 use auth::access_token;
 
@@ -73,7 +74,7 @@ pub(crate) struct DriveFileInfo {
 
 // ---- Google API response shapes --------------------------------------------
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 struct UserRef {
     display_name: Option<String>,

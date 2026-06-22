@@ -7,6 +7,7 @@ import { basename } from '../sessions';
 import { formatDate } from '../time';
 import type { LibraryEntry } from '../config';
 import { useLibraryDrive } from '../useLibraryDrive';
+import { useDriveWatch } from '../useDriveWatch';
 import { useThumbnailWarm } from '../useSpineThumbnail';
 import { useLibraryTags } from '../useLibraryTags';
 import { useLibraryNotes } from '../useLibraryNotes';
@@ -68,7 +69,8 @@ export function LibraryInventory({
     openSettings,
     sessions,
     projects,
-    selectSession
+    selectSession,
+    addDriveChanges
   } = useApp();
 
   const { facet, selectedCats, selectedVersions, query } = filter;
@@ -93,7 +95,7 @@ export function LibraryInventory({
   const { tagList, metaFor, addEntryTag, removeEntryTag, setEntryOwner } = useLibraryTags({ libraryDir });
   const notes = useLibraryNotes({ libraryDir, authorEmail: driveAccount?.email ?? '', isLeader });
 
-  const { driveInfo, expandedInfo, loadingBasics, basicsProgress, basicsLoadedAt, basicFor, toggleDriveInfo, loadDriveBasics, openRevisionInSpine } =
+  const { driveInfo, expandedInfo, loadingBasics, basicsProgress, basicsLoadedAt, basicFor, toggleDriveInfo, loadDriveBasics, refreshBasicsSilently, openRevisionInSpine } =
     useLibraryDrive({
       t,
       pushToast,
@@ -109,6 +111,19 @@ export function LibraryInventory({
   };
 
   const entries = libraryScan?.entries ?? [];
+
+  // Auto-detect Drive changes while this tab is open: Changes-API poll (edit/rename/add/delete) +
+  // filesystem watch (add/remove). Edits refresh silently; add/remove rescan; all surface as a
+  // notification on the top-bar bell. Stops when the tab unmounts or the window loses focus.
+  useDriveWatch({
+    enabled: !!driveAccount,
+    libraryDir,
+    rootPath: activeLibrary?.rootPath ?? '',
+    entries,
+    refreshBasics: refreshBasicsSilently,
+    rescanLibrary,
+    onChanges: addDriveChanges
+  });
 
   // Clean-scan status of an entry as a stable group key ('unknown' | 'warning' | 'clean'); the
   // host owns `libraryCleanState`, so we inject this into the "By status" grouping/filter.

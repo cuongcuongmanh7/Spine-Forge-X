@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.4.17
+- **Tự phát hiện thay đổi trên Drive — không cần bấm "Tải dữ liệu Drive"** — khi đang mở tab Thư viện, app tự dò Drive vài giây một lần: ai sửa / đổi tên / thêm / xoá file `.spine`, cập nhật ảnh nguồn (kể cả trong thư mục con như `images/skin_default`), hay export lại đều được nhận diện và tự cập nhật lên bảng. Vẫn giữ nút "Tải dữ liệu Drive" để tải lại toàn bộ khi cần.
+- **Chuông thông báo "ai vừa làm gì"** — thêm icon chuông ở thanh tiêu đề (luôn thấy ở mọi tab) báo từng thay đổi kèm thư mục, ví dụ "Cường vừa sửa `9901.spine` ở `[…\9901]`" hay "vừa thêm 8 ảnh ở `[…]`"; thay đổi hàng loạt được gộp lại cho gọn. Lưu 20 thông báo gần nhất, bấm vào để xem.
+
 ## v0.4.16
 - **Inventory: nhóm "Theo trạng thái"** — thêm lựa chọn nhóm thứ ba (cạnh "Theo loại" / "Theo ID") để gom file theo trạng thái dọn ảnh: **Chưa scan → Cần kiểm tra → Đã clean**. Bấm chip một trạng thái để lọc nhanh đúng nhóm đó.
 - **Sửa filter "Hiện ghi chú đã xử lý"** — trước đây bật/tắt ở thanh lọc gần như không thấy tác dụng (chỉ ảnh hưởng bên trong popup, mà popup lại che thanh lọc). Nay nút này là **bộ lọc thật**: khi bật, file/thư mục dù ghi chú đã xử lý hết vẫn hiện số đếm + tô sáng để nổi lên trong danh sách. Đồng thời thêm **nút bật/tắt ngay trong popup ghi chú** (đồng bộ với nút ở thanh lọc) nên xem được ghi chú đã xử lý ngay tại chỗ.

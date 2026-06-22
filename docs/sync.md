@@ -118,6 +118,13 @@ Nếu bất kỳ scope nào apply remote → báo toast "Đang tải workspace m
 
 **Còn lại (pha sau):** chuyển sidecar tag/drive-meta sang Firestore; thay `window.location.reload()` bằng `onSnapshot` real-time.
 
+**Auto-detect thay đổi Drive (đã làm — v0.4.17).** Không còn phải bấm "Load Drive data" thủ công khi mở tab Library: một poller chạy nền dùng **Drive Changes API** (`changes.list` theo delta, ~10s/lần, chỉ khi tab Library mở + cửa sổ focus) phát hiện thay đổi ở mức Drive và tự refresh ngầm owner/last-modified các dòng bị ảnh hưởng. Phạm vi phát hiện:
+- **`.spine`**: thêm / sửa / đổi tên / xoá (xoá bắt cả trash lẫn xoá vĩnh viễn vì ID nằm trong cache).
+- **Ảnh nguồn** ở bất kỳ đâu trong cây con của unit (vd `images/skin_default/`), **trừ** dưới `export`/`ex`: thêm / sửa / xoá (xoá khi vào thùng rác). Phân biệt thêm vs sửa bằng heuristic `createdTime ≈ modifiedTime`.
+- **Export skeleton** (`.json`/`.skel`/`.skel.bytes`) trong cây unit → tín hiệu "export lại".
+
+Folder con của unit (`images/…`, `export/…`) không nằm trong cache ID nên được **resolve lười** bằng cách đi ngược chuỗi cha (`files.get` + cache theo session). Song song, một **filesystem watcher** (`notify`) trên ổ Shared drive đã mount tự rescan inventory khi `.spine` thêm/bớt trên đĩa (đúng thời điểm Drive for Desktop tải file xuống). Mỗi thay đổi nổi lên **chuông thông báo global** ở titlebar (luôn thấy ở mọi tab): "ai vừa làm gì + ở folder nào", gộp theo nhóm khi hàng loạt ("vừa xoá 15 file ở […]"), lưu 20 noti gần nhất, **tính cả thay đổi của chính mình**. Giới hạn: xoá vĩnh viễn file chưa-track (ảnh/export) không quy được; cần "Load Drive data" 1 lần để biết folder unit. Code: poller `src-tauri/src/drive/changes.rs`; watcher `src-tauri/src/library.rs` (`library_watch_start/stop`); hook `src/useDriveWatch.ts`; store + chuông `src/useDriveNotifications.ts` + `src/components/NotificationBell.tsx`.
+
 ---
 
 ## 7. Tier B — Owner / lịch sử sửa / version (Google Drive API)

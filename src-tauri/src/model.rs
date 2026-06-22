@@ -4,7 +4,11 @@
 //! the export (`export`) and clean (`clean`) engines construct/read them.
 
 use serde::{Deserialize, Serialize};
-use std::{collections::HashMap, path::PathBuf, sync::atomic::AtomicBool};
+use std::{
+    collections::HashMap,
+    path::PathBuf,
+    sync::atomic::{AtomicBool, AtomicU64},
+};
 use tokio::sync::Mutex;
 
 use crate::cleaner;
@@ -39,6 +43,19 @@ pub(crate) struct AppState {
     pub(crate) drive_file_ids: Mutex<HashMap<String, String>>,
     /// Tier B: cache of `shared-drive-name → driveId`, fetched once via `drives.list`.
     pub(crate) drive_roots: Mutex<Option<HashMap<String, String>>>,
+    /// Tier B realtime: `shared-drive-name → Drive Changes API page token`, advanced each poll so
+    /// the background watcher fetches only the delta since last tick.
+    pub(crate) drive_change_tokens: Mutex<HashMap<String, String>>,
+    /// Tier B realtime: true while the changes poller should keep running. Cleared by
+    /// `drive_watch_stop` so the loop exits at its next tick.
+    pub(crate) drive_watch_running: AtomicBool,
+    /// Tier B realtime: bumped on every `drive_watch_start`. Each spawned poll loop captures the
+    /// epoch it was born with and exits once a newer start supersedes it — so a stop→start (e.g. a
+    /// focus toggle) never leaves two loops polling at once.
+    pub(crate) drive_watch_epoch: AtomicU64,
+    /// Library filesystem watcher (notify) — held here to keep it alive; dropped on stop. Plain
+    /// `std::sync::Mutex` because the watcher is touched outside async and never held across `.await`.
+    pub(crate) library_watcher: std::sync::Mutex<Option<notify::RecommendedWatcher>>,
 }
 
 impl Default for AppState {
@@ -53,6 +70,10 @@ impl Default for AppState {
             drive_token: Mutex::new(None),
             drive_file_ids: Mutex::new(HashMap::new()),
             drive_roots: Mutex::new(None),
+            drive_change_tokens: Mutex::new(HashMap::new()),
+            drive_watch_running: AtomicBool::new(false),
+            drive_watch_epoch: AtomicU64::new(0),
+            library_watcher: std::sync::Mutex::new(None),
         }
     }
 }

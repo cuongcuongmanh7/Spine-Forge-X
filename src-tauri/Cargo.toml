@@ -1,6 +1,6 @@
 [package]
 name = "spineforge-x"
-version = "0.4.16"
+version = "0.4.17"
 description = "Batch export and version upgrade workflow for Spine projects."
 authors = ["SpineForge X"]
 license = "MIT"
@@ -27,6 +27,8 @@ base64 = "0.22"
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
 # Bounded-concurrency fan-out for batched Drive lookups (buffer_unordered).
 futures = "0.3"
+# Filesystem watcher for the mounted Shared drive (auto-detect added/removed .spine files).
+notify = "6.1"
 # `windows-native` is REQUIRED: keyring v3 enables no credential store by default and silently
 # falls back to an in-memory mock store, so the refresh token would vanish on app exit.
 keyring = { version = "3", features = ["windows-native"] }

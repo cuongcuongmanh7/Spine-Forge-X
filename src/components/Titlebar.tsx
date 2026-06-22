@@ -2,6 +2,7 @@ import { Minus, RotateCw, Square, X } from 'lucide-react';
 import appIconUrl from '../../src-tauri/icons/icon.ico';
 import { appVersionLabel } from '../config';
 import { useApp } from '../useAppController';
+import { NotificationBell } from './NotificationBell';
 
 export function Titlebar() {
   const { updateUi, getAppWindow, checkForAppUpdate, installPendingUpdate, openReleasesPage } = useApp();
@@ -97,6 +98,7 @@ export function Titlebar() {
           )}
         </div>
       </div>
+      <NotificationBell />
       <div className="titlebar-controls">
         <button title="Minimize" aria-label="Minimize" onClick={() => void getAppWindow()?.minimize()}>
           <Minus size={15} />

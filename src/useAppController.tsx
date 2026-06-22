@@ -30,6 +30,7 @@ import { useSpineDetection } from './useSpineDetection';
 import { useLinkedProjects } from './useLinkedProjects';
 import { useWorkspace } from './useWorkspace';
 import { useLibrary } from './useLibrary';
+import { useDriveNotifications } from './useDriveNotifications';
 import { useSync } from './useSync';
 import { useDrive } from './useDrive';
 import { useFirebaseAuth } from './useFirebaseAuth';
@@ -197,6 +198,16 @@ export function useAppControllerValue() {
   // App-data sync (Tier B): Google Drive account — identifies the user AND powers owner/history
   // metadata of `.spine` files.
   const { driveAccount, driveBusy, driveSignIn, driveCancelSignIn, driveSignOut } = useDrive({ t, pushToast });
+
+  // Realtime Drive-change notifications (bell in the top bar). The Library tab's watcher feeds
+  // classified changes in via `addDriveChanges`; the store lives here so the bell persists app-wide.
+  const {
+    notifications,
+    unreadCount: notificationsUnread,
+    addChanges: addDriveChanges,
+    markAllRead: markNotificationsRead,
+    clearAll: clearNotifications
+  } = useDriveNotifications();
 
   // Bridge the Drive OAuth session into Firebase Auth (no second login); uid keys the workspace doc.
   // `isLeader` comes from the Firestore-managed `config/roles` list (not hardcoded) — leaders may
@@ -611,6 +622,13 @@ export function useAppControllerValue() {
     driveSignOut,
     /** Library leader (may add/remove libraries); members get a read-only list. */
     isLeader,
+
+    // Realtime Drive-change notifications (top-bar bell)
+    notifications,
+    notificationsUnread,
+    addDriveChanges,
+    markNotificationsRead,
+    clearNotifications,
 
     // Clean source folder
     cleanSourceFolderOpen,

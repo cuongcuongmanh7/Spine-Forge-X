@@ -175,6 +175,33 @@ export function useLibraryDrive({ t, pushToast, driveAccount, libraryDir, spineP
     }
   }
 
+  // Background refresh of owner/last-modified for a few rows the Drive watcher flagged as changed.
+  // Same merge/sidecar path as loadDriveBasics but silent: no spinner, no progress, no toasts — it
+  // runs unattended whenever the Changes API reports an edit/rename to a tracked file.
+  async function refreshBasicsSilently(rows: LibraryEntry[]) {
+    if (!driveAccount) return;
+    const relPaths = rows
+      .map((e) => toDriveRelPath(e.spineFile, libraryDir))
+      .filter((r): r is string => Boolean(r));
+    if (relPaths.length === 0) return;
+    try {
+      const results = await fetchDriveBasics(relPaths);
+      const fresh: Record<string, DriveBasic> = {};
+      for (const r of results) fresh[r.relPath] = r;
+      setDriveBasics((prev) => {
+        const next = { ...prev, ...fresh };
+        persistBasics(next);
+        return next;
+      });
+      if (libraryDir) {
+        const remote = await readDriveMetaSidecar(libraryDir).catch(() => ({}) as Record<string, DriveBasic>);
+        await writeDriveMetaSidecar(libraryDir, { ...remote, ...fresh }).catch(() => undefined);
+      }
+    } catch {
+      /* background refresh — stay silent on failure, the manual button remains as fallback */
+    }
+  }
+
   // Download a past revision to temp and open it in Spine (regression review).
   async function openRevisionInSpine(entry: LibraryEntry, rev: DriveRevision) {
     const relPath = toDriveRelPath(entry.spineFile, libraryDir);
@@ -196,6 +223,7 @@ export function useLibraryDrive({ t, pushToast, driveAccount, libraryDir, spineP
     basicFor,
     toggleDriveInfo,
     loadDriveBasics,
+    refreshBasicsSilently,
     openRevisionInSpine
   };
 }

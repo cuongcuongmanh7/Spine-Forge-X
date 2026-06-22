@@ -7,11 +7,16 @@
 use std::collections::{BTreeSet, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::AtomicBool;
+use std::sync::Arc;
+use std::time::Duration;
 
+use notify::event::ModifyKind;
+use notify::{EventKind, RecursiveMode, Watcher};
 use serde_json::Value;
+use tauri::{AppHandle, Emitter, State};
 
 use crate::clean::discover_clean_units;
-use crate::model::{BatchScanSummary, ExportAssets, ExportPage, FolderScan, LibraryEntry, LibraryScan};
+use crate::model::{AppState, BatchScanSummary, ExportAssets, ExportPage, FolderScan, LibraryEntry, LibraryScan};
 use crate::paths::{parse_quoted_path, path_to_string, unquote};
 use crate::util::normalize_path_for_compare;
 use crate::{cleaner, concurrent, skel_binary, spine_project};
@@ -389,6 +394,90 @@ pub(crate) fn list_export_assets(folder: String) -> Result<ExportAssets, String>
     }
 
     Err("Không tìm thấy skeleton + atlas hợp lệ trong export/.".to_string())
+}
+
+// ---- filesystem watcher (auto-detect added/removed .spine on the mounted Shared drive) ---------
+
+/// Debounce window: collapse a burst of filesystem events (a folder sync, a bulk delete) into a
+/// single rescan signal once things go quiet for this long.
+const FS_DEBOUNCE: Duration = Duration::from_secs(2);
+
+/// Is this event one that could change the library *inventory* (a `.spine` added/removed/renamed,
+/// or a folder created/removed)? We ignore pure content edits and our own sidecar JSON churn so the
+/// watcher doesn't fire a rescan on every save or metadata write.
+fn is_structural_event(event: &notify::Event) -> bool {
+    let kind_matters = matches!(
+        event.kind,
+        EventKind::Create(_) | EventKind::Remove(_) | EventKind::Modify(ModifyKind::Name(_))
+    );
+    if !kind_matters {
+        return false;
+    }
+    event.paths.iter().any(|p| {
+        let s = p.to_string_lossy().to_ascii_lowercase();
+        if s.contains("spineforge-") {
+            return false; // our own sidecar files (library-meta / drive-meta) — never a real change
+        }
+        // A `.spine` file, or a path with no extension (a folder add/remove that may carry units).
+        s.ends_with(".spine") || p.extension().is_none()
+    })
+}
+
+/// Watch the library root (the mounted Shared-drive folder, synced by Google Drive for Desktop) for
+/// `.spine` files appearing/disappearing, and emit a debounced `library-fs-changed` event so the
+/// frontend re-runs its scan. Replaces any previous watcher. No-op-safe to call repeatedly.
+///
+/// Caveat: Google Drive for Desktop streams files on demand, so events can arrive late or oddly
+/// ordered — the heavy debounce + `.spine`-only filter keep that from causing rescan storms.
+#[tauri::command]
+pub(crate) async fn library_watch_start(
+    app: AppHandle,
+    state: State<'_, Arc<AppState>>,
+    root: String,
+) -> Result<(), String> {
+    let root_path = parse_quoted_path(&root);
+    if !root_path.exists() {
+        return Err("Path không tồn tại.".to_string());
+    }
+
+    // notify's callback is sync; forward "something structural happened" into an async debouncer.
+    let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<()>();
+    let mut watcher = notify::recommended_watcher(move |res: notify::Result<notify::Event>| {
+        if let Ok(event) = res {
+            if is_structural_event(&event) {
+                let _ = tx.send(());
+            }
+        }
+    })
+    .map_err(|e| e.to_string())?;
+    watcher.watch(&root_path, RecursiveMode::Recursive).map_err(|e| e.to_string())?;
+
+    // Keep the watcher alive by parking it in state (dropping it stops watching). Replace any prior.
+    *state.library_watcher.lock().unwrap() = Some(watcher);
+
+    let app_handle = app.clone();
+    tauri::async_runtime::spawn(async move {
+        // Trailing debounce: on the first event, wait until FS_DEBOUNCE of silence, then emit once.
+        while rx.recv().await.is_some() {
+            loop {
+                tokio::select! {
+                    _ = tokio::time::sleep(FS_DEBOUNCE) => break,
+                    msg = rx.recv() => {
+                        if msg.is_none() { return; } // channel closed (watcher dropped) → stop
+                    }
+                }
+            }
+            let _ = app_handle.emit("library-fs-changed", ());
+        }
+    });
+    Ok(())
+}
+
+/// Stop watching the library folder (drops the watcher, which ends the event stream + debouncer).
+#[tauri::command]
+pub(crate) async fn library_watch_stop(state: State<'_, Arc<AppState>>) -> Result<(), String> {
+    *state.library_watcher.lock().unwrap() = None;
+    Ok(())
 }
 
 #[cfg(test)]
