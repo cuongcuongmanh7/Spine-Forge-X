@@ -18,10 +18,11 @@
 | **App-data root (cố định)** | `<ổ>:\Shared drives\Pamvis\spine_app_data` — gốc dữ liệu chung, **tự dò** đúng ổ trên mỗi máy. Không có UI chọn folder. Không mount được → banner cảnh báo. **Bản dev** (`tauri dev`, `cfg!(debug_assertions)`) ghi vào subfolder `…\spine_app_data\dev\` riêng để khỏi đụng dữ liệu thật; bản `tauri build` dùng root. Titlebar hiện badge "dev". |
 | **Workspace profile (per-user)** | `workspaces/<emailSlug>/profile.json` (+ `.bak`); chứa appConfig (trừ `spinePath`), projects, sessions. `emailSlug` = email Google sanitize. |
 | **Library list (shared)** | `library/libraries.json` (+ `.bak`); danh sách thư viện đăng ký, dùng chung. Sidecar tag/owner (`library/spineforge-library-meta.json`) + drive-meta (`library/spineforge-drive-meta.json`) cũng nằm trong `library/`. |
+| **Library clean-state (shared)** | Doc Firestore `library/clean`; trạng thái Not scanned/Clean/Needs review của từng `.spine`, gom theo `libraryId`. Leader-curated (cùng cổng quyền với library list). Path (cả key lẫn `record.spineFile`) lưu dạng `${SPINE_ROOT}/...` để rebase xuyên máy. |
 | **Rebase anchor (tự suy ra)** | Mount `…\Shared drives` suy từ app-data root (`deriveAnchor`) — project ở các drive khác (FD/DH) đều portable. |
 | **`${SPINE_ROOT}` token** | Mọi path dưới anchor lưu dạng `${SPINE_ROOT}/...`; load ở máy khác token được thay bằng anchor của máy đó. |
 
-**Không bao giờ đồng bộ** (machine-local): Spine.exe (`spinePath`), cache quét thư viện + trạng thái clean, theme/ngôn ngữ, active project/session id.
+**Không bao giờ đồng bộ** (machine-local): Spine.exe (`spinePath`), cache quét thư viện (inventory — máy mới tự quét lại lần đầu), theme/ngôn ngữ, active project/session id. (Trạng thái clean **có** đồng bộ — xem `library/clean` ở trên.)
 
 ## 2. Cách dùng
 

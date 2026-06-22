@@ -1,8 +1,10 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { defaultAppConfig, defaultSessionConfig, type Library, type Project, type Session } from './config';
 import {
+  applyLibraryCleanProfile,
   applyLibraryProfile,
   applyWorkspaceProfile,
+  buildLibraryCleanProfile,
   buildLibraryProfile,
   buildWorkspaceProfile,
   deriveAnchor,
@@ -10,12 +12,14 @@ import {
   libraryListPath,
   resolvePath,
   sameLibraryBody,
+  sameLibraryCleanBody,
   sameWorkspaceBody,
   slugifyEmail,
   tokenizePath,
   workspaceProfilePath,
   type SyncData
 } from './sync';
+import type { LibraryCleanRecord, LibraryCleanState } from './config';
 
 describe('deriveAnchor', () => {
   it('anchors at the Shared drives mount when the folder is inside one', () => {
@@ -94,7 +98,8 @@ describe('build / apply profiles', () => {
     appConfig: { ...defaultAppConfig, spinePath: 'C:\\MachineA\\Spine.com', parallelJobs: 6 },
     projects: [project],
     sessions: [session],
-    libraries: [library]
+    libraries: [library],
+    libraryCleanState: {}
   };
 
   it('workspace profile tokenizes source paths, drops spinePath, omits libraries', () => {
@@ -134,5 +139,65 @@ describe('build / apply profiles', () => {
   it('sameWorkspaceBody / sameLibraryBody ignore updatedAt', () => {
     expect(sameWorkspaceBody(buildWorkspaceProfile(data, 'G:\\GDrive\\Spine', 1000), buildWorkspaceProfile(data, 'G:\\GDrive\\Spine', 9999))).toBe(true);
     expect(sameLibraryBody(buildLibraryProfile(data.libraries, 'G:\\GDrive\\Spine', 1000), buildLibraryProfile(data.libraries, 'G:\\GDrive\\Spine', 9999))).toBe(true);
+  });
+});
+
+describe('library clean-state profile', () => {
+  beforeEach(() => localStorage.clear());
+
+  const CLEAN_KEY = 'spineforge.libraryClean.l1';
+  const libraries: Library[] = [{ id: 'l1', name: 'Lib', rootPath: 'G:\\GDrive\\Spine', createdAt: 1, lastScanAt: null }];
+  const recordFor = (spineFile: string): LibraryCleanRecord => ({
+    spineFile,
+    scannedAt: 5,
+    unusedCount: 0,
+    unusedBytes: 0,
+    spineBytes: 100,
+    imageBytes: 200,
+    imageCount: 3,
+    version: '4.1',
+    exported: true
+  });
+  const seed = (state: LibraryCleanState) => localStorage.setItem(CLEAN_KEY, JSON.stringify(state));
+
+  it('tokenizes both the record map key and the embedded spineFile', () => {
+    const abs = 'G:\\GDrive\\Spine\\Heroes\\a.spine';
+    seed({ [abs]: recordFor(abs) });
+    const profile = buildLibraryCleanProfile(libraries, 'G:\\GDrive\\Spine', 1000);
+    expect(profile.states.l1).toHaveLength(1);
+    expect(profile.states.l1[0].spineFile).toBe('${SPINE_ROOT}/Heroes/a.spine');
+  });
+
+  it('omits libraries with an empty clean-state', () => {
+    const profile = buildLibraryCleanProfile(libraries, 'G:\\GDrive\\Spine', 1000);
+    expect(profile.states).toEqual({});
+  });
+
+  it('round-trips onto another machine: map key AND record.spineFile rebase to the local path', () => {
+    const abs = 'G:\\GDrive\\Spine\\Heroes\\a.spine';
+    seed({ [abs]: recordFor(abs) });
+    const profile = buildLibraryCleanProfile(libraries, 'G:\\GDrive\\Spine', 1000);
+
+    localStorage.clear();
+    applyLibraryCleanProfile(profile, 'F:\\Drive\\Spine');
+    const local = JSON.parse(localStorage.getItem(CLEAN_KEY)!) as LibraryCleanState;
+
+    const localAbs = 'F:\\Drive\\Spine\\Heroes\\a.spine';
+    // The map MUST be keyed by the local absolute path...
+    expect(Object.keys(local)).toEqual([localAbs]);
+    // ...and record.spineFile rebased too, or cleanStatusForEntry's `record.spineFile === entry.spineFile`
+    // check would reject it on the new machine (showing "needs review" instead of "clean").
+    expect(local[localAbs].spineFile).toBe(localAbs);
+    expect(local[localAbs].version).toBe('4.1');
+  });
+
+  it('sameLibraryCleanBody ignores updatedAt and map-iteration order', () => {
+    seed({
+      'G:\\GDrive\\Spine\\b.spine': recordFor('G:\\GDrive\\Spine\\b.spine'),
+      'G:\\GDrive\\Spine\\a.spine': recordFor('G:\\GDrive\\Spine\\a.spine')
+    });
+    const a = buildLibraryCleanProfile(libraries, 'G:\\GDrive\\Spine', 1000);
+    const b = buildLibraryCleanProfile(libraries, 'G:\\GDrive\\Spine', 9999);
+    expect(sameLibraryCleanBody(a, b)).toBe(true);
   });
 });

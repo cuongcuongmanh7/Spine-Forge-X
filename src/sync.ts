@@ -15,11 +15,20 @@ import {
   defaultAppConfig,
   type AppConfig,
   type Library,
+  type LibraryCleanRecord,
+  type LibraryCleanState,
   type Project,
   type Session,
   type SessionConfig
 } from './config';
-import { persistAppConfig, persistLibraries, persistProjects, persistSessions } from './sessions';
+import {
+  loadLibraryCleanState,
+  persistAppConfig,
+  persistLibraries,
+  persistLibraryCleanState,
+  persistProjects,
+  persistSessions
+} from './sessions';
 
 // Legacy filesystem names kept only for the path helpers used by callers/tests (sidecars + tests).
 const WORKSPACE_FILE = 'profile.json';
@@ -30,7 +39,8 @@ const TOKEN = '${SPINE_ROOT}';
 const SYNC_KEYS = {
   enabled: 'spineforge.sync.enabled',
   workspaceSyncedAt: 'spineforge.sync.workspaceSyncedAt',
-  librarySyncedAt: 'spineforge.sync.librarySyncedAt'
+  librarySyncedAt: 'spineforge.sync.librarySyncedAt',
+  cleanSyncedAt: 'spineforge.sync.cleanSyncedAt'
 } as const;
 
 export type SyncSettings = {
@@ -38,6 +48,8 @@ export type SyncSettings = {
   /** updatedAt of the workspace/library profile we last read or wrote; drives newer-wins. */
   workspaceSyncedAt: number | null;
   librarySyncedAt: number | null;
+  /** updatedAt of the shared library clean-state doc we last read or wrote; drives newer-wins. */
+  cleanSyncedAt: number | null;
 };
 
 /** Live app data the profiles are built from (passed in by the controller). */
@@ -46,6 +58,9 @@ export type SyncData = {
   projects: Project[];
   sessions: Session[];
   libraries: Library[];
+  /** Active library's clean-state. Carried only so a clean scan triggers a debounced push; the
+   *  pushed snapshot is read fresh from localStorage (all libraries) in buildLibraryCleanProfile. */
+  libraryCleanState: LibraryCleanState;
 };
 
 /** Per-user workspace profile. `appConfig` omits the machine-local `spinePath`. */
@@ -64,6 +79,19 @@ export type LibraryProfile = {
   libraries: Library[];
 };
 
+/**
+ * Shared library clean-state (team-wide): the "scanned / clean / needs-review" status per `.spine`
+ * file, grouped by library id. Stored as an array of records per library (NOT a path-keyed map) so
+ * the `${SPINE_ROOT}`-tokenized paths — which contain `.` and `/` — never become Firestore map
+ * keys. The library id is a UUID, so it's a safe map key. Each record's `spineFile` is tokenized
+ * too, because `cleanStatusForEntry` compares it against the entry's absolute path on load.
+ */
+export type LibraryCleanProfile = {
+  schema: number;
+  updatedAt: number;
+  states: Record<string, LibraryCleanRecord[]>;
+};
+
 // ---- machine-local settings -------------------------------------------------
 
 export function loadSyncSettings(): SyncSettings {
@@ -77,7 +105,8 @@ export function loadSyncSettings(): SyncSettings {
   return {
     enabled: enabledRaw === null ? true : enabledRaw === 'true',
     workspaceSyncedAt: num(SYNC_KEYS.workspaceSyncedAt),
-    librarySyncedAt: num(SYNC_KEYS.librarySyncedAt)
+    librarySyncedAt: num(SYNC_KEYS.librarySyncedAt),
+    cleanSyncedAt: num(SYNC_KEYS.cleanSyncedAt)
   };
 }
 
@@ -90,6 +119,7 @@ export function persistSyncSettings(patch: Partial<SyncSettings>): void {
   if (patch.enabled !== undefined) localStorage.setItem(SYNC_KEYS.enabled, String(patch.enabled));
   stamp(SYNC_KEYS.workspaceSyncedAt, patch.workspaceSyncedAt);
   stamp(SYNC_KEYS.librarySyncedAt, patch.librarySyncedAt);
+  stamp(SYNC_KEYS.cleanSyncedAt, patch.cleanSyncedAt);
 }
 
 // ---- path helpers -----------------------------------------------------------
@@ -209,6 +239,37 @@ export function applyLibraryProfile(profile: LibraryProfile, anchor: string): vo
   persistLibraries(profile.libraries.map((l) => ({ ...l, rootPath: resolvePath(l.rootPath, anchor) })));
 }
 
+/**
+ * Snapshot every library's clean-state from localStorage with paths tokenized to `${SPINE_ROOT}`.
+ * Reads localStorage directly (clean-state isn't part of `SyncData`); the caller passes the live
+ * `libraries` so we only snapshot known ids. Empty states are omitted to keep the doc small.
+ */
+export function buildLibraryCleanProfile(libraries: Library[], anchor: string, updatedAt: number): LibraryCleanProfile {
+  const states: Record<string, LibraryCleanRecord[]> = {};
+  for (const lib of libraries) {
+    const local = loadLibraryCleanState(lib.id);
+    const records = Object.values(local);
+    if (records.length === 0) continue;
+    states[lib.id] = records
+      .map((r) => ({ ...r, spineFile: tokenizePath(r.spineFile, anchor) }))
+      // Stable order so `sameLibraryCleanBody` doesn't churn on map-iteration order.
+      .sort((a, b) => a.spineFile.localeCompare(b.spineFile));
+  }
+  return { schema: SCHEMA, updatedAt, states };
+}
+
+/** Write the shared clean-state into localStorage (per library), rebasing paths to this machine. */
+export function applyLibraryCleanProfile(profile: LibraryCleanProfile, anchor: string): void {
+  for (const [libId, records] of Object.entries(profile.states)) {
+    const state: Record<string, LibraryCleanRecord> = {};
+    for (const r of records) {
+      const spineFile = resolvePath(r.spineFile, anchor);
+      state[spineFile] = { ...r, spineFile };
+    }
+    persistLibraryCleanState(libId, state);
+  }
+}
+
 /** Stable comparison ignoring `updatedAt` — used to skip no-op writes. */
 export function sameWorkspaceBody(a: WorkspaceProfile, b: WorkspaceProfile): boolean {
   const body = (p: WorkspaceProfile) => JSON.stringify({ appConfig: p.appConfig, projects: p.projects, sessions: p.sessions });
@@ -216,6 +277,9 @@ export function sameWorkspaceBody(a: WorkspaceProfile, b: WorkspaceProfile): boo
 }
 export function sameLibraryBody(a: LibraryProfile, b: LibraryProfile): boolean {
   return JSON.stringify(a.libraries) === JSON.stringify(b.libraries);
+}
+export function sameLibraryCleanBody(a: LibraryCleanProfile, b: LibraryCleanProfile): boolean {
+  return JSON.stringify(a.states) === JSON.stringify(b.states);
 }
 
 // ---- Firestore IO: read / write profile documents --------------------------
@@ -279,6 +343,24 @@ export async function readLibraryProfile(): Promise<LibraryProfile | null> {
 export async function writeLibraryProfile(profile: LibraryProfile): Promise<number> {
   const ref = envDoc('library', 'list');
   await setDoc(ref, { schema: profile.schema, libraries: profile.libraries, updatedAt: serverTimestamp() });
+  const snap = await getDoc(ref);
+  return tsToMillis(snap.get('updatedAt')) ?? profile.updatedAt;
+}
+
+/** Reads the shared library clean-state doc (`envs/{env}/library/clean`). */
+export async function readLibraryCleanProfile(): Promise<LibraryCleanProfile | null> {
+  const snap = await getDoc(envDoc('library', 'clean'));
+  if (!snap.exists()) return null;
+  const d = snap.data();
+  const updatedAt = tsToMillis(d.updatedAt);
+  if (updatedAt === null || typeof d.states !== 'object' || d.states === null) return null;
+  return { schema: typeof d.schema === 'number' ? d.schema : SCHEMA, updatedAt, states: d.states as LibraryCleanProfile['states'] };
+}
+
+/** Writes the shared clean-state doc; returns the server-resolved `updatedAt` in millis. */
+export async function writeLibraryCleanProfile(profile: LibraryCleanProfile): Promise<number> {
+  const ref = envDoc('library', 'clean');
+  await setDoc(ref, { schema: profile.schema, states: profile.states, updatedAt: serverTimestamp() });
   const snap = await getDoc(ref);
   return tsToMillis(snap.get('updatedAt')) ?? profile.updatedAt;
 }

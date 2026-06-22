@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { confirm, open } from '@tauri-apps/plugin-dialog';
 import type { Library, LibraryCleanState, LibraryEntry, LibraryScan } from './config';
@@ -61,6 +61,23 @@ export function useLibrary({ t, pushToast }: Options) {
     setScan(activeLibraryId ? loadLibraryScan(activeLibraryId) : null);
     setCleanState(activeLibraryId ? loadLibraryCleanState(activeLibraryId) : {});
   }, [activeLibraryId]);
+
+  // Auto-scan a library that has no cached inventory on THIS machine yet. The library *list* syncs
+  // across machines (Firestore), but the per-machine scan cache does not — so after signing in on a
+  // fresh machine the sidebar shows the folder while the inventory is empty until a scan runs. Do it
+  // once per library id per session; runScan persists an (empty) scan even on a genuine no-match, so
+  // a reachable-but-empty folder won't loop, and a failure (path unreachable) surfaces a toast and
+  // isn't retried.
+  const autoScannedRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    if (!activeLibrary || isScanning) return;
+    const id = activeLibrary.id;
+    if (autoScannedRef.current.has(id)) return;
+    if (loadLibraryScan(id)) return; // already have a cached inventory on this machine
+    autoScannedRef.current.add(id);
+    void runScan(activeLibrary);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeLibraryId, activeLibrary]);
 
   async function runScan(library: Library): Promise<LibraryScan | null> {
     setIsScanning(true);

@@ -289,9 +289,10 @@ pub(crate) fn resolve_app_data_dir() -> Option<String> {
     None
 }
 
-/// Resolve the thumbnail cache folder. When the frontend passes a `dir` (the shared app-data root
-/// resolved per-machine), thumbnails live in `<dir>/thumbs` so the whole team reuses them; otherwise
-/// fall back to the per-machine app cache dir.
+/// Resolve the thumbnail cache folder. The frontend now uses the per-machine OS app-cache dir (L1)
+/// and shares thumbnails via Cloud Storage (L2) — so no Drive mount is required and a web/mobile
+/// client can read them too. The optional `dir` (a specific folder) is still honored for callers
+/// that want an explicit location; when absent we use the per-machine app cache.
 fn thumb_cache_dir(app: &AppHandle, dir: &Option<String>) -> Result<PathBuf, String> {
     if let Some(d) = dir.as_deref().map(str::trim).filter(|s| !s.is_empty()) {
         return Ok(parse_quoted_path(d).join("thumbs"));
@@ -333,4 +334,29 @@ pub(crate) fn thumb_cache_put(app: AppHandle, key: String, data: String, dir: Op
     let base = thumb_cache_dir(&app, &dir)?;
     fs::create_dir_all(&base).str_err()?;
     fs::write(base.join(format!("{key}.png")), bytes).str_err()
+}
+
+/// Download a remote thumbnail (a Firebase Storage URL) into the cache and return it as a PNG data
+/// URL. Lets an L2 (Cloud Storage) hit populate the per-machine L1 disk cache so the next view is an
+/// instant local read — the shared source of truth is Cloud Storage, no Drive mount required. Done
+/// in Rust (not a browser `fetch`) so it needs no bucket CORS config.
+#[tauri::command]
+pub(crate) async fn thumb_cache_fetch(
+    app: AppHandle,
+    key: String,
+    url: String,
+    dir: Option<String>,
+) -> Result<String, String> {
+    use base64::Engine;
+    safe_cache_key(&key)?;
+    let resp = reqwest::Client::new().get(&url).send().await.str_err()?;
+    if !resp.status().is_success() {
+        return Err(format!("tải thumbnail lỗi: HTTP {}", resp.status()));
+    }
+    let bytes = resp.bytes().await.str_err()?.to_vec();
+    let base = thumb_cache_dir(&app, &dir)?;
+    fs::create_dir_all(&base).str_err()?;
+    fs::write(base.join(format!("{key}.png")), &bytes).str_err()?;
+    let encoded = base64::engine::general_purpose::STANDARD.encode(&bytes);
+    Ok(format!("data:image/png;base64,{encoded}"))
 }

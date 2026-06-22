@@ -3,7 +3,6 @@ import { invoke } from '@tauri-apps/api/core';
 import type { ExportAssets, LibraryEntry } from './config';
 import { firebaseConfigured, getThumbDownloadUrl, uploadThumb } from './firebase';
 import { type DisposablePlayer, basename, buildRawDataURIs, loadSpine38, loadSpine4 } from './spineRuntime';
-import { useApp } from './useAppController';
 
 /**
  * Renders a small static thumbnail of a Library unit's exported skeleton for the grid
@@ -26,7 +25,7 @@ const RENDER_TIMEOUT_MS = 8000;
 /** Filesystem-safe cache key: a stable hash of the asset's identity. Uses the library-relative
  *  path (NOT the absolute path) so the key matches across machines sharing the same Drive folder.
  *  Re-export (new bytes) or an editor-version bump changes the key, superseding the old thumbnail. */
-function thumbKey(entry: LibraryEntry): string {
+export function thumbKey(entry: LibraryEntry): string {
   const seed = `${entry.relPath.replace(/\\/g, '/')}|${entry.spineBytes}|${entry.version ?? ''}`;
   // cyrb53 — small, fast, good-enough distribution for a cache key.
   let h1 = 0xdeadbeef;
@@ -143,12 +142,8 @@ async function renderThumbnail(assets: ExportAssets, rawDataURIs: Record<string,
 }
 
 export function useSpineThumbnail(entry: LibraryEntry | null, enabled: boolean) {
-  const { appDataDir } = useApp();
   const [status, setStatus] = useState<ThumbStatus>('idle');
   const [dataUrl, setDataUrl] = useState<string | null>(null);
-
-  // Shared app-data root (rides across machines via Drive); null → fall back to per-machine app cache.
-  const dir = appDataDir ?? undefined;
 
   useEffect(() => {
     if (!enabled || !entry || !entry.exported) {
@@ -172,9 +167,9 @@ export function useSpineThumbnail(entry: LibraryEntry | null, enabled: boolean) 
     const folder = entry.folder;
 
     (async () => {
-      // L1 — per-machine local cache (fast, works offline, no Drive needed). Check it first.
+      // L1 — per-machine LOCAL disk cache (OS app-cache dir; no Drive mount, no network). Check first.
       try {
-        const cached = await invoke<string | null>('thumb_cache_get', { key, dir });
+        const cached = await invoke<string | null>('thumb_cache_get', { key });
         if (cancelled) return;
         if (cached) {
           done(cached);
@@ -185,13 +180,21 @@ export function useSpineThumbnail(entry: LibraryEntry | null, enabled: boolean) 
       }
       if (cancelled) return;
 
-      // L2 — shared Cloud Storage. A teammate already rendered this revision → use its download URL
-      // directly as the <img> src (no Drive mount required, works on a future web/mobile client).
+      // L2 — shared Cloud Storage (the cross-machine source of truth; works without Drive, and for a
+      // future web/mobile client). On a hit, download the bytes into L1 (in Rust → no bucket CORS) so
+      // the next view is an instant local read; fall back to the URL as an <img> src if that fails.
       if (firebaseConfigured()) {
         const remoteUrl = await getThumbDownloadUrl(key);
         if (cancelled) return;
         if (remoteUrl) {
-          done(remoteUrl);
+          try {
+            const localized = await invoke<string>('thumb_cache_fetch', { key, url: remoteUrl });
+            if (cancelled) return;
+            done(localized);
+          } catch {
+            if (cancelled) return;
+            done(remoteUrl);
+          }
           return;
         }
       }
@@ -214,8 +217,8 @@ export function useSpineThumbnail(entry: LibraryEntry | null, enabled: boolean) 
         });
         if (cancelled || url == null) return;
         done(url);
-        // Persist for next time; failures here are non-fatal (we already showed the image).
-        void invoke('thumb_cache_put', { key, data: url, dir }).catch(() => undefined);
+        // Persist to the local disk cache for next time; non-fatal (we already showed the image).
+        void invoke('thumb_cache_put', { key, data: url }).catch(() => undefined);
         // Share with the team so other machines skip the render. Best-effort (offline → skipped).
         if (firebaseConfigured()) void uploadThumb(key, url).catch(() => undefined);
       } catch {
@@ -227,7 +230,65 @@ export function useSpineThumbnail(entry: LibraryEntry | null, enabled: boolean) 
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [entry?.relPath, entry?.spineBytes, entry?.version, entry?.exported, enabled, dir]);
+  }, [entry?.relPath, entry?.spineBytes, entry?.version, entry?.exported, enabled]);
 
   return { status, dataUrl };
+}
+
+// --- parallel prefetch: warm the local cache from Cloud Storage on Library open -----------------
+const PREFETCH_CONCURRENCY = 8;
+
+/** Run `worker` over `items` with at most `limit` in flight; best-effort, bails when cancelled. */
+async function runPool<T>(items: T[], limit: number, worker: (item: T) => Promise<void>, cancelled: () => boolean) {
+  let i = 0;
+  const runners = Array.from({ length: Math.min(limit, items.length) }, async () => {
+    while (i < items.length && !cancelled()) {
+      const item = items[i++];
+      try {
+        await worker(item);
+      } catch {
+        /* best effort — a single failure shouldn't stall the pool */
+      }
+    }
+  });
+  await Promise.all(runners);
+}
+
+/**
+ * Prefetch thumbnails into the per-machine L1 disk cache in parallel when the Library grid opens,
+ * instead of waiting for each card to scroll into view and fetch serially. Only PULLS already-shared
+ * thumbnails from Cloud Storage (L2) — it never renders (WebGL contexts are scarce; cards that miss
+ * L2 are rendered lazily by `useSpineThumbnail` when shown). Bounded concurrency keeps it background.
+ */
+export function useThumbnailWarm(entries: LibraryEntry[], enabled: boolean) {
+  // Re-warm only when the actual set changes (not on every render / unrelated state churn). Keys
+  // fold in size+version, so a re-export (new key) re-warms; a pure re-render does not.
+  const signature = enabled ? entries.filter((e) => e.exported).map(thumbKey).join('|') : '';
+  useEffect(() => {
+    if (!enabled || !firebaseConfigured()) return;
+    const targets = entries.filter((e) => e.exported);
+    if (targets.length === 0) return;
+    let cancelled = false;
+
+    const warmOne = async (entry: LibraryEntry) => {
+      if (cancelled) return;
+      const key = thumbKey(entry);
+      try {
+        const cached = await invoke<string | null>('thumb_cache_get', { key });
+        if (cancelled || cached) return; // already local → nothing to pull
+      } catch {
+        /* treat as miss */
+      }
+      if (cancelled) return;
+      const url = await getThumbDownloadUrl(key);
+      if (cancelled || !url) return; // not on L2 yet → leave it to the lazy render path
+      await invoke('thumb_cache_fetch', { key, url });
+    };
+
+    void runPool(targets, PREFETCH_CONCURRENCY, warmOne, () => cancelled);
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [signature, enabled]);
 }

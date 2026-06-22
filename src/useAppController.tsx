@@ -211,8 +211,8 @@ export function useAppControllerValue() {
   // App-data sync (Tier A v2): per-user workspace + shared library list in Firestore, keyed by the
   // signed-in Firebase uid, with `${SPINE_ROOT}` path rebasing (anchor derived from appDataDir).
   const syncData = useMemo<SyncData>(
-    () => ({ appConfig, projects, sessions, libraries }),
-    [appConfig, projects, sessions, libraries]
+    () => ({ appConfig, projects, sessions, libraries, libraryCleanState }),
+    [appConfig, projects, sessions, libraries, libraryCleanState]
   );
   const {
     syncEnabled,

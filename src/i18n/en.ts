@@ -142,6 +142,7 @@ export const en: Translations = {
   libraryDeleteConfirm: 'Remove library “{name}”? This only removes it from the list — files on disk are untouched.',
   libraryEmpty: 'No library yet. Import a master folder containing your Spine folders to start.',
   libraryNoSpine: 'No .spine files found in this folder.',
+  libraryNotScanned: 'Not scanned on this machine yet — press Rescan. (If the folder is empty, check the master path is mounted.)',
   libraryScanning: 'Scanning…',
   libraryScanDone: 'Scanned {count} .spine files.',
   libraryDataPathMissing:

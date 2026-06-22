@@ -140,6 +140,7 @@ export const vi = {
   libraryDeleteConfirm: 'Xoá thư viện "{name}"? Chỉ gỡ khỏi danh sách, không xoá file trên ổ đĩa.',
   libraryEmpty: 'Chưa có thư viện nào. Import folder tổng chứa các folder Spine để bắt đầu.',
   libraryNoSpine: 'Không tìm thấy file .spine nào trong folder này.',
+  libraryNotScanned: 'Máy này chưa quét — bấm Quét lại. (Nếu folder trống, kiểm tra ổ chứa thư viện gốc đã mount chưa.)',
   libraryScanning: 'Đang quét…',
   libraryScanDone: 'Đã quét {count} file .spine.',
   libraryDataPathMissing:

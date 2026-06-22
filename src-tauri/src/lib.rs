@@ -478,6 +478,7 @@ pub fn run() {
             system::read_file_data_url,
             system::thumb_cache_get,
             system::thumb_cache_put,
+            system::thumb_cache_fetch,
             system::resolve_app_data_dir,
             library::list_export_assets,
             clean::count_clean_units,

@@ -2,17 +2,22 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type { Translations } from './i18n';
 import type { ToastKind } from './types';
 import {
+  applyLibraryCleanProfile,
   applyLibraryProfile,
   applyWorkspaceProfile,
+  buildLibraryCleanProfile,
   buildLibraryProfile,
   buildWorkspaceProfile,
   deriveAnchor,
   loadSyncSettings,
   persistSyncSettings,
+  readLibraryCleanProfile,
   readLibraryProfile,
   readWorkspaceProfile,
   sameLibraryBody,
+  sameLibraryCleanBody,
   sameWorkspaceBody,
+  writeLibraryCleanProfile,
   writeLibraryProfile,
   writeWorkspaceProfile,
   type SyncData
@@ -49,6 +54,7 @@ export function useSync({ data, t, pushToast, appDataDir, userUid, isLeader }: A
   const [error, setError] = useState<string | null>(null);
   const [workspaceSyncedAt, setWorkspaceSyncedAt] = useState<number | null>(initial.workspaceSyncedAt);
   const [librarySyncedAt, setLibrarySyncedAt] = useState<number | null>(initial.librarySyncedAt);
+  const [cleanSyncedAt, setCleanSyncedAt] = useState<number | null>(initial.cleanSyncedAt);
 
   // Workspace sync needs both the shared drive (for the rebase anchor) AND a signed-in Firebase
   // identity; the library list only needs the drive.
@@ -58,8 +64,8 @@ export function useSync({ data, t, pushToast, appDataDir, userUid, isLeader }: A
   // Async callbacks read live values through refs so they never close over stale state.
   const dataRef = useRef(data);
   dataRef.current = data;
-  const settingsRef = useRef({ enabled, appDataDir, userUid, isLeader, workspaceSyncedAt, librarySyncedAt });
-  settingsRef.current = { enabled, appDataDir, userUid, isLeader, workspaceSyncedAt, librarySyncedAt };
+  const settingsRef = useRef({ enabled, appDataDir, userUid, isLeader, workspaceSyncedAt, librarySyncedAt, cleanSyncedAt });
+  settingsRef.current = { enabled, appDataDir, userUid, isLeader, workspaceSyncedAt, librarySyncedAt, cleanSyncedAt };
   // t/pushToast are recreated each render; read through refs so the callbacks keep a STABLE identity
   // (otherwise the debounce effect re-subscribes every render and cancels the pending timer).
   const tRef = useRef(t);
@@ -69,6 +75,7 @@ export function useSync({ data, t, pushToast, appDataDir, userUid, isLeader }: A
   // Bodies we last read/wrote — let the debounced writer skip no-op pushes.
   const lastWsBodyRef = useRef<string | null>(null);
   const lastLibBodyRef = useRef<string | null>(null);
+  const lastCleanBodyRef = useRef<string | null>(null);
   const debounceRef = useRef<number | null>(null);
   // Gate pushes until the first reconcile establishes a baseline (else a fresh machine clobbers remote).
   const reconcilingRef = useRef(false);
@@ -92,6 +99,13 @@ export function useSync({ data, t, pushToast, appDataDir, userUid, isLeader }: A
     setLibrarySyncedAt(at);
     settingsRef.current = { ...settingsRef.current, librarySyncedAt: at };
     if (body !== null) lastLibBodyRef.current = body;
+  }, []);
+
+  const markClean = useCallback((at: number, body: string | null) => {
+    persistSyncSettings({ cleanSyncedAt: at });
+    setCleanSyncedAt(at);
+    settingsRef.current = { ...settingsRef.current, cleanSyncedAt: at };
+    if (body !== null) lastCleanBodyRef.current = body;
   }, []);
 
   // Push local edits up (no reload). Writes only the scope(s) whose body changed.
@@ -121,6 +135,14 @@ export function useSync({ data, t, pushToast, appDataDir, userUid, isLeader }: A
           const at = await writeLibraryProfile(lib);
           markLibrary(at, libBody);
         }
+        // Clean-state rides the same leader gate as the list — it describes the shared assets.
+        const clean = buildLibraryCleanProfile(dataRef.current.libraries, anchor, Date.now());
+        const cleanBody = JSON.stringify(clean.states);
+        if (cleanBody !== lastCleanBodyRef.current) {
+          setStatus('syncing');
+          const at = await writeLibraryCleanProfile(clean);
+          markClean(at, cleanBody);
+        }
       }
       setStatus('synced');
     } catch (e) {
@@ -128,12 +150,19 @@ export function useSync({ data, t, pushToast, appDataDir, userUid, isLeader }: A
       setStatus('error');
       pushToastRef.current(tRef.current.syncErrorWrite, 'error');
     }
-  }, [markWorkspace, markLibrary]);
+  }, [markWorkspace, markLibrary, markClean]);
 
   // Startup / manual reconcile: newer of (local, remote) wins, per scope.
   const reconcile = useCallback(async () => {
-    const { enabled: on, appDataDir: dir, userUid: uid, isLeader: leader, workspaceSyncedAt: wsAt, librarySyncedAt: libAt } =
-      settingsRef.current;
+    const {
+      enabled: on,
+      appDataDir: dir,
+      userUid: uid,
+      isLeader: leader,
+      workspaceSyncedAt: wsAt,
+      librarySyncedAt: libAt,
+      cleanSyncedAt: cleanAt
+    } = settingsRef.current;
     // Firestore needs the shared drive (for the rebase anchor) AND a Firebase session (rules gate
     // every read/write). Signed out → nothing to reconcile; the badge shows "needs sign-in".
     if (!on || !dir || !uid) {
@@ -198,6 +227,38 @@ export function useSync({ data, t, pushToast, appDataDir, userUid, isLeader }: A
       }
       // Member with no remote yet → nothing to do until the leader seeds the list.
 
+      // --- library clean-state (shared, leader-curated) — same gating as the list ---
+      const remoteClean = await readLibraryCleanProfile();
+      const localClean = buildLibraryCleanProfile(dataRef.current.libraries, anchor, Date.now());
+      const localCleanBody = JSON.stringify(localClean.states);
+      if (leader) {
+        if (!remoteClean) {
+          // Don't seed an empty doc — wait until there's at least one scanned record to share.
+          if (Object.keys(localClean.states).length > 0) {
+            const at = await writeLibraryCleanProfile(localClean);
+            markClean(at, localCleanBody);
+          }
+        } else if (sameLibraryCleanBody(remoteClean, localClean)) {
+          markClean(remoteClean.updatedAt, localCleanBody);
+        } else if (remoteClean.updatedAt > (cleanAt ?? 0)) {
+          persistSyncSettings({ cleanSyncedAt: remoteClean.updatedAt });
+          applyLibraryCleanProfile(remoteClean, anchor);
+          needReload = true;
+        } else {
+          const at = await writeLibraryCleanProfile(localClean);
+          markClean(at, localCleanBody);
+        }
+      } else if (remoteClean) {
+        // Member: pull-only.
+        if (sameLibraryCleanBody(remoteClean, localClean)) {
+          markClean(remoteClean.updatedAt, localCleanBody);
+        } else if (remoteClean.updatedAt > (cleanAt ?? 0)) {
+          persistSyncSettings({ cleanSyncedAt: remoteClean.updatedAt });
+          applyLibraryCleanProfile(remoteClean, anchor);
+          needReload = true;
+        }
+      }
+
       syncedOnceRef.current = true;
       setError(null);
       if (needReload) {
@@ -217,7 +278,7 @@ export function useSync({ data, t, pushToast, appDataDir, userUid, isLeader }: A
     } finally {
       reconcilingRef.current = false;
     }
-  }, [markWorkspace, markLibrary]);
+  }, [markWorkspace, markLibrary, markClean]);
 
   // Reconcile when sync becomes usable, and again whenever the identity (drive/email) changes.
   useEffect(() => {
@@ -229,6 +290,7 @@ export function useSync({ data, t, pushToast, appDataDir, userUid, isLeader }: A
     syncedOnceRef.current = false;
     lastWsBodyRef.current = null;
     lastLibBodyRef.current = null;
+    lastCleanBodyRef.current = null;
     void reconcile();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [connected, appDataDir, userUid]);
@@ -247,7 +309,7 @@ export function useSync({ data, t, pushToast, appDataDir, userUid, isLeader }: A
     return () => {
       if (debounceRef.current) window.clearTimeout(debounceRef.current);
     };
-  }, [data.appConfig, data.projects, data.sessions, data.libraries, workspaceReady, pushLocal]);
+  }, [data.appConfig, data.projects, data.sessions, data.libraries, data.libraryCleanState, workspaceReady, pushLocal]);
 
   const setSyncEnabled = useCallback((value: boolean) => {
     setEnabled(value);
@@ -261,7 +323,7 @@ export function useSync({ data, t, pushToast, appDataDir, userUid, isLeader }: A
 
   return {
     syncEnabled: enabled,
-    syncLastSyncedAt: Math.max(workspaceSyncedAt ?? 0, librarySyncedAt ?? 0) || null,
+    syncLastSyncedAt: Math.max(workspaceSyncedAt ?? 0, librarySyncedAt ?? 0, cleanSyncedAt ?? 0) || null,
     syncStatus: status,
     syncError: error,
     syncConnected: connected,

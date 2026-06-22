@@ -7,6 +7,7 @@ import { basename } from '../sessions';
 import { formatDate } from '../time';
 import type { LibraryEntry } from '../config';
 import { useLibraryDrive } from '../useLibraryDrive';
+import { useThumbnailWarm } from '../useSpineThumbnail';
 import { useLibraryTags } from '../useLibraryTags';
 import { LibraryTable } from './LibraryTable';
 import { LibraryGrid } from './LibraryGrid';
@@ -192,6 +193,10 @@ export function LibraryInventory({
     }
     return { clean, warning, unknown };
   }, [entries, libraryCleanState]);
+
+  // Grid open → pull all shared thumbnails into the local cache in parallel so scrolling is instant,
+  // instead of each card fetching from Cloud Storage one-by-one as it appears.
+  useThumbnailWarm(sorted, viewMode === 'grid');
 
   const sections = useMemo<Section[]>(() => {
     const groups = facet === 'id' ? groupByIdBand(sorted) : groupByFolder(sorted);
@@ -498,7 +503,9 @@ export function LibraryInventory({
 
       <div className="library-pane-scroll">
         {sections.length === 0 ? (
-          <p className="helper-text">{t.libraryNoSpine}</p>
+          // `libraryScan === null` → no inventory cached on this machine (scan never succeeded,
+          // e.g. master path not mounted); a non-null scan with no sections genuinely has no .spine.
+          <p className="helper-text">{libraryScan === null ? t.libraryNotScanned : t.libraryNoSpine}</p>
         ) : viewMode === 'grid' ? (
           <LibraryGrid {...view} />
         ) : (
