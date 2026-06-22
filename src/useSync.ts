@@ -136,9 +136,11 @@ export function useSync({ data, t, pushToast, appDataDir, userUid, isLeader }: A
           markLibrary(at, libBody);
         }
         // Clean-state rides the same leader gate as the list — it describes the shared assets.
+        // Never push an empty snapshot: it would seed a useless empty doc, and worse, a leader that
+        // hasn't scanned anything locally could overwrite a populated remote with nothing.
         const clean = buildLibraryCleanProfile(dataRef.current.libraries, anchor, Date.now());
         const cleanBody = JSON.stringify(clean.states);
-        if (cleanBody !== lastCleanBodyRef.current) {
+        if (cleanBody !== lastCleanBodyRef.current && Object.keys(clean.states).length > 0) {
           setStatus('syncing');
           const at = await writeLibraryCleanProfile(clean);
           markClean(at, cleanBody);
@@ -244,7 +246,9 @@ export function useSync({ data, t, pushToast, appDataDir, userUid, isLeader }: A
           persistSyncSettings({ cleanSyncedAt: remoteClean.updatedAt });
           applyLibraryCleanProfile(remoteClean, anchor);
           needReload = true;
-        } else {
+        } else if (Object.keys(localClean.states).length > 0) {
+          // Local diverges and remote isn't newer → push local, but only if it actually has data
+          // (never wipe a populated remote with an empty local snapshot).
           const at = await writeLibraryCleanProfile(localClean);
           markClean(at, localCleanBody);
         }
