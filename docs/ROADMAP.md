@@ -6,6 +6,17 @@ Source-of-truth tiến độ toàn dự án.
 
 ---
 
+## v0.4.15 — Drive "Load data": timeout + song song giới hạn + retry/backoff + cache ID bền ✅ Done
+
+> Bump `0.4.14 → 0.4.15`; tag `v0.4.15`. (ROADMAP nhảy từ v0.4.9 — các bản 0.4.10–0.4.14 chỉ ghi ở CHANGELOG.)
+
+- [x] **Timeout mọi call Drive REST** — `drive_client()` (connect 15s / total 30s) dùng cho toàn bộ read-path + sign-in. Sửa root cause: một socket stall trước đây treo cả batch vĩnh viễn → "Tải dữ liệu Drive" chạy 5–10p rồi trả rỗng, timestamp không set. [drive/mod.rs](../src-tauri/src/drive/mod.rs).
+- [x] **Fan-out song song có giới hạn** — `futures::stream::buffer_unordered` (concurrency 8), warm cache 1 lookup tuần tự trước khi fan-out để tránh trùng request folder gốc. Event `drive-basics-progress {done,total}` → nút hiện N/total thay vì spinner câm. [useLibraryDrive.ts](../src/useLibraryDrive.ts), [LibraryInventory.tsx](../src/components/LibraryInventory.tsx).
+- [x] **Retry + truncated exponential backoff** (1→16s + jitter, ≤5 lần) cho `429` và rate-limit `403` theo guidance Google; `send_with_retry` bọc toàn read-path; permission-403/404 trả ngay không retry. [drive/mod.rs](../src-tauri/src/drive/mod.rs).
+- [x] **Cache `path → Drive ID` bền giữa session** (`app_cache_dir/drive-folder-ids.json`): lần load sau gần như chỉ còn `files.get` (5 units) thay vì `files.list` (100 units). Self-heal khi ID stale (folder/file xóa+tạo lại): lookup "not found" → xóa prefix cache + resolve cold 1 lần. Xóa cache khi sign-out. [drive/mod.rs](../src-tauri/src/drive/mod.rs).
+- [x] **Tách `drive.rs` (978 dòng > ceiling 800) → `drive/mod.rs` (REST metadata) + `drive/auth.rs` (OAuth/token/keyring/loopback)** ([[keep-files-small]]). [drive/auth.rs](../src-tauri/src/drive/auth.rs).
+- [x] Verify: `cargo check` + `tsc` + `npm test` + `npm run build` (file-size guard) xanh.
+
 ## v0.4.9 — Sync feedback + Cleanup scan motion + dev/prod data split + user filter ✅ Done
 
 > Bump `0.4.8 → 0.4.9`; tag `v0.4.9`.

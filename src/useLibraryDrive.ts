@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
+import { listen } from '@tauri-apps/api/event';
 import type { Translations } from './i18n';
 import type { ToastKind } from './types';
 import type { LibraryEntry } from './config';
@@ -71,6 +72,7 @@ export function useLibraryDrive({ t, pushToast, driveAccount, libraryDir, spineP
   const [expandedInfo, setExpandedInfo] = useState<Set<string>>(new Set());
   const [driveBasics, setDriveBasics] = useState<Record<string, DriveBasic>>(loadDriveBasicsCache);
   const [loadingBasics, setLoadingBasics] = useState(false);
+  const [basicsProgress, setBasicsProgress] = useState<{ done: number; total: number } | null>(null);
   const [basicsLoadedAt, setBasicsLoadedAt] = useState<number | null>(loadBasicsLoadedAt);
 
   // Merge the cross-machine snapshot from the Drive sidecar on open / when the folder changes.
@@ -141,6 +143,11 @@ export function useLibraryDrive({ t, pushToast, driveAccount, libraryDir, spineP
       return;
     }
     setLoadingBasics(true);
+    setBasicsProgress({ done: 0, total: relPaths.length });
+    // Live N/total feedback from the backend so a long batch isn't a silent spinner.
+    const unlisten = await listen<{ done: number; total: number }>('drive-basics-progress', (e) => {
+      setBasicsProgress(e.payload);
+    });
     try {
       const results = await fetchDriveBasics(relPaths);
       const fresh: Record<string, DriveBasic> = {};
@@ -162,6 +169,8 @@ export function useLibraryDrive({ t, pushToast, driveAccount, libraryDir, spineP
     } catch (e) {
       pushToast(String(e), 'error');
     } finally {
+      unlisten();
+      setBasicsProgress(null);
       setLoadingBasics(false);
     }
   }
@@ -182,6 +191,7 @@ export function useLibraryDrive({ t, pushToast, driveAccount, libraryDir, spineP
     driveInfo,
     expandedInfo,
     loadingBasics,
+    basicsProgress,
     basicsLoadedAt,
     basicFor,
     toggleDriveInfo,

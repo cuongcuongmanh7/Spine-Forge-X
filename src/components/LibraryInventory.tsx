@@ -92,7 +92,7 @@ export function LibraryInventory({
   const { tagList, metaFor, addEntryTag, removeEntryTag, setEntryOwner } = useLibraryTags({ libraryDir });
   const notes = useLibraryNotes({ libraryDir, authorEmail: driveAccount?.email ?? '', isLeader });
 
-  const { driveInfo, expandedInfo, loadingBasics, basicsLoadedAt, basicFor, toggleDriveInfo, loadDriveBasics, openRevisionInSpine } =
+  const { driveInfo, expandedInfo, loadingBasics, basicsProgress, basicsLoadedAt, basicFor, toggleDriveInfo, loadDriveBasics, openRevisionInSpine } =
     useLibraryDrive({
       t,
       pushToast,
@@ -379,6 +379,7 @@ export function LibraryInventory({
           </button>
           <button className="secondary-button small" onClick={() => void loadDriveBasics(filtered)} disabled={loadingBasics} title={t.driveLoadDataHelp}>
             {loadingBasics ? <RotateCw size={14} className="spin" /> : <CloudDownload size={14} />} {t.driveLoadData}
+            {loadingBasics && basicsProgress ? ` ${basicsProgress.done}/${basicsProgress.total}` : ''}
           </button>
         </div>
 

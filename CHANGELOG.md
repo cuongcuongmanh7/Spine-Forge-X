@@ -1,5 +1,10 @@
 # Changelog
 
+## v0.4.15
+- **Sửa "Tải dữ liệu Drive" treo & trả rỗng trên thư viện lớn** — với thư viện nhiều file (vài trăm `.spine`), nút Tải dữ liệu Drive trước đây có thể chạy 5–10 phút rồi im lặng không ra kết quả (mục "Lần tải Drive" trống). Nay mỗi yêu cầu có giới hạn thời gian nên một kết nối bị treo không còn làm kẹt cả lượt tải; các file được tra song song nên nhanh hơn nhiều (vài chục giây thay vì nhiều phút); nút hiện tiến độ N/tổng trong lúc tải thay vì chỉ quay vòng im lặng.
+- **Tự thử lại khi Google giới hạn tốc độ** — gặp lỗi rate-limit (429/403) sẽ tự chờ rồi thử lại (chờ tăng dần) theo khuyến nghị của Google, thay vì để file đó lỗi luôn.
+- **Nhớ dữ liệu Drive giữa các lần mở app** — lần tải sau dùng lại thông tin đã tra trước đó nên nhanh hơn hẳn và đỡ tốn hạn mức Google; tự làm mới khi file/thư mục trên Drive bị đổi.
+
 ## v0.4.14
 - **Sửa đồng bộ thư viện** — không còn đẩy trạng thái dọn thư viện rỗng lên cloud khi máy chưa có dữ liệu local, tránh xoá nhầm clean-state của nhóm.
 - **Sửa quy trình release** — bản `v0.4.13` đã bị bỏ qua vì artifact vẫn mang version app `0.4.12`, khiến auto-updater không nhận là bản mới. `v0.4.14` bump đúng version app/installer/updater manifest và thay thế `v0.4.13`.

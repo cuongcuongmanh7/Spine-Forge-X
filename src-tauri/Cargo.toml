@@ -1,6 +1,6 @@
 [package]
 name = "spineforge-x"
-version = "0.4.14"
+version = "0.4.15"
 description = "Batch export and version upgrade workflow for Spine projects."
 authors = ["SpineForge X"]
 license = "MIT"
@@ -25,6 +25,8 @@ flate2 = "1"
 base64 = "0.22"
 # Tier B (Google Drive API): native HTTP + OAuth (loopback + PKCE) + secure token storage.
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+# Bounded-concurrency fan-out for batched Drive lookups (buffer_unordered).
+futures = "0.3"
 # `windows-native` is REQUIRED: keyring v3 enables no credential store by default and silently
 # falls back to an in-memory mock store, so the refresh token would vanish on app exit.
 keyring = { version = "3", features = ["windows-native"] }
