@@ -421,7 +421,8 @@ export function useAppControllerValue() {
   const { updateUi, checkForAppUpdate, installPendingUpdate, openReleasesPage } = useAppUpdater(appendLog);
   // OS drag-drop: zone routing lives in useDragDrop. The output zone only exists while
   // the output path field is editable; the linkedProject policy hides it.
-  const outputDropEnabled = merged.outputPolicy !== 'linkedProject';
+  // Only policies that show the output-root field accept a dropped output folder.
+  const outputDropEnabled = merged.outputPolicy === 'sourceFolderName' || merged.outputPolicy === 'timestamp';
   const { isDragOver, dragPosition } = useDragDrop({
     enabled: !anyRunning,
     outputDropEnabled,
@@ -440,6 +441,7 @@ export function useAppControllerValue() {
     isStopping,
     isOpeningOutput,
     startExport,
+    quickExport,
     stopExport,
     exportProjectSessions,
     resolveOpenOutputTarget,
@@ -746,6 +748,7 @@ export function useAppControllerValue() {
     deleteUserPreset,
     cleanTimestampExports,
     startExport,
+    quickExport,
     stopExport,
     removeFile,
     restoreExcludedFile,

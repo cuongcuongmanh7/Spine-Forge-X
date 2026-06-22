@@ -683,6 +683,7 @@
   vertical-align: -2px;
 }
 .library-actions {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 6px;
@@ -699,6 +700,19 @@
 }
 .library-table tr:hover .library-actions .icon-button,
 .library-table tr:focus-within .library-actions .icon-button {
+  opacity: 1;
+  pointer-events: auto;
+}
+/* Section "⋯" menu trigger: hidden-until-hover in the table (like the icon-buttons above),
+   revealed on group-header hover/focus or while its menu is open. (Base .session-menu-trigger
+   is opacity:0 and only revealed by sidebar .session-row rules, which don't apply here.) */
+.library-actions .session-menu-trigger {
+  opacity: 0;
+  pointer-events: none;
+}
+.library-table tr:hover .library-actions .session-menu-trigger,
+.library-table tr:focus-within .library-actions .session-menu-trigger,
+.library-actions .session-menu-trigger.open {
   opacity: 1;
   pointer-events: auto;
 }

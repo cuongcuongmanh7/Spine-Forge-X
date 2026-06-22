@@ -75,7 +75,9 @@ export function LibraryInventory({
     sessions,
     projects,
     selectSession,
-    addDriveChanges
+    addDriveChanges,
+    quickExport,
+    anyRunning
   } = useApp();
 
   const { facet, selectedCats, selectedVersions, query } = filter;
@@ -398,7 +400,9 @@ export function LibraryInventory({
     createSessionForEntry,
     createSessionForSection,
     onPrepareCleanScan,
-    onPreview
+    onPreview,
+    onQuickExport: (spineFiles) => void quickExport(spineFiles),
+    quickExportBusy: anyRunning
   };
 
   return (

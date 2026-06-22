@@ -5,6 +5,10 @@
   align-items: flex-start;
   gap: 6px;
 }
+/* Breathing room between stacked filter rows (GROUP / TYPE / VERSION / …). */
+.library-chip-row + .library-chip-row {
+  margin-top: 10px;
+}
 .library-chip-label {
   flex: 0 0 64px;
   width: 64px;

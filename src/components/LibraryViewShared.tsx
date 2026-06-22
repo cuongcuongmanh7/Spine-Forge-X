@@ -143,4 +143,8 @@ export interface LibraryViewProps {
   createSessionForSection: (section: Section) => void;
   onPrepareCleanScan: (spineFiles: string[]) => void;
   onPreview: (entry: LibraryEntry) => void;
+  /** Quick-export the given .spine files using the active session's preset + output. */
+  onQuickExport: (spineFiles: string[]) => void;
+  /** Disable Quick export while another run is in progress. */
+  quickExportBusy: boolean;
 }

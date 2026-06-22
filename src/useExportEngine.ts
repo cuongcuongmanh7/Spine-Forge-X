@@ -9,6 +9,9 @@ import { commonParentPath } from './paths';
 import { linkedDestFolder, stamp } from './controllerHelpers';
 import type { BatchExportResult, ScanResult, ToastKind, ValidateResult } from './types';
 
+/** Synthetic running id for Inventory "Quick export" runs (not tied to any session). */
+const QUICK_RUN_ID = '__quick_export__';
+
 type Options = {
   merged: MergedConfig;
   appConfig: AppConfig;
@@ -204,6 +207,87 @@ export function useExportEngine({
     } catch (error) {
       const body = String(error);
       recordRunLog(stamp(`${t.batchFailed}: ${body}`));
+      await message(body, { title: t.exportFailedTitle, kind: 'error' });
+    } finally {
+      runningIdRef.current = null;
+      setRunningSessionId(null);
+      setActiveJobs({});
+      setRunStartedAt(null);
+    }
+  }
+
+  /**
+   * One-click export of an explicit file list (from the Inventory tab) using the
+   * currently active session's preset + output settings (`merged`) — no session needed.
+   * Reuses the same validate → collision-confirm → start_batch_export flow as startExport,
+   * but routes the run under a synthetic id so it doesn't touch the active session's runtime
+   * or lastExport record.
+   */
+  async function quickExport(targetFiles: string[]) {
+    if (anyRunning) return;
+    if (targetFiles.length === 0) {
+      pushToast(t.exportAllNothing, 'warning');
+      return;
+    }
+
+    // Validate the current workspace settings (preset + output) before running.
+    let validation: ValidateResult = { ok: false, warnings: [], errors: [] };
+    try {
+      validation = await invoke<ValidateResult>('validate_settings', {
+        spinePath: merged.spinePath,
+        outputPath:
+          merged.outputPolicy === 'linkedProject' ? resolveLinkedTarget(merged)?.unityRoot ?? '' : merged.outputPath,
+        outputPolicy: merged.outputPolicy,
+        exportMode: merged.exportMode,
+        globalJsonPath: merged.globalJsonPath
+      });
+    } catch {
+      validation = { ok: false, warnings: [], errors: [] };
+    }
+    if (!validation.ok) {
+      pushToast(`${t.quickExportNotReady} ${validation.errors.join(' ')}`.trim(), 'error');
+      return;
+    }
+
+    // Use the files' common parent as the input root so relative/timestamp policies behave.
+    const inputRoot = commonParentPath(targetFiles) || targetFiles[0];
+    const request = buildExportRequestFrom({ ...merged, inputPath: inputRoot }, targetFiles);
+
+    // Warn before overwriting output folders that already exist.
+    try {
+      const existing = await invoke<string[]>('check_output_collisions', { request });
+      if (existing.length > 0) {
+        const ok = await confirm(t.overwriteConfirmBody.replace('{count}', String(existing.length)), {
+          title: t.overwriteConfirmTitle,
+          kind: 'warning'
+        });
+        if (!ok) return;
+      }
+    } catch {
+      // If the check fails, fall through and let the export proceed.
+    }
+
+    runningIdRef.current = QUICK_RUN_ID;
+    setRunningSessionId(QUICK_RUN_ID);
+    setBatchProgress(null);
+    setLiveProgress({ current: 0, total: targetFiles.length, file: '' });
+    setActiveJobs({});
+    const startedAt = Date.now();
+    setRunStartedAt(startedAt);
+    recordRunLog(stamp(`${t.starting}: ${targetFiles.length} files.`));
+
+    try {
+      const result = await invoke<BatchExportResult>('start_batch_export', { request });
+      if (result.stopped) {
+        const body = formatSummary(t.exportStoppedSummary, result.completed, result.failed, result.skipped);
+        await message(body, { title: t.exportStoppedTitle, kind: 'warning' });
+      } else {
+        const body = formatSummary(t.exportSummary, result.completed, result.failed, result.skipped);
+        await message(body, { title: t.exportSuccessTitle, kind: 'info' });
+      }
+      await maybeAutoOpenOutput(result.outputFolders);
+    } catch (error) {
+      const body = String(error);
       await message(body, { title: t.exportFailedTitle, kind: 'error' });
     } finally {
       runningIdRef.current = null;
@@ -455,6 +539,7 @@ export function useExportEngine({
     isOpeningOutput,
     buildExportRequest,
     startExport,
+    quickExport,
     stopExport,
     exportProjectSessions,
     resolveOpenOutputTarget,

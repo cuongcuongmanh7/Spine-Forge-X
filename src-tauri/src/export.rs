@@ -305,6 +305,11 @@ pub(crate) fn resolve_output_dir(
             base.push(folder);
             Ok(path_to_string(&base))
         }
+        OutputPolicy::ExportSubfolder => {
+            // Each file exports into an "export" folder created next to it,
+            // inside the folder that contains the .spine file.
+            Ok(path_to_string(&parent.join("export")))
+        }
     }
 }
 

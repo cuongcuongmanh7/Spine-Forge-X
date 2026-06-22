@@ -26,11 +26,14 @@
 
 /* Group-header actions are hidden-until-row-hover in the table (which the grid header isn't part of);
    keep them visible (muted) and brighten when the header is hovered. */
-.library-grid-group .library-actions .icon-button {
+.library-grid-group .library-actions .icon-button,
+.library-grid-group .library-actions .session-menu-trigger {
   opacity: 0.55;
   pointer-events: auto;
 }
-.library-grid-group .library-group-head-row:hover .library-actions .icon-button {
+.library-grid-group .library-group-head-row:hover .library-actions .icon-button,
+.library-grid-group .library-group-head-row:hover .library-actions .session-menu-trigger,
+.library-grid-group .library-actions .session-menu-trigger.open {
   opacity: 1;
 }
 

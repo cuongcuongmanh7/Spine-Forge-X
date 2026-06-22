@@ -106,6 +106,7 @@ pub(crate) enum OutputPolicy {
     Timestamp,
     SourceFolderName,
     LinkedProject,
+    ExportSubfolder,
 }
 
 #[derive(Debug, Deserialize)]

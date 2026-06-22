@@ -12,7 +12,7 @@ import {
 import { formatBytes, formatDate } from '../time';
 import { entryWarnings, matchedNames, metaKeyForEntry, metaKeyForFolder } from '../library';
 import { LibraryDriveInfoRow } from './LibraryDriveInfoRow';
-import { LibraryRowMenu } from './LibraryRowMenu';
+import { LibraryRowMenu, LibrarySectionMenu } from './LibraryRowMenu';
 import { LibraryPreviewCell } from './LibraryPreviewCell';
 import { LibraryTagCell } from './LibraryTagCell';
 import { LibraryOwnerCell } from './LibraryOwnerCell';
@@ -63,7 +63,9 @@ export function LibraryTable(props: LibraryViewProps) {
     onPrepareCleanScan,
     onPreview,
     openNotes,
-    noteCount
+    noteCount,
+    onQuickExport,
+    quickExportBusy
   } = props;
 
   const tableRef = useRef<HTMLTableElement>(null);
@@ -192,6 +194,14 @@ export function LibraryTable(props: LibraryViewProps) {
                     <button className="icon-button" onClick={() => createSessionForSection(section)} title={t.libraryCreateSession} aria-label={t.libraryCreateSession}>
                       <FolderPlus size={15} />
                     </button>
+                    <LibrarySectionMenu
+                      open={menuOpen === `sec:${section.key}`}
+                      onToggle={() => setMenuOpen(menuOpen === `sec:${section.key}` ? null : `sec:${section.key}`)}
+                      onClose={() => setMenuOpen(null)}
+                      onQuickExport={() => onQuickExport(section.entries.map((entry) => entry.spineFile))}
+                      quickExportBusy={quickExportBusy}
+                      t={t}
+                    />
                   </span>
                 </div>
               </td>
@@ -298,6 +308,8 @@ export function LibraryTable(props: LibraryViewProps) {
                         onOpenFolder={(e) => openFolder(e)}
                         onOpenInSpine={(e) => openInSpine(e)}
                         onCreateSession={createSessionForEntry}
+                        onQuickExport={(e) => onQuickExport([e.spineFile])}
+                        quickExportBusy={quickExportBusy}
                         t={t}
                       />
                     </tr>

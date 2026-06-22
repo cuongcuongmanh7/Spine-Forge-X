@@ -70,6 +70,9 @@ export function OutputSection() {
 
   const selectedLinked = linkedProjects.find((p) => p.id === merged.linkedProjectId);
   const isLinked = merged.outputPolicy === 'linkedProject';
+  // The output root field only applies to the source-folder (and legacy timestamp) policies.
+  // linkedProject uses the Unity root; exportSubfolder derives the path per-file.
+  const showOutputRoot = merged.outputPolicy === 'sourceFolderName' || merged.outputPolicy === 'timestamp';
 
   // Auto-pick the Type from input paths when a Project is chosen but no Type is set yet.
   useEffect(() => {
@@ -79,7 +82,7 @@ export function OutputSection() {
 
   return (
     <Section title={t.outputDirectory}>
-      {!isLinked && (
+      {showOutputRoot && (
         <div className="form-row">
           <label>{t.outputRoot}</label>
           <input
@@ -117,6 +120,7 @@ export function OutputSection() {
             [
               // Note: the 'timestamp' policy is temporarily hidden (still supported by the backend).
               ['sourceFolderName', t.sourceFolderPolicy, t.sourceFolderPolicyHelp],
+              ['exportSubfolder', t.exportSubfolderPolicy, t.exportSubfolderPolicyHelp],
               ['linkedProject', t.linkedProjectPolicy, t.linkedProjectPolicyHelp]
             ] as [OutputPolicy, string, string][]
           ).map(([value, label, description]) => (

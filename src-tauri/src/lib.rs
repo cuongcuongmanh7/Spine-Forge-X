@@ -175,6 +175,9 @@ fn validate_settings(
         // The frontend passes the resolved Unity root as output_path; empty means no
         // Linked Project / type has been selected yet.
         errors.push("Linked Project cần chọn Project và Type.".to_string());
+    } else if output_policy == "exportSubfolder" {
+        // Destination is derived per-file (<spine folder>/export); no output root needed.
+        output_ok = true;
     } else {
         output_warning = true;
     }
@@ -281,6 +284,9 @@ async fn start_batch_export(
                 "spine-log",
                 format!("Output policy: linked project → {}", request.linked_dest_type),
             );
+        }
+        OutputPolicy::ExportSubfolder => {
+            let _ = window.emit("spine-log", "Output policy: export subfolder");
         }
     }
 

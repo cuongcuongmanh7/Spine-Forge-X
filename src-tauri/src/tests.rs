@@ -285,7 +285,7 @@ proptest! {
     /// when the Spine path is empty — regardless of the other inputs.
     #[test]
     fn prop_validate_settings_rejects_empty_spine_path(
-        output_policy in prop::sample::select(vec!["timestamp", "sourceFolderName", "linkedProject"]),
+        output_policy in prop::sample::select(vec!["timestamp", "sourceFolderName", "linkedProject", "exportSubfolder"]),
         export_mode in prop::sample::select(vec!["globalJson", "perProjectJson", "builtIn"]),
     ) {
         let result = validate_settings(
@@ -453,6 +453,22 @@ fn resolve_output_dir_linked_project_reuses_then_creates() {
     assert!(resolve_output_dir(&bad, &input, "run").is_err());
 
     let _ = fs::remove_dir_all(&unity_root);
+}
+
+/// resolve_output_dir for the ExportSubfolder policy always routes into an
+/// "export" folder next to the input file, regardless of output_path.
+#[test]
+fn resolve_output_dir_export_subfolder_uses_sibling_folder() {
+    let req = BatchExportRequest {
+        output_policy: OutputPolicy::ExportSubfolder,
+        ..base_request()
+    };
+    let input = PathBuf::from("D:/Project/4001_Fighter/skel.spine");
+    let resolved = resolve_output_dir(&req, &input, "run").unwrap();
+    assert_eq!(
+        PathBuf::from(&resolved),
+        PathBuf::from("D:/Project/4001_Fighter/export")
+    );
 }
 
 /// Property 12 (FS-backed, example-based): when no `.export.json` sits next

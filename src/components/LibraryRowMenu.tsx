@@ -1,4 +1,4 @@
-import { FolderOpen, FolderPlus, History, ListChecks, MoreHorizontal } from 'lucide-react';
+import { FolderOpen, FolderPlus, History, ListChecks, MoreHorizontal, Zap } from 'lucide-react';
 import type { Translations } from '../i18n';
 import type { LibraryEntry } from '../config';
 import { SpineFileIcon } from './SpineFileIcon';
@@ -15,6 +15,8 @@ type Props = {
   onOpenFolder: (entry: LibraryEntry) => void;
   onOpenInSpine: (entry: LibraryEntry) => void;
   onCreateSession: (entry: LibraryEntry) => void;
+  onQuickExport: (entry: LibraryEntry) => void;
+  quickExportBusy: boolean;
   t: Translations;
 };
 
@@ -29,6 +31,8 @@ export function LibraryRowMenuButton({
   onOpenFolder,
   onOpenInSpine,
   onCreateSession,
+  onQuickExport,
+  quickExportBusy,
   t
 }: Props) {
   const act = (fn: (entry: LibraryEntry) => void) => {
@@ -73,6 +77,9 @@ export function LibraryRowMenuButton({
             <button onClick={() => act(onCreateSession)}>
               <FolderPlus size={14} /> {t.libraryCreateSession}
             </button>
+            <button disabled={quickExportBusy} onClick={() => act(onQuickExport)}>
+              <Zap size={14} /> {t.libraryQuickExport}
+            </button>
           </div>
         </>
       )}
@@ -85,5 +92,60 @@ export function LibraryRowMenu(props: Props) {
     <td className="library-menu-cell">
       <LibraryRowMenuButton {...props} />
     </td>
+  );
+}
+
+/** The folder-group "⋯" menu (currently just Quick export) shown in the section header. */
+export function LibrarySectionMenu({
+  open,
+  onToggle,
+  onClose,
+  onQuickExport,
+  quickExportBusy,
+  t
+}: {
+  open: boolean;
+  onToggle: () => void;
+  onClose: () => void;
+  onQuickExport: () => void;
+  quickExportBusy: boolean;
+  t: Translations;
+}) {
+  return (
+    <>
+      <button
+        className={`session-menu-trigger ${open ? 'open' : ''}`}
+        title={t.options}
+        aria-label={t.options}
+        onClick={(e) => {
+          e.stopPropagation();
+          onToggle();
+        }}
+      >
+        <MoreHorizontal size={15} />
+      </button>
+      {open && (
+        <>
+          <div
+            className="menu-backdrop"
+            onClick={(e) => {
+              e.stopPropagation();
+              onClose();
+            }}
+          />
+          <div className="session-menu library-row-menu" onClick={(e) => e.stopPropagation()}>
+            <button
+              disabled={quickExportBusy}
+              onClick={() => {
+                onClose();
+                onQuickExport();
+              }}
+            >
+              <Zap size={14} /> {t.libraryQuickExport}
+            </button>
+          </div>
+        </>
+      )}
+    </>
   );
 }

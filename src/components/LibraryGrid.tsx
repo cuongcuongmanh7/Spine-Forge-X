@@ -5,7 +5,7 @@ import { LibraryCardThumb } from './LibraryCardThumb';
 import { LibraryTagCell } from './LibraryTagCell';
 import { LibraryOwnerCell } from './LibraryOwnerCell';
 import { LibraryPreviewButton } from './LibraryPreviewCell';
-import { LibraryRowMenuButton } from './LibraryRowMenu';
+import { LibraryRowMenuButton, LibrarySectionMenu } from './LibraryRowMenu';
 import { LibraryDriveInfoPanel } from './LibraryDriveInfoRow';
 import {
   DAY_MS,
@@ -51,7 +51,9 @@ export function LibraryGrid(props: LibraryViewProps) {
     onPrepareCleanScan,
     onPreview,
     openNotes,
-    noteCount
+    noteCount,
+    onQuickExport,
+    quickExportBusy
   } = props;
 
   return (
@@ -89,6 +91,14 @@ export function LibraryGrid(props: LibraryViewProps) {
                 <button className="icon-button" onClick={() => createSessionForSection(section)} title={t.libraryCreateSession} aria-label={t.libraryCreateSession}>
                   <FolderPlus size={15} />
                 </button>
+                <LibrarySectionMenu
+                  open={menuOpen === `sec:${section.key}`}
+                  onToggle={() => setMenuOpen(menuOpen === `sec:${section.key}` ? null : `sec:${section.key}`)}
+                  onClose={() => setMenuOpen(null)}
+                  onQuickExport={() => onQuickExport(section.entries.map((entry) => entry.spineFile))}
+                  quickExportBusy={quickExportBusy}
+                  t={t}
+                />
               </span>
             </div>
 
@@ -134,6 +144,8 @@ export function LibraryGrid(props: LibraryViewProps) {
                               onOpenFolder={(e) => openFolder(e)}
                               onOpenInSpine={(e) => openInSpine(e)}
                               onCreateSession={createSessionForEntry}
+                              onQuickExport={(e) => onQuickExport([e.spineFile])}
+                              quickExportBusy={quickExportBusy}
                               t={t}
                             />
                           </span>

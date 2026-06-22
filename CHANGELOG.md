@@ -1,5 +1,10 @@
 # Changelog
 
+## v0.4.19
+- **Workspace: thêm cơ chế output "Folder export cạnh file"** — mỗi file `.spine` xuất vào thư mục `export` (tự tạo) nằm ngay trong thư mục chứa file đó, không cần chọn output root.
+- **Inventory: nút "Quick export" trong menu từng dòng** — bấm `⋯` ở dòng file (xuất đúng file đó) hoặc dòng thư mục (xuất cả nhóm) để export ngay bằng preset + output đang chọn ở tab Workspace, khỏi phải tạo session.
+- **Inventory: giãn khoảng cách các dòng bộ lọc** cho dễ nhìn hơn.
+
 ## v0.4.18
 - **Inventory: thu gọn được cụm Thống kê & Bộ lọc** — hai cụm này giờ là thẻ gập/mở (đồng bộ với tab Cài đặt) để nhường chỗ cho danh sách; trạng thái gập được nhớ cho lần mở sau. Khi đang lọc, thẻ "Bộ lọc" hiện số bộ lọc đang bật ngay cả lúc đã gập.
 - **Bớt thông báo "Đã scan" khi tự quét lại** — các lần quét lại tự động (theo dõi Drive/ổ đĩa, hoặc sau khi dọn ảnh) không còn bật thông báo "Đã scan N file" nữa; chỉ khi bấm nút Quét lại thủ công mới hiện. Đồng thời bỏ qua thay đổi trong thư mục backup ảnh đã dọn nên không báo nhầm.
