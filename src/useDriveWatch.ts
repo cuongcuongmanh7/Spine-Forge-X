@@ -17,8 +17,8 @@ type Args = {
   entries: LibraryEntry[];
   /** Silently refresh owner/last-modified for the given rows (edit/rename). */
   refreshBasics: (rows: LibraryEntry[]) => void;
-  /** Re-scan the inventory (a `.spine` was added/removed on disk). */
-  rescanLibrary: () => void;
+  /** Re-scan the inventory (a `.spine` was added/removed on disk). Silent: no success toast. */
+  rescanLibrary: (silent?: boolean) => void;
   /** Push classified changes into the notification store. */
   onChanges: (changes: DriveChange[]) => void;
 };
@@ -87,7 +87,7 @@ export function useDriveWatch({
     void listen('library-fs-changed', () => {
       // Backend already debounced ~2s; a short extra debounce coalesces any residual bursts.
       window.clearTimeout(rescanTimer);
-      rescanTimer = window.setTimeout(() => rescanRef.current(), 500);
+      rescanTimer = window.setTimeout(() => rescanRef.current(true), 500);
     }).then(keep);
 
     return () => {

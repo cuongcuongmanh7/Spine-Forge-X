@@ -212,7 +212,7 @@ export function LibraryClean({ filter, scopeRequest }: { filter: LibraryFilterAp
         }
       }
       pushToast(t.cleanSourceDone.replace('{count}', String(moved)), 'success');
-      const refreshed = await rescanLibrary();
+      const refreshed = await rescanLibrary(true);
       if (cleanedSpineFiles.length > 0) markLibraryEntriesClean(cleanedSpineFiles, refreshed?.entries);
       await scanOffline(refreshed?.entries);
     } finally {

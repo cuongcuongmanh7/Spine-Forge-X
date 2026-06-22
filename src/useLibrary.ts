@@ -79,14 +79,17 @@ export function useLibrary({ t, pushToast }: Options) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeLibraryId, activeLibrary]);
 
-  async function runScan(library: Library): Promise<LibraryScan | null> {
+  // `silent` suppresses the success toast — used by automatic rescans (the Drive/FS watcher and the
+  // post-clean refresh) so they don't pop a "Scanned N files" toast over a finished action. Errors
+  // still surface. Only the manual Rescan button leaves it false.
+  async function runScan(library: Library, silent = false): Promise<LibraryScan | null> {
     setIsScanning(true);
     try {
       const result = await invoke<LibraryScan>('scan_library', { root: library.rootPath });
       persistLibraryScan(library.id, result);
       setScan(result);
       setLibraries((list) => list.map((l) => (l.id === library.id ? { ...l, lastScanAt: Date.now() } : l)));
-      pushToast(t.libraryScanDone.replace('{count}', String(result.entries.length)), 'success');
+      if (!silent) pushToast(t.libraryScanDone.replace('{count}', String(result.entries.length)), 'success');
       return result;
     } catch (error) {
       pushToast(`${t.libraryScanFailed}: ${String(error)}`, 'error');
@@ -119,8 +122,8 @@ export function useLibrary({ t, pushToast }: Options) {
     await runScan(library);
   }
 
-  async function rescan() {
-    if (activeLibrary) return runScan(activeLibrary);
+  async function rescan(silent = false) {
+    if (activeLibrary) return runScan(activeLibrary, silent);
     return null;
   }
 

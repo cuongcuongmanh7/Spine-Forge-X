@@ -418,6 +418,9 @@ fn is_structural_event(event: &notify::Event) -> bool {
         if s.contains("spineforge-") {
             return false; // our own sidecar files (library-meta / drive-meta) — never a real change
         }
+        if s.contains("_unused_backup") {
+            return false; // our own clean-backup folder churn — moving images here isn't an inventory change
+        }
         // A `.spine` file, or a path with no extension (a folder add/remove that may carry units).
         s.ends_with(".spine") || p.extension().is_none()
     })
