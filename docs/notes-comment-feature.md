@@ -1,6 +1,6 @@
 # Tính năng: Note/Comment cho file & folder trong Library
 
-> Trạng thái: **planned** — chưa code. Doc này để mai làm tiếp.
+> Trạng thái: **implemented** — đã code theo plan này (unit test xanh; còn cần chạy app verify thủ công theo §Kiểm thử).
 
 ## Bối cảnh
 

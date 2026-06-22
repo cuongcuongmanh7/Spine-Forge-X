@@ -438,6 +438,78 @@ export function entryMatchesTags(metaEntry: EntryMeta | undefined, selected: Set
   return false;
 }
 
+// ---- notes / comments (file & folder) -------------------------------------
+// Free-form multi-line notes a leader (or anyone) leaves on a Library file or folder — e.g.
+// "missing attack anim, re-export". Stored in their own sidecar (spineforge-library-notes.json),
+// keyed by the machine-independent relPath for files and a `dir:`-prefixed key for folders so the
+// two namespaces never collide. Merge-before-write unions by note id (not last-writer-wins) so two
+// leaders annotating the same target don't clobber each other.
+
+export type LibraryNote = {
+  id: string; // crypto.randomUUID()
+  text: string;
+  authorEmail: string; // denormalized so the author shows without a Drive lookup
+  createdAt: number; // Date.now()
+  updatedAt: number;
+  resolved: boolean;
+  resolvedBy?: string;
+};
+/** note key (relPath for a file, `dir:<sectionKey>` for a folder) → its notes. */
+export type LibraryNotes = Record<string, LibraryNote[]>;
+
+/** Folder note key — `dir:` prefix keeps it out of the file (relPath) namespace. */
+export function metaKeyForFolder(folderKey: string): string {
+  return `dir:${folderKey}`;
+}
+
+/** Apply an edit to one key's note array, pruning the key entirely when it ends up empty. */
+function withNotesEntry(notes: LibraryNotes, key: string, fn: (list: LibraryNote[]) => LibraryNote[]): LibraryNotes {
+  const next = fn([...(notes[key] ?? [])]);
+  if (next.length === 0) {
+    const { [key]: _drop, ...rest } = notes;
+    return rest;
+  }
+  return { ...notes, [key]: next };
+}
+
+/** Append a note to a key. Returns a new map. */
+export function addNote(notes: LibraryNotes, key: string, note: LibraryNote): LibraryNotes {
+  return withNotesEntry(notes, key, (list) => [...list, note]);
+}
+
+/** Remove a note by id. Returns a new map (key pruned when it empties). */
+export function removeNote(notes: LibraryNotes, key: string, id: string): LibraryNotes {
+  return withNotesEntry(notes, key, (list) => list.filter((n) => n.id !== id));
+}
+
+/** Mark a note resolved/unresolved, stamping `resolvedBy` + `updatedAt`. Returns a new map. */
+export function setNoteResolved(notes: LibraryNotes, key: string, id: string, resolved: boolean, by: string, now: number): LibraryNotes {
+  return withNotesEntry(notes, key, (list) =>
+    list.map((n) => (n.id === id ? { ...n, resolved, resolvedBy: resolved ? by : undefined, updatedAt: now } : n))
+  );
+}
+
+/** Notes for a key (empty array when none). */
+export function notesFor(notes: LibraryNotes, key: string): LibraryNote[] {
+  return notes[key] ?? [];
+}
+
+/** How many of a key's notes are still open (unresolved) — drives the badge/highlight. */
+export function unresolvedCount(notes: LibraryNotes, key: string): number {
+  return (notes[key] ?? []).reduce((n, note) => n + (note.resolved ? 0 : 1), 0);
+}
+
+/** Union two note arrays by id, keeping the newer `updatedAt` for each id — for merge-before-write. */
+export function mergeNoteArrays(a: LibraryNote[] = [], b: LibraryNote[] = []): LibraryNote[] {
+  const byId = new Map<string, LibraryNote>();
+  for (const note of a) byId.set(note.id, note);
+  for (const note of b) {
+    const existing = byId.get(note.id);
+    if (!existing || note.updatedAt >= existing.updatedAt) byId.set(note.id, note);
+  }
+  return [...byId.values()];
+}
+
 export type VersionTag = { version: string | null; count: number };
 
 /** Distinct full editor versions with counts (e.g. 3.8.99, 4.3.11), unknown last — for filter chips. */

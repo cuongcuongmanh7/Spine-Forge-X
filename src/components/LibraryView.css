@@ -550,11 +550,12 @@
 .library-table col.lib-col-tags {
   width: 130px;
 }
+/* Owner/Modified trimmed so the elastic File column keeps room (it also carries the notes badge). */
 .library-table col.lib-col-owner {
-  width: 132px;
+  width: 104px;
 }
 .library-table col.lib-col-modified {
-  width: 96px;
+  width: 80px;
 }
 /* Narrow icon-only Preview column (Spine Hub Tier C #5). Kept compact so the elastic
    File column barely gives up width. */

@@ -1,6 +1,6 @@
 import { AlertTriangle, ChevronDown, ChevronRight, FolderPlus, ListChecks, Users } from 'lucide-react';
 import { formatBytes, formatDate } from '../time';
-import { entryWarnings, matchedNames } from '../library';
+import { entryWarnings, matchedNames, metaKeyForEntry, metaKeyForFolder } from '../library';
 import { LibraryCardThumb } from './LibraryCardThumb';
 import { LibraryTagCell } from './LibraryTagCell';
 import { LibraryOwnerCell } from './LibraryOwnerCell';
@@ -9,6 +9,7 @@ import { LibraryRowMenuButton } from './LibraryRowMenu';
 import { LibraryDriveInfoPanel } from './LibraryDriveInfoRow';
 import {
   DAY_MS,
+  NotesIndicator,
   cleanStatusIcon,
   sectionCleanStatus,
   splitRelPath,
@@ -48,7 +49,9 @@ export function LibraryGrid(props: LibraryViewProps) {
     createSessionForEntry,
     createSessionForSection,
     onPrepareCleanScan,
-    onPreview
+    onPreview,
+    openNotes,
+    unresolvedNotes
   } = props;
 
   return (
@@ -56,9 +59,11 @@ export function LibraryGrid(props: LibraryViewProps) {
       {sections.map((section) => {
         const isCollapsed = collapsed.has(section.key);
         const secStatus = sectionCleanStatus(section.entries, cleanStatus);
+        const folderKey = metaKeyForFolder(section.key);
+        const folderNotes = unresolvedNotes(folderKey);
         return (
           <section className="library-grid-group" key={section.key}>
-            <div className="library-group-head-row">
+            <div className={`library-group-head-row${folderNotes > 0 ? ' library-has-notes' : ''}`}>
               <span className="library-group-head-left">
                 <button className="library-group-toggle" onClick={() => toggleCollapsed(section.key)} aria-expanded={!isCollapsed}>
                   {isCollapsed ? <ChevronRight size={15} /> : <ChevronDown size={15} />}
@@ -70,6 +75,7 @@ export function LibraryGrid(props: LibraryViewProps) {
                     <AlertTriangle size={13} /> {t.libraryWarnMixed}
                   </span>
                 )}
+                <NotesIndicator count={folderNotes} onOpen={() => openNotes(folderKey, section.label)} t={t} />
               </span>
               <span className="library-actions">
                 <button
@@ -101,8 +107,10 @@ export function LibraryGrid(props: LibraryViewProps) {
                   const { dir, name } = splitRelPath(entry.relPath);
                   const u = usage.get(entry.spineFile);
                   const usedCount = u?.projectIds.length ?? 0;
+                  const entryKey = metaKeyForEntry(entry);
+                  const entryNotes = unresolvedNotes(entryKey);
                   return (
-                    <article className="library-card" key={entry.spineFile}>
+                    <article className={`library-card${entryNotes > 0 ? ' library-has-notes' : ''}`} key={entry.spineFile}>
                       <div className="library-card-thumb-wrap">
                         <LibraryCardThumb entry={entry} />
                         <LibraryPreviewButton entry={entry} onPreview={onPreview} t={t} />
@@ -114,6 +122,7 @@ export function LibraryGrid(props: LibraryViewProps) {
                           {name}
                         </span>
                         <span className="library-card-actions">
+                          <NotesIndicator count={entryNotes} onOpen={() => openNotes(entryKey, name)} t={t} />
                           <span className="library-card-menu">
                             <LibraryRowMenuButton
                               entry={entry}

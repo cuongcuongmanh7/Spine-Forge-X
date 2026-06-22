@@ -1,5 +1,8 @@
 # Changelog
 
+## v0.4.12
+- **Ghi chú cho file & thư mục trong Thư viện** — để lại nhiều ghi chú (kèm người viết + thời gian) cho từng file hoặc cả thư mục; file/thư mục có ghi chú chưa xử lý được tô sáng và hiện số đếm. Mỗi ghi chú **đánh dấu đã xử lý** (làm mờ) hoặc xoá (tác giả của ghi chú, hoặc trưởng nhóm); có nút bật/tắt hiện ghi chú đã xử lý. Ô nhập tự nối tiếp danh sách: gõ `1.` hay `- ` rồi Enter sẽ tự thêm dòng kế. Ghi chú dùng chung cả nhóm qua Drive (offline vẫn ghi được, nối mạng tự đồng bộ).
+
 ## v0.4.11
 - **Xem trước Spine: thêm điều khiển khung nhìn** — phóng to/thu nhỏ bằng nút hoặc lăn chuột, **giữ chuột phải để kéo di chuyển** (con trỏ thành bàn tay), nút đưa khung hình về mặc định, nút phóng to toàn màn hình, và kéo giãn được kích thước cửa sổ (nhớ lại cho lần sau). Góc khung hiện thêm FPS và thời lượng animation.
 - **Tự chọn skin/animation khi xem trước** — ưu tiên skin `skin_default` (không có thì `default`) và animation `idle` nếu có.

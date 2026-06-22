@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
-import { AlertTriangle, CloudDownload, Layers, RotateCw, Search, Tag, Users } from 'lucide-react';
+import { AlertTriangle, CloudDownload, Layers, MessageSquare, RotateCw, Search, Tag, Users } from 'lucide-react';
 import { useApp } from '../useAppController';
 import { LibraryStatCards } from './LibraryStatCards';
 import { basename } from '../sessions';
@@ -9,8 +9,11 @@ import type { LibraryEntry } from '../config';
 import { useLibraryDrive } from '../useLibraryDrive';
 import { useThumbnailWarm } from '../useSpineThumbnail';
 import { useLibraryTags } from '../useLibraryTags';
+import { useLibraryNotes } from '../useLibraryNotes';
 import { LibraryTable } from './LibraryTable';
 import { LibraryGrid } from './LibraryGrid';
+import { NotesModal } from './NotesModal';
+import './NotesModal.css';
 import './LibraryMeta.css';
 import './LibraryFilters.css';
 import {
@@ -20,6 +23,7 @@ import {
   cleanStatusForEntry,
   type LibraryCleanStatus,
   entryMatchesTags,
+  metaKeyForEntry,
   parseQuery,
   usageByEntry,
   divergingFileSet,
@@ -58,6 +62,7 @@ export function LibraryInventory({
     setViewMode,
     pushToast,
     driveAccount,
+    isLeader,
     libraryDir,
     openSettings,
     sessions,
@@ -80,8 +85,12 @@ export function LibraryInventory({
   const [selectedUsers, setSelectedUsers] = useState<Set<string>>(new Set());
   // Version-mix triage: show only files that diverge from their folder group's majority version.
   const [divergingOnly, setDivergingOnly] = useState(false);
+  // Notes/comments: which target's notes modal is open, and whether resolved notes are shown.
+  const [notesTarget, setNotesTarget] = useState<{ key: string; label: string } | null>(null);
+  const [showResolved, setShowResolved] = useState(false);
 
   const { tagList, metaFor, addEntryTag, removeEntryTag, setEntryOwner } = useLibraryTags({ libraryDir });
+  const notes = useLibraryNotes({ libraryDir, authorEmail: driveAccount?.email ?? '', isLeader });
 
   const { driveInfo, expandedInfo, loadingBasics, basicsLoadedAt, basicFor, toggleDriveInfo, loadDriveBasics, openRevisionInSpine } =
     useLibraryDrive({
@@ -329,6 +338,8 @@ export function LibraryInventory({
     addEntryTag,
     removeEntryTag,
     setEntryOwner,
+    openNotes: (key, label) => setNotesTarget({ key, label }),
+    unresolvedNotes: notes.unresolvedForKey,
     driveInfo,
     expandedInfo,
     basicFor,
@@ -466,6 +477,9 @@ export function LibraryInventory({
             <button className={`library-chip ${unusedOnly ? 'active' : ''}`} onClick={() => setUnusedOnly((v) => !v)} aria-pressed={unusedOnly}>
               <Users size={12} /> {t.libraryUnusedOnly}
             </button>
+            <button className={`library-chip ${showResolved ? 'active' : ''}`} onClick={() => setShowResolved((v) => !v)} aria-pressed={showResolved}>
+              <MessageSquare size={12} /> {t.notesShowResolved}
+            </button>
           </div>
         </div>
 
@@ -519,6 +533,20 @@ export function LibraryInventory({
           <Layers size={15} /> {t.libraryCreateProject}
         </button>
       </div>
+
+      {notesTarget && (
+        <NotesModal
+          t={t}
+          targetLabel={notesTarget.label}
+          notes={notes.notesForKey(notesTarget.key)}
+          showResolved={showResolved}
+          onAdd={(text) => notes.addNoteByKey(notesTarget.key, text)}
+          onToggleResolved={(id) => notes.toggleResolved(notesTarget.key, id)}
+          onDelete={(id) => notes.deleteNote(notesTarget.key, id)}
+          canDelete={notes.canDelete}
+          onClose={() => setNotesTarget(null)}
+        />
+      )}
     </div>
   );
 }

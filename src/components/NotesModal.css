@@ -1,0 +1,133 @@
+/* Notes/comments modal (file & folder). Fixed-height, only the body scrolls; the footer (note
+   input) carries its own padding/border per docs/ui-design-rules.md §1. */
+.notes-modal {
+  display: flex;
+  flex-direction: column;
+  max-height: 86vh;
+  overflow: hidden;
+}
+.notes-modal .modal-header h2 {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.notes-modal .modal-body.notes-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+/* Count of open (unresolved) notes, beside the title. */
+.notes-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 6px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  background: color-mix(in srgb, var(--primary), transparent 82%);
+  color: var(--primary);
+}
+
+.notes-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.note-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--text) 3%, transparent);
+}
+.note-item.resolved {
+  opacity: 0.55;
+}
+.note-text {
+  white-space: pre-wrap;
+  word-break: break-word;
+  line-height: 1.45;
+}
+.note-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 12px;
+}
+.note-actions {
+  display: inline-flex;
+  gap: 4px;
+}
+
+/* Footer: textarea + add button. Carries its own padding (body scrolls separately). */
+.notes-modal .modal-footer.notes-footer {
+  flex: 0 0 auto;
+  margin-top: 0;
+  /* Pin the Add button to the bottom so growing the textarea doesn't stretch the button. */
+  align-items: flex-end;
+  gap: 8px;
+  padding: 14px 18px;
+  border-top: 1px solid var(--border);
+  background: color-mix(in srgb, var(--surface), var(--bg) 20%);
+}
+.notes-input {
+  flex: 1 1 auto;
+  resize: vertical;
+  min-height: 64px;
+  max-height: 40vh;
+  font: inherit;
+  line-height: 1.45;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--text);
+}
+/* Keep the button at its natural size regardless of textarea height. */
+.notes-footer .primary-button {
+  flex: 0 0 auto;
+  align-self: stretch;
+  max-height: 64px;
+}
+.notes-input:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 1px;
+}
+
+/* File/folder row & group header highlight when they carry open notes — icon + tint, not color
+   alone (accessibility §7). */
+.library-has-notes {
+  background: color-mix(in srgb, var(--primary), transparent 92%) !important;
+}
+.notes-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  margin-left: 8px;
+  padding: 0 7px;
+  height: 18px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 12px;
+}
+.notes-indicator:hover {
+  border-color: var(--primary);
+  color: var(--primary);
+}
+.notes-indicator.has-notes {
+  border-color: color-mix(in srgb, var(--primary), var(--border) 40%);
+  color: var(--primary);
+}

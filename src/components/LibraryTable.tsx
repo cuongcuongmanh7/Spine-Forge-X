@@ -10,7 +10,7 @@ import {
   Users
 } from 'lucide-react';
 import { formatBytes, formatDate } from '../time';
-import { entryWarnings, matchedNames } from '../library';
+import { entryWarnings, matchedNames, metaKeyForEntry, metaKeyForFolder } from '../library';
 import { LibraryDriveInfoRow } from './LibraryDriveInfoRow';
 import { LibraryRowMenu } from './LibraryRowMenu';
 import { LibraryPreviewCell } from './LibraryPreviewCell';
@@ -18,6 +18,7 @@ import { LibraryTagCell } from './LibraryTagCell';
 import { LibraryOwnerCell } from './LibraryOwnerCell';
 import {
   DAY_MS,
+  NotesIndicator,
   cleanStatusIcon,
   sectionCleanStatus,
   splitRelPath,
@@ -60,7 +61,9 @@ export function LibraryTable(props: LibraryViewProps) {
     createSessionForEntry,
     createSessionForSection,
     onPrepareCleanScan,
-    onPreview
+    onPreview,
+    openNotes,
+    unresolvedNotes
   } = props;
 
   const tableRef = useRef<HTMLTableElement>(null);
@@ -157,9 +160,11 @@ export function LibraryTable(props: LibraryViewProps) {
       {sections.map((section) => {
         const isCollapsed = collapsed.has(section.key);
         const secStatus = sectionCleanStatus(section.entries, cleanStatus);
+        const folderKey = metaKeyForFolder(section.key);
+        const folderNotes = unresolvedNotes(folderKey);
         return (
           <tbody key={section.key}>
-            <tr className="library-group-row">
+            <tr className={`library-group-row${folderNotes > 0 ? ' library-has-notes' : ''}`}>
               <td colSpan={10}>
                 <div className="library-group-head-row">
                   <span className="library-group-head-left">
@@ -173,6 +178,7 @@ export function LibraryTable(props: LibraryViewProps) {
                         <AlertTriangle size={13} /> {t.libraryWarnMixed}
                       </span>
                     )}
+                    <NotesIndicator count={folderNotes} onOpen={() => openNotes(folderKey, section.label)} t={t} />
                   </span>
                   <span className="library-actions">
                     <button
@@ -201,9 +207,11 @@ export function LibraryTable(props: LibraryViewProps) {
                 const basic = basicFor(entry);
                 const modifiedMs = basic?.modifiedTime ? Date.parse(basic.modifiedTime) : NaN;
                 const recent = Number.isFinite(modifiedMs) && Date.now() - modifiedMs < 7 * DAY_MS;
+                const entryKey = metaKeyForEntry(entry);
+                const entryNotes = unresolvedNotes(entryKey);
                 return (
                   <Fragment key={entry.spineFile}>
-                    <tr>
+                    <tr className={entryNotes > 0 ? 'library-has-notes' : undefined}>
                       <td className="library-path" title={entry.spineFile}>
                         <span className="library-path-line">
                           {cleanStatusIcon(cleanStatus(entry), t)}
@@ -237,6 +245,7 @@ export function LibraryTable(props: LibraryViewProps) {
                               </button>
                             );
                           })()}
+                          <NotesIndicator count={entryNotes} onOpen={() => openNotes(entryKey, splitRelPath(entry.relPath).name)} t={t} />
                         </span>
                       </td>
                       <td>{entry.version ?? <span className="muted">{t.libraryUnknownVersion}</span>}</td>

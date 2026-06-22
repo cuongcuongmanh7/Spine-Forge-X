@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { AlertTriangle, CheckCircle2, Circle } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, Circle, MessageSquare } from 'lucide-react';
 import type { LibraryEntry } from '../config';
 import type { Translations } from '../i18n';
 import { parseQuery } from '../library';
@@ -63,6 +63,37 @@ export function sectionCleanStatus(
   return null;
 }
 
+/**
+ * Notes badge/opener for a file row or folder header. Shows the open-note count when > 0 and is
+ * always clickable to open the notes modal (so you can add the first note). `has-notes` styles it
+ * as active; the row/section also gets `.library-has-notes` to tint it.
+ */
+export function NotesIndicator({
+  count,
+  onOpen,
+  t
+}: {
+  count: number;
+  onOpen: () => void;
+  t: Translations;
+}): ReactNode {
+  return (
+    <button
+      type="button"
+      className={`notes-indicator${count > 0 ? ' has-notes' : ''}`}
+      title={t.notesOpenIndicator}
+      aria-label={t.notesOpenIndicator}
+      onClick={(e) => {
+        e.stopPropagation();
+        onOpen();
+      }}
+    >
+      <MessageSquare size={12} />
+      {count > 0 && <span>{count}</span>}
+    </button>
+  );
+}
+
 type TagsApi = ReturnType<typeof useLibraryTags>;
 type DriveApi = ReturnType<typeof useLibraryDrive>;
 
@@ -95,6 +126,10 @@ export interface LibraryViewProps {
   addEntryTag: TagsApi['addEntryTag'];
   removeEntryTag: TagsApi['removeEntryTag'];
   setEntryOwner: TagsApi['setEntryOwner'];
+  /** Open notes for `key` (file relPath or `dir:`-folder key); `label` is the modal title target. */
+  openNotes: (key: string, label: string) => void;
+  /** Count of still-open notes for `key` — drives the indicator badge + row/section highlight. */
+  unresolvedNotes: (key: string) => number;
   driveInfo: DriveApi['driveInfo'];
   expandedInfo: DriveApi['expandedInfo'];
   basicFor: DriveApi['basicFor'];
