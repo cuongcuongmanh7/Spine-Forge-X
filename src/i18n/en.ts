@@ -160,6 +160,7 @@ export const en: Translations = {
   libraryFacetLabel: 'Group',
   libraryFacetFolder: 'By type',
   libraryFacetId: 'By ID',
+  libraryFacetStatus: 'By status',
   libraryCollapseAll: 'Collapse',
   libraryExpandAll: 'Expand',
   libraryFilterCategory: 'Type',

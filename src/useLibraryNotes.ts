@@ -3,6 +3,7 @@ import { invoke } from '@tauri-apps/api/core';
 import {
   addNote,
   mergeNoteArrays,
+  noteCount,
   notesFor,
   removeNote,
   setNoteResolved,
@@ -141,11 +142,13 @@ export function useLibraryNotes({ libraryDir, authorEmail, isLeader }: Args) {
 
   const notesForKey = useCallback((key: string) => notesFor(notes, key), [notes]);
   const unresolvedForKey = useCallback((key: string) => unresolvedCount(notes, key), [notes]);
+  const countForKey = useCallback((key: string) => noteCount(notes, key), [notes]);
 
   return {
     notes,
     notesForKey,
     unresolvedForKey,
+    countForKey,
     addNoteByKey,
     deleteNote,
     toggleResolved,

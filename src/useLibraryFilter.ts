@@ -5,12 +5,12 @@ import { useState } from 'react';
  * Inventory and Clean tabs so the Clean scan can be scoped to exactly what the user has filtered.
  */
 export function useLibraryFilter() {
-  const [facet, setFacetState] = useState<'folder' | 'id'>('folder');
+  const [facet, setFacetState] = useState<'folder' | 'id' | 'status'>('folder');
   const [selectedCats, setSelectedCats] = useState<Set<string>>(new Set());
   const [selectedVersions, setSelectedVersions] = useState<Set<string>>(new Set());
   const [query, setQuery] = useState('');
 
-  function setFacet(next: 'folder' | 'id') {
+  function setFacet(next: 'folder' | 'id' | 'status') {
     setFacetState(next);
     // Category keys differ per facet, so a stale selection would filter everything out.
     setSelectedCats(new Set());

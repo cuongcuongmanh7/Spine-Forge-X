@@ -10,6 +10,13 @@
   display: inline-flex;
   align-items: center;
   gap: 8px;
+  /* Push the show-resolved toggle + close button to the right edge. */
+  flex: 1 1 auto;
+}
+/* Show/hide resolved notes — lit when active so its effect on the list is obvious. */
+.notes-resolved-toggle.active {
+  color: var(--primary);
+  background: color-mix(in srgb, var(--primary), transparent 85%);
 }
 .notes-modal .modal-body.notes-body {
   flex: 1 1 auto;

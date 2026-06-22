@@ -148,6 +148,17 @@ export function groupByIdBand(entries: LibraryEntry[]): LibraryGroup[] {
   return groupBy(entries, idBand);
 }
 
+/** Triage order for clean-scan status groups: Not scanned → Needs review → Clean. */
+const STATUS_RANK: Record<string, number> = { unknown: 0, warning: 1, clean: 2 };
+
+/**
+ * Group entries by clean-scan status ('unknown' | 'warning' | 'clean'). `statusOf` resolves the
+ * status (the host owns `libraryCleanState`); groups are ordered by triage rank, not alphabetically.
+ */
+export function groupByStatus(entries: LibraryEntry[], statusOf: (entry: LibraryEntry) => string): LibraryGroup[] {
+  return groupBy(entries, statusOf).sort((a, b) => (STATUS_RANK[a.key] ?? 99) - (STATUS_RANK[b.key] ?? 99));
+}
+
 export type VersionBucket = {
   major: string;
   count: number;
@@ -181,10 +192,13 @@ export function versionLabel(major: string): string {
 
 /** The shared chip/search selection that scopes both the Inventory view and the Clean scan. */
 export type LibrarySelection = {
-  facet: 'folder' | 'id';
+  facet: 'folder' | 'id' | 'status';
   selectedCats: Set<string>;
   selectedVersions: Set<string>;
   query: string;
+  /** Clean-scan status of an entry — required when `facet === 'status'` (cleanState lives in the host,
+   *  not here). Returns the raw status key ('unknown' | 'warning' | 'clean'). */
+  statusOf?: (entry: LibraryEntry) => string;
 };
 
 /** Which facet a search term is scoped to: path+anim+skin (default), or just one of them. */
@@ -240,7 +254,8 @@ export function matchedNames(entry: LibraryEntry, parsed: ParsedQuery): { animat
 
 /** True when an entry passes the current category-chip, version-chip, and search filters. */
 export function entryMatchesFilter(entry: LibraryEntry, sel: LibrarySelection): boolean {
-  const catKey = sel.facet === 'id' ? idBand(entry) : topFolder(entry);
+  const catKey =
+    sel.facet === 'status' ? (sel.statusOf?.(entry) ?? 'unknown') : sel.facet === 'id' ? idBand(entry) : topFolder(entry);
   if (sel.selectedCats.size > 0 && !sel.selectedCats.has(catKey)) return false;
   if (sel.selectedVersions.size > 0 && !sel.selectedVersions.has(entry.version ?? '')) return false;
   return entryMatchesQuery(entry, parseQuery(sel.query));
@@ -497,6 +512,11 @@ export function notesFor(notes: LibraryNotes, key: string): LibraryNote[] {
 /** How many of a key's notes are still open (unresolved) — drives the badge/highlight. */
 export function unresolvedCount(notes: LibraryNotes, key: string): number {
   return (notes[key] ?? []).reduce((n, note) => n + (note.resolved ? 0 : 1), 0);
+}
+
+/** Total notes on a key, including resolved — used for the badge when "show resolved" is on. */
+export function noteCount(notes: LibraryNotes, key: string): number {
+  return (notes[key] ?? []).length;
 }
 
 /** Union two note arrays by id, keeping the newer `updatedAt` for each id — for merge-before-write. */

@@ -1,5 +1,10 @@
 # Changelog
 
+## v0.4.16
+- **Inventory: nhóm "Theo trạng thái"** — thêm lựa chọn nhóm thứ ba (cạnh "Theo loại" / "Theo ID") để gom file theo trạng thái dọn ảnh: **Chưa scan → Cần kiểm tra → Đã clean**. Bấm chip một trạng thái để lọc nhanh đúng nhóm đó.
+- **Sửa filter "Hiện ghi chú đã xử lý"** — trước đây bật/tắt ở thanh lọc gần như không thấy tác dụng (chỉ ảnh hưởng bên trong popup, mà popup lại che thanh lọc). Nay nút này là **bộ lọc thật**: khi bật, file/thư mục dù ghi chú đã xử lý hết vẫn hiện số đếm + tô sáng để nổi lên trong danh sách. Đồng thời thêm **nút bật/tắt ngay trong popup ghi chú** (đồng bộ với nút ở thanh lọc) nên xem được ghi chú đã xử lý ngay tại chỗ.
+- **Chế độ Lưới: icon dẫn nghĩa trên thẻ** — thêm icon người cạnh tên người phụ trách và icon đồng hồ cạnh thời gian sửa cuối, dễ phân biệt hai dòng ở chân thẻ.
+
 ## v0.4.15
 - **Sửa "Tải dữ liệu Drive" treo & trả rỗng trên thư viện lớn** — với thư viện nhiều file (vài trăm `.spine`), nút Tải dữ liệu Drive trước đây có thể chạy 5–10 phút rồi im lặng không ra kết quả (mục "Lần tải Drive" trống). Nay mỗi yêu cầu có giới hạn thời gian nên một kết nối bị treo không còn làm kẹt cả lượt tải; các file được tra song song nên nhanh hơn nhiều (vài chục giây thay vì nhiều phút); nút hiện tiến độ N/tổng trong lúc tải thay vì chỉ quay vòng im lặng.
 - **Tự thử lại khi Google giới hạn tốc độ** — gặp lỗi rate-limit (429/403) sẽ tự chờ rồi thử lại (chờ tăng dần) theo khuyến nghị của Google, thay vì để file đó lỗi luôn.

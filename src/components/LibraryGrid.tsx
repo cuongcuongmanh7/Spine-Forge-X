@@ -1,4 +1,4 @@
-import { AlertTriangle, ChevronDown, ChevronRight, FolderPlus, ListChecks, Users } from 'lucide-react';
+import { AlertTriangle, ChevronDown, ChevronRight, Clock, FolderPlus, ListChecks, User, Users } from 'lucide-react';
 import { formatBytes, formatDate } from '../time';
 import { entryWarnings, matchedNames, metaKeyForEntry, metaKeyForFolder } from '../library';
 import { LibraryCardThumb } from './LibraryCardThumb';
@@ -51,7 +51,7 @@ export function LibraryGrid(props: LibraryViewProps) {
     onPrepareCleanScan,
     onPreview,
     openNotes,
-    unresolvedNotes
+    noteCount
   } = props;
 
   return (
@@ -60,7 +60,7 @@ export function LibraryGrid(props: LibraryViewProps) {
         const isCollapsed = collapsed.has(section.key);
         const secStatus = sectionCleanStatus(section.entries, cleanStatus);
         const folderKey = metaKeyForFolder(section.key);
-        const folderNotes = unresolvedNotes(folderKey);
+        const folderNotes = noteCount(folderKey);
         return (
           <section className="library-grid-group" key={section.key}>
             <div className={`library-group-head-row${folderNotes > 0 ? ' library-has-notes' : ''}`}>
@@ -108,7 +108,7 @@ export function LibraryGrid(props: LibraryViewProps) {
                   const u = usage.get(entry.spineFile);
                   const usedCount = u?.projectIds.length ?? 0;
                   const entryKey = metaKeyForEntry(entry);
-                  const entryNotes = unresolvedNotes(entryKey);
+                  const entryNotes = noteCount(entryKey);
                   return (
                     <article className={`library-card${entryNotes > 0 ? ' library-has-notes' : ''}`} key={entry.spineFile}>
                       <div className="library-card-thumb-wrap">
@@ -213,6 +213,7 @@ export function LibraryGrid(props: LibraryViewProps) {
 
                       <div className="library-card-foot">
                         <span className="library-card-owner">
+                          <User size={11} className="muted" />
                           <LibraryOwnerCell
                             manualOwner={metaFor(entry)?.owner}
                             driveName={basic?.ownerName || basic?.ownerEmail || basic?.lastEditorName || basic?.lastEditorEmail || ''}
@@ -222,6 +223,7 @@ export function LibraryGrid(props: LibraryViewProps) {
                           />
                         </span>
                         <span className={`library-card-modified muted ${recent ? 'library-modified-recent' : ''}`}>
+                          <Clock size={11} />
                           {basic?.modifiedTime ? formatDate(basic.modifiedTime) : '—'}
                         </span>
                       </div>

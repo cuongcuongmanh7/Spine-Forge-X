@@ -15,6 +15,7 @@ export function NotesModal({
   targetLabel,
   notes,
   showResolved,
+  onToggleShowResolved,
   onAdd,
   onToggleResolved,
   onDelete,
@@ -25,6 +26,7 @@ export function NotesModal({
   targetLabel: string;
   notes: LibraryNote[];
   showResolved: boolean;
+  onToggleShowResolved: () => void;
   onAdd: (text: string) => void;
   onToggleResolved: (id: string) => void;
   onDelete: (id: string) => void;
@@ -74,6 +76,16 @@ export function NotesModal({
             <MessageSquare size={16} /> {t.notesFor.replace('{name}', targetLabel)}
             {unresolved > 0 && <span className="notes-badge">{unresolved}</span>}
           </h2>
+          <button
+            type="button"
+            className={`icon-button notes-resolved-toggle${showResolved ? ' active' : ''}`}
+            title={t.notesShowResolved}
+            aria-label={t.notesShowResolved}
+            aria-pressed={showResolved}
+            onClick={onToggleShowResolved}
+          >
+            <CheckCircle2 size={16} />
+          </button>
           <button className="modal-close" title={t.cancel} aria-label={t.cancel} onClick={onClose}>
             <X size={18} />
           </button>

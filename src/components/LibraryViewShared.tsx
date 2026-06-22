@@ -128,8 +128,9 @@ export interface LibraryViewProps {
   setEntryOwner: TagsApi['setEntryOwner'];
   /** Open notes for `key` (file relPath or `dir:`-folder key); `label` is the modal title target. */
   openNotes: (key: string, label: string) => void;
-  /** Count of still-open notes for `key` — drives the indicator badge + row/section highlight. */
-  unresolvedNotes: (key: string) => number;
+  /** Note count for `key` driving the badge + row/section highlight: open notes only, or all notes
+   *  when the "show resolved" filter is on (host decides). */
+  noteCount: (key: string) => number;
   driveInfo: DriveApi['driveInfo'];
   expandedInfo: DriveApi['expandedInfo'];
   basicFor: DriveApi['basicFor'];

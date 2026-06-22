@@ -20,6 +20,7 @@ import {
   entryMatchesFilter,
   groupByFolder,
   groupByIdBand,
+  groupByStatus,
   cleanStatusForEntry,
   type LibraryCleanStatus,
   entryMatchesTags,
@@ -109,8 +110,24 @@ export function LibraryInventory({
 
   const entries = libraryScan?.entries ?? [];
 
+  // Clean-scan status of an entry as a stable group key ('unknown' | 'warning' | 'clean'); the
+  // host owns `libraryCleanState`, so we inject this into the "By status" grouping/filter.
+  const statusOf = useCallback(
+    (e: LibraryEntry): string => cleanStatusForEntry(e, libraryCleanState[e.spineFile]),
+    [libraryCleanState]
+  );
+  // Localized label for a status group key (chips + section headers under the "By status" facet).
+  const statusLabel = useCallback(
+    (key: string): string =>
+      key === 'clean' ? t.libraryStatClean : key === 'warning' ? t.libraryStatNeedsReview : t.libraryStatNotScanned,
+    [t]
+  );
+
   const buckets = useMemo(() => versionSummary(entries), [entries]);
-  const catChips = useMemo(() => (facet === 'id' ? groupByIdBand(entries) : groupByFolder(entries)), [entries, facet]);
+  const catChips = useMemo(
+    () => (facet === 'status' ? groupByStatus(entries, statusOf) : facet === 'id' ? groupByIdBand(entries) : groupByFolder(entries)),
+    [entries, facet, statusOf]
+  );
   const versions = useMemo(() => versionTags(entries), [entries]);
 
   const usage = useMemo(() => usageByEntry(entries, sessions), [entries, sessions]);
@@ -141,13 +158,13 @@ export function LibraryInventory({
   }, [entries, effectiveOwner]);
 
   const filtered = useMemo(() => {
-    let base = entries.filter((e) => entryMatchesFilter(e, { facet, selectedCats, selectedVersions, query }));
+    let base = entries.filter((e) => entryMatchesFilter(e, { facet, selectedCats, selectedVersions, query, statusOf }));
     if (unusedOnly) base = base.filter((e) => (usage.get(e.spineFile)?.projectIds.length ?? 0) === 0);
     if (divergingOnly) base = base.filter((e) => divergingSet.has(e.spineFile));
     if (selectedTags.size > 0) base = base.filter((e) => entryMatchesTags(metaFor(e), selectedTags));
     if (selectedUsers.size > 0) base = base.filter((e) => selectedUsers.has(effectiveOwner(e)));
     return base;
-  }, [entries, facet, selectedCats, selectedVersions, query, unusedOnly, usage, divergingOnly, divergingSet, selectedTags, metaFor, selectedUsers, effectiveOwner]);
+  }, [entries, facet, selectedCats, selectedVersions, query, statusOf, unusedOnly, usage, divergingOnly, divergingSet, selectedTags, metaFor, selectedUsers, effectiveOwner]);
 
   const parsedQuery = useMemo(() => parseQuery(query), [query]);
 
@@ -208,9 +225,14 @@ export function LibraryInventory({
   useThumbnailWarm(sorted, viewMode === 'grid');
 
   const sections = useMemo<Section[]>(() => {
-    const groups = facet === 'id' ? groupByIdBand(sorted) : groupByFolder(sorted);
-    return groups.map((g) => ({ key: g.key, label: g.key, entries: g.entries, mixedVersion: g.mixedVersion }));
-  }, [sorted, facet]);
+    const groups = facet === 'status' ? groupByStatus(sorted, statusOf) : facet === 'id' ? groupByIdBand(sorted) : groupByFolder(sorted);
+    return groups.map((g) => ({
+      key: g.key,
+      label: facet === 'status' ? statusLabel(g.key) : g.key,
+      entries: g.entries,
+      mixedVersion: g.mixedVersion
+    }));
+  }, [sorted, facet, statusOf, statusLabel]);
 
   function toggleSet(setter: React.Dispatch<React.SetStateAction<Set<string>>>, key: string) {
     setter((prev) => {
@@ -339,7 +361,8 @@ export function LibraryInventory({
     removeEntryTag,
     setEntryOwner,
     openNotes: (key, label) => setNotesTarget({ key, label }),
-    unresolvedNotes: notes.unresolvedForKey,
+    // Badge/highlight count: open notes only, unless "show resolved" is on (then count all).
+    noteCount: (key: string) => (showResolved ? notes.countForKey(key) : notes.unresolvedForKey(key)),
     driveInfo,
     expandedInfo,
     basicFor,
@@ -393,6 +416,9 @@ export function LibraryInventory({
               <button className={facet === 'id' ? 'active' : ''} onClick={() => filter.setFacet('id')}>
                 {t.libraryFacetId}
               </button>
+              <button className={facet === 'status' ? 'active' : ''} onClick={() => filter.setFacet('status')}>
+                {t.libraryFacetStatus}
+              </button>
             </span>
           </div>
           <span className="library-view-controls">
@@ -438,7 +464,7 @@ export function LibraryInventory({
                 title={c.mixedVersion ? t.libraryWarnMixed : undefined}
               >
                 {c.mixedVersion && <AlertTriangle size={12} />}
-                {c.key} <em>{c.entries.length}</em>
+                {facet === 'status' ? statusLabel(c.key) : c.key} <em>{c.entries.length}</em>
               </button>
             ))}
           </div>
@@ -541,6 +567,7 @@ export function LibraryInventory({
           targetLabel={notesTarget.label}
           notes={notes.notesForKey(notesTarget.key)}
           showResolved={showResolved}
+          onToggleShowResolved={() => setShowResolved((v) => !v)}
           onAdd={(text) => notes.addNoteByKey(notesTarget.key, text)}
           onToggleResolved={(id) => notes.toggleResolved(notesTarget.key, id)}
           onDelete={(id) => notes.deleteNote(notesTarget.key, id)}

@@ -14,7 +14,7 @@ Tính năng cần:
 ### Quyết định đã chốt với user
 - **Phạm vi:** chỉ **Library view** (entry + folder). Không đụng Workspace.
 - **Quyền:** ai cũng thêm note; **tác giả xoá note của mình, leader xoá mọi note** (gate ở UI bằng cờ `isLeader` + `driveAccount.email`; sidecar không enforce — chấp nhận được như tags).
-- **Ẩn/hiện:** mỗi note có nút **resolve** (note bị làm mờ); 1 toggle toàn cục ẩn/hiện các note đã resolved; file hết note *chưa resolved* thì bỏ highlight.
+- **Ẩn/hiện:** mỗi note có nút **resolve** (note bị làm mờ); toggle "hiện note đã resolved" có ở **cả thanh lọc Inventory lẫn header popup** (chung 1 state). Toggle này là **filter thật**: khi TẮT, badge/highlight chỉ tính note *chưa resolved* (file hết note chưa resolved thì bỏ highlight); khi BẬT, badge/highlight tính **cả note đã resolved** nên file chỉ-còn-resolved vẫn nổi lên. _(Cập nhật v0.4.16 — trước đó toggle chỉ ảnh hưởng danh sách trong popup.)_
 
 ### Lựa chọn kiến trúc
 Tái dùng **đúng pattern sidecar của tags** (`useLibraryTags` / `library.ts`) thay vì tạo collection Firestore mới: hoạt động offline + sync qua Drive, không cần đổi `firestore.rules` hay listener real-time (chưa có). Note là dữ liệu mảng theo key nên merge sẽ **union theo note id** để giảm mất note khi 2 leader sửa cùng file.
@@ -93,8 +93,8 @@ Tái dùng: `metaFilePath`/sidecar I/O & merge-before-write từ `src/useLibrary
 1. **Unit (Vitest)**: file `src/library.notes.test.ts` cho `addNote/removeNote/setNoteResolved/mergeNoteArrays/unresolvedCount` (round-trip, prune key rỗng, merge union theo id giữ bản updatedAt mới). Mẫu: `src/sync.test.ts`, `src/roles.test.ts`.
 2. **Chạy app** (`npm run tauri dev`):
    - Mở Library → chọn 1 entry → thêm 2 note → entry có highlight + badge "2".
-   - Resolve 1 note → badge còn "1", note bị mờ; tắt toggle "hiện note đã xử lý" → note resolved ẩn.
-   - Resolve nốt → highlight biến mất.
+   - Resolve 1 note → badge còn "1", note bị mờ; tắt toggle "hiện note đã xử lý" → note resolved ẩn trong popup.
+   - Resolve nốt → highlight biến mất (toggle TẮT); BẬT toggle (ở thanh lọc hoặc header popup) → badge hiện lại đếm cả resolved + highlight trở lại.
    - Thêm note cho 1 folder header → folder highlight.
    - Xoá: với note của mình thấy nút xoá; (giả lập) note người khác + không phải leader → ẩn nút xoá.
 3. **Sync**: kiểm tra `spineforge-library-notes.json` xuất hiện trong `…\spine_app_data\library`; sửa thủ công thêm 1 note key khác rồi mở lại → merge không mất note.

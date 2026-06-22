@@ -63,7 +63,7 @@ export function LibraryTable(props: LibraryViewProps) {
     onPrepareCleanScan,
     onPreview,
     openNotes,
-    unresolvedNotes
+    noteCount
   } = props;
 
   const tableRef = useRef<HTMLTableElement>(null);
@@ -161,7 +161,7 @@ export function LibraryTable(props: LibraryViewProps) {
         const isCollapsed = collapsed.has(section.key);
         const secStatus = sectionCleanStatus(section.entries, cleanStatus);
         const folderKey = metaKeyForFolder(section.key);
-        const folderNotes = unresolvedNotes(folderKey);
+        const folderNotes = noteCount(folderKey);
         return (
           <tbody key={section.key}>
             <tr className={`library-group-row${folderNotes > 0 ? ' library-has-notes' : ''}`}>
@@ -208,7 +208,7 @@ export function LibraryTable(props: LibraryViewProps) {
                 const modifiedMs = basic?.modifiedTime ? Date.parse(basic.modifiedTime) : NaN;
                 const recent = Number.isFinite(modifiedMs) && Date.now() - modifiedMs < 7 * DAY_MS;
                 const entryKey = metaKeyForEntry(entry);
-                const entryNotes = unresolvedNotes(entryKey);
+                const entryNotes = noteCount(entryKey);
                 return (
                   <Fragment key={entry.spineFile}>
                     <tr className={entryNotes > 0 ? 'library-has-notes' : undefined}>

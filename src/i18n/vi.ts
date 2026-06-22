@@ -158,6 +158,7 @@ export const vi = {
   libraryFacetLabel: 'Nhóm',
   libraryFacetFolder: 'Theo loại',
   libraryFacetId: 'Theo ID',
+  libraryFacetStatus: 'Theo trạng thái',
   libraryCollapseAll: 'Thu gọn',
   libraryExpandAll: 'Mở rộng',
   libraryFilterCategory: 'Loại',

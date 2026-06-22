@@ -5,6 +5,7 @@ import {
   entryWarnings,
   groupByFolder,
   groupByIdBand,
+  groupByStatus,
   idBand,
   isMixedVersion,
   majorVersion,
@@ -112,6 +113,23 @@ describe('idBand / groupByIdBand', () => {
     ]);
     expect(groups.map((g) => g.key)).toEqual(['3xxx', '7xxx', '9xxx']);
     expect(groups.find((g) => g.key === '3xxx')?.entries).toHaveLength(2);
+  });
+});
+
+describe('groupByStatus', () => {
+  it('orders groups by triage rank: unknown → warning → clean', () => {
+    const statusOf = (e: LibraryEntry) => e.relPath; // relPath doubles as the status key here
+    const groups = groupByStatus(
+      [
+        entry({ relPath: 'clean', spineFile: 'c1' }),
+        entry({ relPath: 'unknown', spineFile: 'u1' }),
+        entry({ relPath: 'warning', spineFile: 'w1' }),
+        entry({ relPath: 'clean', spineFile: 'c2' })
+      ],
+      statusOf
+    );
+    expect(groups.map((g) => g.key)).toEqual(['unknown', 'warning', 'clean']);
+    expect(groups.find((g) => g.key === 'clean')?.entries).toHaveLength(2);
   });
 });
 

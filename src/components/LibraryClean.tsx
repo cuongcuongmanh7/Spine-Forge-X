@@ -5,7 +5,8 @@ import { useApp } from '../useAppController';
 import { StatCard } from './StatCard';
 import { LibraryScanningOverlay } from './LibraryScanningOverlay';
 import { formatBytes } from '../time';
-import { entryMatchesFilter, groupByFolder, groupByIdBand, selectionSummary } from '../library';
+import { cleanStatusForEntry, entryMatchesFilter, groupByFolder, groupByIdBand, groupByStatus, selectionSummary } from '../library';
+import type { LibraryEntry } from '../config';
 import type { LibraryFilterApi } from '../useLibraryFilter';
 import type { BatchScanSummary, FolderScan, ImageEntry } from '../types';
 
@@ -60,6 +61,7 @@ export function LibraryClean({ filter, scopeRequest }: { filter: LibraryFilterAp
     t,
     activeLibrary,
     libraryScan,
+    libraryCleanState,
     merged,
     scanSourceFolders,
     cleanScanSummary,
@@ -86,12 +88,19 @@ export function LibraryClean({ filter, scopeRequest }: { filter: LibraryFilterAp
 
   const { facet, selectedCats, selectedVersions, query } = filter;
   const entries = libraryScan?.entries ?? [];
+  // Clean-scan status as a group key — facet 'status' is shared with the Inventory tab, so honour it.
+  const statusOf = (e: LibraryEntry): string => cleanStatusForEntry(e, libraryCleanState[e.spineFile]);
+  const statusLabel = (key: string): string =>
+    key === 'clean' ? t.libraryStatClean : key === 'warning' ? t.libraryStatNeedsReview : t.libraryStatNotScanned;
   const included = useMemo(
-    () => entries.filter((e) => entryMatchesFilter(e, { facet, selectedCats, selectedVersions, query })),
-    [entries, facet, selectedCats, selectedVersions, query]
+    () => entries.filter((e) => entryMatchesFilter(e, { facet, selectedCats, selectedVersions, query, statusOf })),
+    [entries, facet, selectedCats, selectedVersions, query, libraryCleanState]
   );
   const includedKeys = useMemo(() => included.map((e) => e.spineFile).join('\n'), [included]);
-  const scanGroups = useMemo(() => (facet === 'id' ? groupByIdBand(included) : groupByFolder(included)), [facet, included]);
+  const scanGroups = useMemo(
+    () => (facet === 'status' ? groupByStatus(included, statusOf) : facet === 'id' ? groupByIdBand(included) : groupByFolder(included)),
+    [facet, included, libraryCleanState]
+  );
   const summaryText = selectionSummary({ facet, selectedCats, selectedVersions, query });
   const scopeAll = included.length === entries.length;
   const selectedScanEntries = included.filter((e) => scanChecked.has(e.spineFile));
@@ -298,11 +307,11 @@ export function LibraryClean({ filter, scopeRequest }: { filter: LibraryFilterAp
                         }}
                         onChange={() => toggleScanGroup(group.entries)}
                         disabled={working}
-                        aria-label={`${t.cleanSourcePickFolders}: ${group.key}`}
+                        aria-label={`${t.cleanSourcePickFolders}: ${facet === 'status' ? statusLabel(group.key) : group.key}`}
                       />
                       <button className="library-group-toggle" onClick={() => toggleGroupCollapsed(group.key)} aria-expanded={!isCollapsed}>
                         {isCollapsed ? <ChevronRight size={15} /> : <ChevronDown size={15} />}
-                        {group.key} <span className="muted">({group.entries.length})</span>
+                        {facet === 'status' ? statusLabel(group.key) : group.key} <span className="muted">({group.entries.length})</span>
                       </button>
                     </div>
                     {!isCollapsed && (

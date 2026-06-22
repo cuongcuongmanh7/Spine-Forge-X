@@ -3,6 +3,7 @@ import {
   addNote,
   mergeNoteArrays,
   metaKeyForFolder,
+  noteCount,
   notesFor,
   removeNote,
   setNoteResolved,
@@ -59,6 +60,14 @@ describe('library notes helpers', () => {
     expect(n1b.resolved).toBe(false);
     expect(n1b.resolvedBy).toBeUndefined();
     expect(unresolvedCount(reopened, 'k')).toBe(2);
+  });
+
+  it('noteCount counts all notes incl. resolved, unlike unresolvedCount', () => {
+    const start = addNote(addNote({}, 'k', note('1')), 'k', note('2'));
+    const resolved = setNoteResolved(start, 'k', '1', true, 'leader@x.com', 5000);
+    expect(noteCount(resolved, 'k')).toBe(2); // both still counted
+    expect(unresolvedCount(resolved, 'k')).toBe(1); // only the open one
+    expect(noteCount({}, 'missing')).toBe(0);
   });
 
   it('mergeNoteArrays unions by id, keeping the newer updatedAt per id', () => {

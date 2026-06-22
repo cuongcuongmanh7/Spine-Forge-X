@@ -6,6 +6,15 @@ Source-of-truth tiến độ toàn dự án.
 
 ---
 
+## v0.4.16 — Inventory "By status" group + sửa filter Show-resolved-notes + icon thẻ Lưới ✅ Done
+
+> Bump `0.4.15 → 0.4.16`; tag `v0.4.16`.
+
+- [x] **Nhóm "By status"** — facet thứ ba `'status'` (cạnh `folder`/`id`), key thô `'unknown' | 'warning' | 'clean'`, sắp xếp theo triage rank Chưa scan → Cần kiểm tra → Đã clean (`STATUS_RANK`). `groupByStatus(entries, statusOf)` + `entryMatchesFilter` nhận `statusOf` (host bơm `libraryCleanState`). Chip/section dịch nhãn qua `libraryStat*`. Facet dùng chung nên [LibraryClean.tsx](../src/components/LibraryClean.tsx) cũng xử lý `status`. [library.ts](../src/library.ts), [useLibraryFilter.ts](../src/useLibraryFilter.ts), [LibraryInventory.tsx](../src/components/LibraryInventory.tsx).
+- [x] **Filter "Show resolved notes" thành filter thật + toggle trong popup** — badge/highlight đổi sang `noteCount` = chỉ-chưa-resolved khi tắt, đếm-tất-cả khi bật (host quyết qua `showResolved`). Prop view `unresolvedNotes` → `noteCount`. Thêm `noteCount`/`countForKey` helper + toggle `CheckCircle2` ở header [NotesModal.tsx](../src/components/NotesModal.tsx) (chung state với nút thanh lọc). [library.ts](../src/library.ts), [useLibraryNotes.ts](../src/useLibraryNotes.ts), [LibraryViewShared.tsx](../src/components/LibraryViewShared.tsx).
+- [x] **Icon thẻ Lưới** — `User` cạnh owner, `Clock` cạnh thời gian sửa ở `.library-card-foot`. [LibraryGrid.tsx](../src/components/LibraryGrid.tsx), [LibraryGrid.css](../src/components/LibraryGrid.css).
+- [x] Verify: `tsc` + `npm test` (109, thêm test `groupByStatus`/`noteCount`) xanh.
+
 ## v0.4.15 — Drive "Load data": timeout + song song giới hạn + retry/backoff + cache ID bền ✅ Done
 
 > Bump `0.4.14 → 0.4.15`; tag `v0.4.15`. (ROADMAP nhảy từ v0.4.9 — các bản 0.4.10–0.4.14 chỉ ghi ở CHANGELOG.)
