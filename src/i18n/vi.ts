@@ -136,6 +136,8 @@ export const vi = {
   libraryTitle: 'Thư viện Spine',
   libraryImport: 'Import folder tổng',
   libraryRescan: 'Quét lại',
+  libraryStatsTitle: 'Thống kê',
+  libraryFiltersTitle: 'Bộ lọc',
   libraryDeleteLib: 'Xoá thư viện',
   libraryDeleteConfirm: 'Xoá thư viện "{name}"? Chỉ gỡ khỏi danh sách, không xoá file trên ổ đĩa.',
   libraryEmpty: 'Chưa có thư viện nào. Import folder tổng chứa các folder Spine để bắt đầu.',

@@ -2,6 +2,7 @@ import { useCallback, useMemo, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { AlertTriangle, CloudDownload, Layers, MessageSquare, RotateCw, Search, Tag, Users } from 'lucide-react';
 import { useApp } from '../useAppController';
+import { Section as CollapsibleSection } from './common';
 import { LibraryStatCards } from './LibraryStatCards';
 import { basename } from '../sessions';
 import { formatDate } from '../time';
@@ -38,6 +39,10 @@ import type { LibraryViewProps, Section, SortKey, SortState } from './LibraryVie
 
 const SORT_TIEBREAKER = { numeric: true, sensitivity: 'base' } as const;
 const SORT_KEYS: SortKey[] = ['entry', 'version', 'spine', 'images', 'anims', 'owner', 'modified'];
+
+// Persisted collapse state for the inventory header sections (stats / filters).
+const STATS_KEY = 'libraryInventory.statsCollapsed';
+const FILTERS_KEY = 'libraryInventory.filtersCollapsed';
 
 /** Inventory tab host: stats, chip filters, search, view toggle — renders the table or grid view. */
 export function LibraryInventory({
@@ -91,6 +96,10 @@ export function LibraryInventory({
   // Notes/comments: which target's notes modal is open, and whether resolved notes are shown.
   const [notesTarget, setNotesTarget] = useState<{ key: string; label: string } | null>(null);
   const [showResolved, setShowResolved] = useState(false);
+  // Count of active chip filters — surfaced as a badge on the collapsible Filters section header.
+  const activeFilterCount =
+    selectedCats.size + selectedVersions.size + selectedUsers.size + selectedTags.size +
+    (unusedOnly ? 1 : 0) + (showResolved ? 1 : 0) + (divergingOnly ? 1 : 0);
 
   const { tagList, metaFor, addEntryTag, removeEntryTag, setEntryOwner } = useLibraryTags({ libraryDir });
   const notes = useLibraryNotes({ libraryDir, authorEmail: driveAccount?.email ?? '', isLeader });
@@ -395,7 +404,9 @@ export function LibraryInventory({
   return (
     <div className="library-pane">
       <div className="library-pane-head">
-        <LibraryStatCards t={t} totalEntries={entries.length} buckets={buckets} totalImageBytes={libraryScan?.totalImageBytes ?? 0} scanCounts={scanCounts} />
+        <CollapsibleSection title={t.libraryStatsTitle} storageKey={STATS_KEY}>
+          <LibraryStatCards t={t} totalEntries={entries.length} buckets={buckets} totalImageBytes={libraryScan?.totalImageBytes ?? 0} scanCounts={scanCounts} />
+        </CollapsibleSection>
 
         <div className="library-search-row">
           <Search size={15} />
@@ -421,6 +432,11 @@ export function LibraryInventory({
           </button>
         </div>
 
+        <CollapsibleSection
+          title={t.libraryFiltersTitle}
+          storageKey={FILTERS_KEY}
+          accessory={activeFilterCount > 0 ? <span className="section-badge">{activeFilterCount}</span> : undefined}
+        >
         <div className="library-chip-row">
           <span className="library-chip-label">{t.libraryFacetLabel}</span>
           <div className="library-chip-set">
@@ -555,6 +571,7 @@ export function LibraryInventory({
             </div>
           </div>
         )}
+        </CollapsibleSection>
       </div>
 
       <div className="library-pane-scroll">

@@ -138,6 +138,8 @@ export const en: Translations = {
   libraryTitle: 'Spine Library',
   libraryImport: 'Import master folder',
   libraryRescan: 'Rescan',
+  libraryStatsTitle: 'Statistics',
+  libraryFiltersTitle: 'Filters',
   libraryDeleteLib: 'Remove library',
   libraryDeleteConfirm: 'Remove library “{name}”? This only removes it from the list — files on disk are untouched.',
   libraryEmpty: 'No library yet. Import a master folder containing your Spine folders to start.',

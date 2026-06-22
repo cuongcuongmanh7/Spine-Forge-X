@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.4.18
+- **Inventory: thu gọn được cụm Thống kê & Bộ lọc** — hai cụm này giờ là thẻ gập/mở (đồng bộ với tab Cài đặt) để nhường chỗ cho danh sách; trạng thái gập được nhớ cho lần mở sau. Khi đang lọc, thẻ "Bộ lọc" hiện số bộ lọc đang bật ngay cả lúc đã gập.
+- **Bớt thông báo "Đã scan" khi tự quét lại** — các lần quét lại tự động (theo dõi Drive/ổ đĩa, hoặc sau khi dọn ảnh) không còn bật thông báo "Đã scan N file" nữa; chỉ khi bấm nút Quét lại thủ công mới hiện. Đồng thời bỏ qua thay đổi trong thư mục backup ảnh đã dọn nên không báo nhầm.
+
 ## v0.4.17
 - **Tự phát hiện thay đổi trên Drive — không cần bấm "Tải dữ liệu Drive"** — khi đang mở tab Thư viện, app tự dò Drive vài giây một lần: ai sửa / đổi tên / thêm / xoá file `.spine`, cập nhật ảnh nguồn (kể cả trong thư mục con như `images/skin_default`), hay export lại đều được nhận diện và tự cập nhật lên bảng. Vẫn giữ nút "Tải dữ liệu Drive" để tải lại toàn bộ khi cần.
 - **Chuông thông báo "ai vừa làm gì"** — thêm icon chuông ở thanh tiêu đề (luôn thấy ở mọi tab) báo từng thay đổi kèm thư mục, ví dụ "Cường vừa sửa `9901.spine` ở `[…\9901]`" hay "vừa thêm 8 ảnh ở `[…]`"; thay đổi hàng loạt được gộp lại cho gọn. Lưu 20 thông báo gần nhất, bấm vào để xem.
