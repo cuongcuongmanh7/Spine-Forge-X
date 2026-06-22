@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.4.14
+- **Sửa đồng bộ thư viện** — không còn đẩy trạng thái dọn thư viện rỗng lên cloud khi máy chưa có dữ liệu local, tránh xoá nhầm clean-state của nhóm.
+- **Sửa quy trình release** — bản `v0.4.13` đã bị bỏ qua vì artifact vẫn mang version app `0.4.12`, khiến auto-updater không nhận là bản mới. `v0.4.14` bump đúng version app/installer/updater manifest và thay thế `v0.4.13`.
+
 ## v0.4.12
 - **Ghi chú cho file & thư mục trong Thư viện** — để lại nhiều ghi chú (kèm người viết + thời gian) cho từng file hoặc cả thư mục; file/thư mục có ghi chú chưa xử lý được tô sáng và hiện số đếm. Mỗi ghi chú **đánh dấu đã xử lý** (làm mờ) hoặc xoá (tác giả của ghi chú, hoặc trưởng nhóm); có nút bật/tắt hiện ghi chú đã xử lý. Ô nhập tự nối tiếp danh sách: gõ `1.` hay `- ` rồi Enter sẽ tự thêm dòng kế. Ghi chú dùng chung cả nhóm qua Drive (offline vẫn ghi được, nối mạng tự đồng bộ).
 
