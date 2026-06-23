@@ -1,5 +1,8 @@
 # Changelog
 
+## v0.4.26
+- **Sửa thumbnail file 4.x luôn trống** — trình phát 4.x mặc định "bay" camera vào khung trong ~0.25s, mà thumbnail chụp ngay sau khi nạp (~2 frame) nên chụp đúng lúc nhân vật chưa vào khung → ra ảnh trống và bị loại. Nay khung được căn tức thì khi chụp (và tắt spinner loading đè lên), nên thumbnail 4.x hiện đúng. Thumbnail cũ sẽ tự tạo lại.
+
 ## v0.4.25
 - **Inventory hiện được danh sách anim/skin cho file 4.x binary** — trước đây file export dạng binary 4.x (`.skel`/`.skel.bytes`, không có JSON) không đọc được tên anim/skin nên cột đếm, sort, tìm kiếm và panel mở rộng đều trống. Nay app tự parse bằng runtime khớp version (không cần WebGL) và điền vào — đầy đủ số đếm, sort, search theo tên.
 - **Sửa thumbnail / xem trước bị trống với rig kiểu "skin-folder"** — nhiều rig để skin `default` gần như rỗng và đặt art ở các skin riêng (`A/Body_0`, `A/Weapon_0`…). Trước đây app luôn chọn `default` nên ra ảnh trống. Nay chọn skin có nhiều ảnh nhất nên hiện đúng nhân vật ở cả thumbnail lẫn khung xem trước. Thumbnail cũ sẽ tự tạo lại.

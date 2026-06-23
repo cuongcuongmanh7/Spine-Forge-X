@@ -34,8 +34,9 @@ const RENDER_TIMEOUT_MS = 8000;
  *  image (local L1 + shared L2), independent of the asset bytes. v2: prefer `skin_default` over an
  *  empty `default` skin so rigs that hid their art under `skin_default` stop thumbnailing blank.
  *  v3: load 4.2 exports with the matching 4.2 runtime (the 4.3 reader misaligned → blank/failed).
- *  v4: pick the skin with the most attachments (skin-folder rigs left `default` near-empty → blank). */
-const THUMB_RENDER_VERSION = 4;
+ *  v4: pick the skin with the most attachments (skin-folder rigs left `default` near-empty → blank).
+ *  v5: frame instantly + hide the loading screen so the 4.x capture isn't an unframed blank. */
+const THUMB_RENDER_VERSION = 5;
 
 /** Filesystem-safe cache key: a stable hash of the asset's identity. Uses the library-relative
  *  path (NOT the absolute path) so the key matches across machines sharing the same Drive folder.
@@ -134,9 +135,15 @@ async function renderThumbnail(assets: ExportAssets, rawDataURIs: Record<string,
       const common = {
         rawDataURIs,
         showControls: false,
+        // No loading-screen spinner — it would composite over the skeleton in the capture.
+        showLoading: false,
         alpha: true,
         // Required so the drawing buffer survives compositing and toDataURL isn't blank.
         preserveDrawingBuffer: true,
+        // Frame the skeleton INSTANTLY. The 4.x player otherwise animates the camera to fit over
+        // ~0.25s, so a capture two frames after load grabs an unframed (near-empty) canvas that the
+        // blank-capture guard then rejects — which is why 4.x thumbnails came out empty.
+        viewport: { transitionTime: 0 },
         backgroundColor: '#00000000',
         success: onSuccess,
         error: onError,
