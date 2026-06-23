@@ -396,6 +396,31 @@ fn read_animation(r: &mut Reader, strings: &[Option<String>], event_has_audio: &
     Ok(())
 }
 
+/// Runtime family ("3.8" vs "4.x") read from a binary skeleton's header alone — just the hash
+/// and version strings, no full body parse.
+///
+/// This is what picks the player runtime in `list_export_assets`. It must NOT depend on
+/// [`read_skel_names`] succeeding: that's a hand-ported parser with gaps, and a 3.8 file it
+/// can't fully walk would otherwise be mislabeled 4.x and loaded by the wrong runtime —
+/// misaligning every string and producing garbled region names ("Region not found in atlas").
+///
+/// A genuine 3.8 export stores its hash as a string, so the version reads cleanly as "3.8.x".
+/// A 4.x export stores an 8-byte hash instead, so reading it as a string lands on a bogus
+/// offset and the version won't start with "3.8" → we fall through to "4.x", which is correct.
+pub(crate) fn read_skel_version_family(bytes: &[u8]) -> String {
+    let mut r = Reader::new(bytes);
+    let version = (|| {
+        r.string()?; // hash (string in 3.8; misread for 4.x, which is fine — see above)
+        Ok::<_, String>(r.string()?.unwrap_or_default())
+    })()
+    .unwrap_or_default();
+    if version.starts_with("3.8") {
+        "3.8".to_string()
+    } else {
+        "4.x".to_string()
+    }
+}
+
 /// Parse a 3.8.x binary skeleton, returning its skin + animation names. Returns `Err` for any
 /// other version (4.x layout differs) or on a malformed/short stream.
 pub(crate) fn read_skel_names(bytes: &[u8]) -> Result<SkelNames, String> {
@@ -554,6 +579,19 @@ mod tests {
         data.extend([0u8; 17]); // x,y,w,h + nonessential — never reached, but harmless
         let err = read_skel_names(&data).unwrap_err();
         assert!(err.contains("unsupported"), "got: {err}");
+    }
+
+    #[test]
+    fn version_family_from_header_only() {
+        // A 3.8 header is enough to pick the runtime, even when the body can't be fully parsed
+        // (truncated here) — the old "full parse must succeed" rule would have mislabeled this 4.x.
+        let data = header("3.8.99");
+        assert_eq!(read_skel_version_family(&data), "3.8");
+        // Non-3.8 version string → 4.x family.
+        let data = header("4.1.23");
+        assert_eq!(read_skel_version_family(&data), "4.x");
+        // Garbage/short blob → 4.x (safe default).
+        assert_eq!(read_skel_version_family(b"\x00xyz"), "4.x");
     }
 
     #[test]

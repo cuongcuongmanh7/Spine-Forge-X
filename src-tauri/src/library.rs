@@ -363,14 +363,13 @@ pub(crate) fn list_export_assets(folder: String) -> Result<ExportAssets, String>
                 .ok()
                 .and_then(|c| json_skeleton_version(&c))
         } else {
-            // 3.8 binary parser succeeds only on the 3.8 format; failure ⇒ 4.x.
-            std::fs::read(&skel_path).ok().map(|data| {
-                if skel_binary::read_skel_names(&data).is_ok() {
-                    "3.8".to_string()
-                } else {
-                    "4.x".to_string()
-                }
-            })
+            // Pick the runtime from the binary header's version string, NOT from a full parse:
+            // a 3.8 file our hand-ported reader can't fully walk must still render on the 3.8
+            // runtime, or string offsets misalign into garbled region names. See
+            // `skel_binary::read_skel_version_family`.
+            std::fs::read(&skel_path)
+                .ok()
+                .map(|data| skel_binary::read_skel_version_family(&data))
         };
 
         let atlas_dir = atlas_path.parent().unwrap_or(&dir).to_path_buf();
@@ -617,7 +616,7 @@ mod tests {
 
         let assets = list_export_assets(unit.to_string_lossy().to_string()).unwrap();
         assert_eq!(assets.skeleton_format, "skel");
-        // Unparseable binary ⇒ treated as 4.x (the 3.8 parser rejected it).
+        // No "3.8" version string in the header ⇒ treated as 4.x.
         assert_eq!(assets.version.as_deref(), Some("4.x"));
         assert_eq!(assets.pages.iter().map(|p| p.name.as_str()).collect::<Vec<_>>(), vec!["mob.png"]);
 
