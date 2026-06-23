@@ -17,6 +17,7 @@ import {
   sameLibraryBody,
   sameLibraryCleanBody,
   sameWorkspaceBody,
+  subscribeLibraryCleanProfile,
   writeLibraryCleanProfile,
   writeLibraryProfile,
   writeWorkspaceProfile,
@@ -38,6 +39,9 @@ type Args = {
   userUid: string | null;
   /** Whether this user may curate the shared library list. Members are pull-only on that scope. */
   isLeader: boolean;
+  /** Fired after a realtime clean-state update is adopted into localStorage — the controller uses it
+   *  to refresh the in-memory inventory stats (and silently rescan to realign scan-entry metadata). */
+  onRemoteCleanApplied?: () => void;
 };
 
 /**
@@ -47,7 +51,7 @@ type Args = {
  * remote reloads the window so module-scope `loadPersistedState` re-runs with it. The app-data root
  * is still needed to derive the `${SPINE_ROOT}` rebase anchor for source paths.
  */
-export function useSync({ data, t, pushToast, appDataDir, userUid, isLeader }: Args) {
+export function useSync({ data, t, pushToast, appDataDir, userUid, isLeader, onRemoteCleanApplied }: Args) {
   const initial = loadSyncSettings();
   const [enabled, setEnabled] = useState(initial.enabled);
   const [status, setStatus] = useState<SyncStatus>('idle');
@@ -72,6 +76,8 @@ export function useSync({ data, t, pushToast, appDataDir, userUid, isLeader }: A
   tRef.current = t;
   const pushToastRef = useRef(pushToast);
   pushToastRef.current = pushToast;
+  const onRemoteCleanAppliedRef = useRef(onRemoteCleanApplied);
+  onRemoteCleanAppliedRef.current = onRemoteCleanApplied;
   // Bodies we last read/wrote — let the debounced writer skip no-op pushes.
   const lastWsBodyRef = useRef<string | null>(null);
   const lastLibBodyRef = useRef<string | null>(null);
@@ -296,6 +302,33 @@ export function useSync({ data, t, pushToast, appDataDir, userUid, isLeader }: A
     lastLibBodyRef.current = null;
     lastCleanBodyRef.current = null;
     void reconcile();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [connected, appDataDir, userUid]);
+
+  // Realtime: adopt a teammate's newer clean-state into an already-open window (no reload). The
+  // one-shot reconcile above only runs at connect/identity-change, so without this a member keeps
+  // showing stale inventory stats until a manual Rescan. Soft-applies to localStorage and signals
+  // the controller to refresh in-memory stats; never reloads (clean-state feeds only the Library).
+  useEffect(() => {
+    const { appDataDir: dir, userUid: uid } = settingsRef.current;
+    if (!connected || !dir || !uid) return;
+    const anchor = deriveAnchor(dir);
+    const unsub = subscribeLibraryCleanProfile((remote) => {
+      if (!remote) return;
+      // Strictly-newer only: equal `updatedAt` is this machine's own write echoing back (we stamp
+      // `cleanSyncedAt` with the same server value on push), so dropping it avoids a write/apply loop.
+      if (remote.updatedAt <= (settingsRef.current.cleanSyncedAt ?? 0)) return;
+      const local = buildLibraryCleanProfile(dataRef.current.libraries, anchor, Date.now());
+      if (sameLibraryCleanBody(remote, local)) {
+        // Same content, newer stamp → just advance the watermark so we stop re-checking it.
+        markClean(remote.updatedAt, JSON.stringify(local.states));
+        return;
+      }
+      applyLibraryCleanProfile(remote, anchor);
+      markClean(remote.updatedAt, JSON.stringify(remote.states));
+      onRemoteCleanAppliedRef.current?.();
+    });
+    return unsub;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [connected, appDataDir, userUid]);
 

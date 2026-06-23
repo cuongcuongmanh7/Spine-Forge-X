@@ -162,6 +162,13 @@ export function useLibrary({ t, pushToast }: Options) {
     setActiveLibraryId(id);
   }
 
+  // Re-read the active library's clean-state from localStorage into memory. Used after sync adopts a
+  // teammate's newer clean-state (written to localStorage by `applyLibraryCleanProfile`) so the
+  // inventory stats recompute without a window reload. Mirrors the active-library load effect above.
+  function reloadCleanState() {
+    setCleanState(activeLibraryId ? loadLibraryCleanState(activeLibraryId) : {});
+  }
+
   async function deleteLibrary(id: string) {
     const lib = libraries.find((l) => l.id === id);
     if (!lib) return;
@@ -193,6 +200,7 @@ export function useLibrary({ t, pushToast }: Options) {
     markLibraryEntriesClean,
     markLibraryEntriesScanned,
     selectLibrary,
-    deleteLibrary
+    deleteLibrary,
+    reloadCleanState
   };
 }

@@ -33,6 +33,11 @@ vi.mock('firebase/firestore', () => {
         data: () => data,
         get: (k: string) => data?.[k]
       };
+    },
+    onSnapshot: (ref: { key: string }, onNext: (snap: unknown) => void) => {
+      const data = store.get(ref.key);
+      onNext({ exists: () => data !== undefined, data: () => data, get: (k: string) => data?.[k] });
+      return () => {};
     }
   };
 });
@@ -43,8 +48,11 @@ import {
   buildWorkspaceProfile,
   readLibraryProfile,
   readWorkspaceProfile,
+  subscribeLibraryCleanProfile,
+  writeLibraryCleanProfile,
   writeLibraryProfile,
   writeWorkspaceProfile,
+  type LibraryCleanProfile,
   type SyncData
 } from './sync';
 
@@ -101,5 +109,31 @@ describe('library Firestore IO', () => {
 
   it('returns null when the doc does not exist', async () => {
     expect(await readLibraryProfile()).toBeNull();
+  });
+});
+
+describe('library clean-state live subscription', () => {
+  beforeEach(() => store.clear());
+
+  it('emits the parsed profile on subscribe', async () => {
+    const profile: LibraryCleanProfile = {
+      schema: 1,
+      updatedAt: 1000,
+      states: { l1: [{ spineFile: '${SPINE_ROOT}/Hero.spine', spineBytes: 10, imageBytes: 20, imageCount: 2, version: '3.8', exported: true, unusedCount: 0, unusedBytes: 0, scannedAt: 1, cleanedAt: 1 }] }
+    };
+    await writeLibraryCleanProfile(profile); // server stamps updatedAt → 5000
+
+    const seen: (LibraryCleanProfile | null)[] = [];
+    const unsub = subscribeLibraryCleanProfile((p) => seen.push(p));
+    expect(seen).toHaveLength(1);
+    expect(seen[0]?.updatedAt).toBe(5000);
+    expect(seen[0]?.states.l1[0].spineFile).toBe('${SPINE_ROOT}/Hero.spine');
+    unsub();
+  });
+
+  it('emits null when the doc does not exist', () => {
+    const seen: (LibraryCleanProfile | null)[] = [];
+    subscribeLibraryCleanProfile((p) => seen.push(p));
+    expect(seen).toEqual([null]);
   });
 });

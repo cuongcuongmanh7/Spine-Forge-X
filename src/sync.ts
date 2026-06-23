@@ -9,7 +9,7 @@
 // Firestore IO; orchestration lives in useSync.ts. Machine-local settings (Spine.exe path) are
 // NEVER written into a profile.
 
-import { getDoc, serverTimestamp, setDoc, Timestamp } from 'firebase/firestore';
+import { getDoc, onSnapshot, serverTimestamp, setDoc, Timestamp } from 'firebase/firestore';
 import { currentUid, envDoc } from './firebase';
 import {
   defaultAppConfig,
@@ -347,14 +347,33 @@ export async function writeLibraryProfile(profile: LibraryProfile): Promise<numb
   return tsToMillis(snap.get('updatedAt')) ?? profile.updatedAt;
 }
 
-/** Reads the shared library clean-state doc (`envs/{env}/library/clean`). */
-export async function readLibraryCleanProfile(): Promise<LibraryCleanProfile | null> {
-  const snap = await getDoc(envDoc('library', 'clean'));
+/** Validate a clean-state doc snapshot into a profile (shared by the one-shot read + live sub). */
+function parseCleanSnap(snap: { exists: () => boolean; data: () => Record<string, unknown> | undefined; get: (k: string) => unknown }): LibraryCleanProfile | null {
   if (!snap.exists()) return null;
   const d = snap.data();
+  if (!d) return null;
   const updatedAt = tsToMillis(d.updatedAt);
   if (updatedAt === null || typeof d.states !== 'object' || d.states === null) return null;
   return { schema: typeof d.schema === 'number' ? d.schema : SCHEMA, updatedAt, states: d.states as LibraryCleanProfile['states'] };
+}
+
+/** Reads the shared library clean-state doc (`envs/{env}/library/clean`). */
+export async function readLibraryCleanProfile(): Promise<LibraryCleanProfile | null> {
+  return parseCleanSnap(await getDoc(envDoc('library', 'clean')));
+}
+
+/**
+ * Live subscription to the shared clean-state doc. Emits the parsed profile on every change (or
+ * `null` when the doc is missing/invalid/unreadable). Lets a teammate's scan/clean propagate to an
+ * already-open window without waiting for the next reconcile. Returns an unsubscribe fn. Callable
+ * only after sign-in (rules gate the read). Mirrors `subscribeLeaderEmails` in firebase.ts.
+ */
+export function subscribeLibraryCleanProfile(cb: (profile: LibraryCleanProfile | null) => void): () => void {
+  return onSnapshot(
+    envDoc('library', 'clean'),
+    (snap) => cb(parseCleanSnap(snap)),
+    () => cb(null)
+  );
 }
 
 /** Writes the shared clean-state doc; returns the server-resolved `updatedAt` in millis. */

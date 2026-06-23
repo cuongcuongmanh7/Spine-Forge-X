@@ -192,7 +192,8 @@ export function useAppControllerValue() {
     markLibraryEntriesClean,
     markLibraryEntriesScanned,
     selectLibrary,
-    deleteLibrary
+    deleteLibrary,
+    reloadCleanState
   } = useLibrary({ t, pushToast });
 
   // App-data sync (Tier B): Google Drive account — identifies the user AND powers owner/history
@@ -234,7 +235,20 @@ export function useAppControllerValue() {
     syncNeedsSignIn,
     setSyncEnabled,
     syncNow
-  } = useSync({ data: syncData, t, pushToast, appDataDir, userUid: firebaseUid, isLeader });
+  } = useSync({
+    data: syncData,
+    t,
+    pushToast,
+    appDataDir,
+    userUid: firebaseUid,
+    isLeader,
+    // A teammate's newer clean-state just landed: refresh in-memory stats, then silently rescan so
+    // scan-entry metadata (bytes/version) realigns with the adopted records (covers the re-export case).
+    onRemoteCleanApplied: () => {
+      reloadCleanState();
+      void rescanLibrary(true);
+    }
+  });
 
   const merged = useMemo<MergedConfig>(() => ({ ...appConfig, ...sessionConfig }), [appConfig, sessionConfig]);
 
