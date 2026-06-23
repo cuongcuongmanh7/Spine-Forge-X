@@ -50,11 +50,13 @@ const FILTERS_KEY = 'libraryInventory.filtersCollapsed';
 export function LibraryInventory({
   filter,
   onPrepareCleanScan,
-  onPreview
+  onPreview,
+  onHealthCheck
 }: {
   filter: LibraryFilterApi;
   onPrepareCleanScan: (spineFiles: string[]) => void;
   onPreview: (entry: LibraryEntry) => void;
+  onHealthCheck: (entry: LibraryEntry) => void;
 }) {
   const {
     t,
@@ -420,6 +422,7 @@ export function LibraryInventory({
     createSessionForSection,
     onPrepareCleanScan,
     onPreview,
+    onHealthCheck,
     onQuickExport: (spineFiles) => void quickExport(spineFiles),
     quickExportBusy: anyRunning
   };

@@ -208,6 +208,39 @@ export type ExportAssets = {
   pages: ExportPage[];
 };
 
+/** One texture page in a health report (mirrors the Rust `HealthPage`). */
+export type HealthPage = {
+  name: string;
+  path: string;
+  /** Whether the page image actually exists on disk. */
+  exists: boolean;
+  bytes: number;
+};
+
+/**
+ * Diagnostic snapshot of a unit's export (mirrors the Rust `HealthReport`).
+ * Returned by the `health_check_entry` command. Collects every check plus the raw
+ * atlas text + skeleton header so a blank thumbnail / failed preview can be traced.
+ */
+export type HealthReport = {
+  relPath: string;
+  spineFile: string;
+  folder: string;
+  editorVersion: string | null;
+  exportDirs: string[];
+  exportFiles: string[];
+  skeletonPath: string | null;
+  skeletonFormat: 'json' | 'skel' | null;
+  skeletonBytes: number;
+  detectedVersion: string | null;
+  skeletonHeader: string | null;
+  atlasPath: string | null;
+  atlasContent: string | null;
+  pages: HealthPage[];
+  problems: string[];
+  ok: boolean;
+};
+
 /** Result of scanning a master folder (mirrors the Rust `LibraryScan`). */
 export type LibraryScan = {
   root: string;

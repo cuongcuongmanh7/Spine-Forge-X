@@ -4893,7 +4893,7 @@ var spine;
 			var chars = "";
 			var charCount = 0;
 			for (var i = 0; i < byteCount;) {
-				var b = this.readByte();
+				var b = this.readByte() & 0xFF; // readByte() is signed (getInt8); mask so multi-byte UTF-8 (≥0x80) decodes
 				switch (b >> 4) {
 					case 12:
 					case 13:

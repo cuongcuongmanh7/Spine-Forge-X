@@ -1,6 +1,6 @@
 import { useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
-import { FolderOpen, FolderPlus, History, ListChecks, MoreHorizontal, Zap } from 'lucide-react';
+import { FolderOpen, FolderPlus, History, ListChecks, MoreHorizontal, Stethoscope, Zap } from 'lucide-react';
 import type { Translations } from '../i18n';
 import type { LibraryEntry } from '../config';
 import { SpineFileIcon } from './SpineFileIcon';
@@ -74,6 +74,7 @@ type Props = {
   onOpenFolder: (entry: LibraryEntry) => void;
   onOpenInSpine: (entry: LibraryEntry) => void;
   onCreateSession: (entry: LibraryEntry) => void;
+  onHealthCheck: (entry: LibraryEntry) => void;
   onQuickExport: (entry: LibraryEntry) => void;
   quickExportBusy: boolean;
   t: Translations;
@@ -90,6 +91,7 @@ export function LibraryRowMenuButton({
   onOpenFolder,
   onOpenInSpine,
   onCreateSession,
+  onHealthCheck,
   onQuickExport,
   quickExportBusy,
   t
@@ -129,6 +131,9 @@ export function LibraryRowMenuButton({
           </button>
           <button onClick={() => act(onCreateSession)}>
             <FolderPlus size={14} /> {t.libraryCreateSession}
+          </button>
+          <button onClick={() => act(onHealthCheck)}>
+            <Stethoscope size={14} /> {t.libraryHealthCheck}
           </button>
           <button disabled={quickExportBusy} onClick={() => act(onQuickExport)}>
             <Zap size={14} /> {t.libraryQuickExport}

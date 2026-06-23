@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.4.27
+- **Sửa vài file bị lỗi hình ảnh (viền sáng/quầng) do Premultiply Alpha** — trình phát 3.8 mặc định coi mọi texture là premultiplied, nên file export **tắt** Premultiply alpha (straight alpha) bị render viền/vùng bán trong suốt sáng lóa. Nay app tự nhận diện từng file là PMA hay straight-alpha (quét pixel page đầu) và báo player render đúng — không cần re-export hay sửa setting. Thumbnail tạo lại để áp dụng.
+- **Sửa file binary 3.8 có tên layer tiếng Trung/Nhật/Hàn không load được** — trình phát 3.8 đọc byte skeleton dạng có dấu (signed) nên ký tự nhiều byte (vd `祥云 Copy`, `图层`) bị giải mã sai → tên attachment không khớp atlas → báo "could not load skeleton / Region not found in atlas" → trắng cả thumbnail lẫn xem trước. Nay đọc byte đúng kiểu unsigned, các file này hiện đúng. Ảnh hỏng sẽ tự tạo lại.
+- **Sửa thumbnail/xem trước trắng khi folder export có nhiều bộ** — nhiều unit export ra cả rig chính (vd `9905`) lẫn atlas hiệu ứng riêng (vd `9905_Portal`) trong cùng thư mục `export/`. Trước đây app chọn skeleton và atlas **độc lập** nên dễ ghép nhầm (skeleton chính + atlas hiệu ứng) → không tìm thấy region → ảnh trắng. Nay ghép skeleton ↔ atlas **theo tên gốc** và ưu tiên bộ khớp tên/ID thư mục (vd folder `9912` chọn bộ `Splash_9912`, bỏ qua bộ `Splash_9911` thừa do copy nhầm), nên chọn đúng cặp/đúng nhân vật. Thumbnail hỏng sẽ tự tạo lại.
+- **Thêm "Kiểm tra export" cho từng file trong Library** — với file đã export nhưng không hiện thumbnail / không xem trước được, mở menu ⋯ → Kiểm tra export để xem ngay vì sao: đủ thư mục export chưa, có skeleton + atlas không, từng ảnh texture mà atlas trỏ tới có nằm trên đĩa và đúng dung lượng không, version/runtime khớp chưa. Có nút **Copy cho AI** và **Lưu report** (xuất `health-report.md` kèm nội dung atlas + header skeleton) để nhờ phân tích sâu.
+
 ## v0.4.26
 - **Sửa thumbnail file 4.x luôn trống** — trình phát 4.x mặc định "bay" camera vào khung trong ~0.25s, mà thumbnail chụp ngay sau khi nạp (~2 frame) nên chụp đúng lúc nhân vật chưa vào khung → ra ảnh trống và bị loại. Nay khung được căn tức thì khi chụp (và tắt spinner loading đè lên), nên thumbnail 4.x hiện đúng. Thumbnail cũ sẽ tự tạo lại.
 

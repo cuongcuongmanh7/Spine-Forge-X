@@ -64,6 +64,7 @@ export function LibraryTable(props: LibraryViewProps) {
     createSessionForSection,
     onPrepareCleanScan,
     onPreview,
+    onHealthCheck,
     openNotes,
     noteCount,
     onQuickExport,
@@ -310,6 +311,7 @@ export function LibraryTable(props: LibraryViewProps) {
                         onOpenFolder={(e) => openFolder(e)}
                         onOpenInSpine={(e) => openInSpine(e)}
                         onCreateSession={createSessionForEntry}
+                        onHealthCheck={onHealthCheck}
                         onQuickExport={(e) => onQuickExport([e.spineFile])}
                         quickExportBusy={quickExportBusy}
                         t={t}

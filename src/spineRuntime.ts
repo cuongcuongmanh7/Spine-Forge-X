@@ -202,3 +202,50 @@ export async function buildRawDataURIs(assets: ExportAssets): Promise<Record<str
   ]);
   return Object.fromEntries(entries);
 }
+
+/**
+ * Detect whether the export's texture is premultiplied-alpha (PMA), by sampling the first page.
+ * The vendored 3.8 player blindly assumes PMA (blend `ONE, 1-SRC_ALPHA`); a straight-alpha export
+ * then renders with bright/glowing fringes on feathered edges. The browser decodes every image as
+ * straight alpha, so a stored colour channel that exceeds its own alpha — impossible once
+ * premultiplied — proves the texture is NOT premultiplied. Returns `true` (the player's default)
+ * when it can't tell (decode failure, no semi-transparent pixels, opaque formats like JPEG).
+ */
+export async function detectPremultipliedAlpha(
+  assets: ExportAssets,
+  rawDataURIs: Record<string, string>
+): Promise<boolean> {
+  const page = assets.pages[0];
+  const uri = page && rawDataURIs[page.name];
+  if (!uri) return true;
+  try {
+    const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+      const el = new Image();
+      el.onload = () => resolve(el);
+      el.onerror = () => reject(new Error('image decode failed'));
+      el.src = uri;
+    });
+    const w = img.naturalWidth;
+    const h = img.naturalHeight;
+    if (!w || !h) return true;
+    const canvas = document.createElement('canvas');
+    canvas.width = w;
+    canvas.height = h;
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+    if (!ctx) return true;
+    ctx.clearRect(0, 0, w, h);
+    ctx.drawImage(img, 0, 0);
+    const { data } = ctx.getImageData(0, 0, w, h);
+    // Only semi-transparent pixels are decisive (where PMA vs straight actually differ). The
+    // tolerance absorbs the canvas's own premultiply round-tripping.
+    const TOL = 2;
+    for (let i = 0; i < data.length; i += 4) {
+      const a = data[i + 3];
+      if (a === 0 || a === 255) continue;
+      if (data[i] > a + TOL || data[i + 1] > a + TOL || data[i + 2] > a + TOL) return false;
+    }
+    return true;
+  } catch {
+    return true;
+  }
+}

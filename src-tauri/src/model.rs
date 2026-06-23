@@ -374,3 +374,47 @@ pub(crate) struct ExportAssets {
     /// Texture pages the atlas references (resolved to absolute paths).
     pub(crate) pages: Vec<ExportPage>,
 }
+
+/// One texture page in a health report: the name as the atlas references it, its
+/// resolved path, and whether it actually exists on disk (+ its byte size).
+#[derive(Debug, Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct HealthPage {
+    pub(crate) name: String,
+    pub(crate) path: String,
+    pub(crate) exists: bool,
+    pub(crate) bytes: u64,
+}
+
+/// Diagnostic snapshot of why a unit's export does (or doesn't) load in the thumbnail/preview
+/// player. Collects every check instead of bailing on the first error, plus the raw atlas text
+/// and skeleton header so a human (or AI) can pinpoint the cause. See
+/// [`crate::library::health_check_entry`].
+#[derive(Debug, Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct HealthReport {
+    pub(crate) rel_path: String,
+    pub(crate) spine_file: String,
+    pub(crate) folder: String,
+    /// Editor version from the `.spine` (passed in from the frontend entry).
+    pub(crate) editor_version: Option<String>,
+    /// `export`/`ex` subfolders found under the unit folder.
+    pub(crate) export_dirs: Vec<String>,
+    /// Every file in those export dirs, as `name (size)` lines — for eyeballing what got exported.
+    pub(crate) export_files: Vec<String>,
+    pub(crate) skeleton_path: Option<String>,
+    /// `"json"` or `"skel"`.
+    pub(crate) skeleton_format: Option<String>,
+    pub(crate) skeleton_bytes: u64,
+    /// Runtime version family the skeleton needs ("3.8" / "4.2" / "4.3" / "4.x").
+    pub(crate) detected_version: Option<String>,
+    /// JSON: the `skeleton{}` header object (truncated). Skel: hex of the first 16 bytes + version.
+    pub(crate) skeleton_header: Option<String>,
+    pub(crate) atlas_path: Option<String>,
+    /// Full atlas text (small; lists pages + regions — the richest single diagnostic).
+    pub(crate) atlas_content: Option<String>,
+    pub(crate) pages: Vec<HealthPage>,
+    /// Human-readable issues found; empty when healthy.
+    pub(crate) problems: Vec<String>,
+    pub(crate) ok: bool,
+}

@@ -16,7 +16,10 @@ use serde_json::Value;
 use tauri::{AppHandle, Emitter, State};
 
 use crate::clean::discover_clean_units;
-use crate::model::{AppState, BatchScanSummary, ExportAssets, ExportPage, FolderScan, LibraryEntry, LibraryScan};
+use crate::model::{
+    AppState, BatchScanSummary, ExportAssets, ExportPage, FolderScan, HealthPage, HealthReport,
+    LibraryEntry, LibraryScan,
+};
 use crate::paths::{parse_quoted_path, path_to_string, unquote};
 use crate::util::normalize_path_for_compare;
 use crate::{cleaner, concurrent, skel_binary, spine_project};
@@ -309,6 +312,101 @@ fn json_skeleton_version(content: &str) -> Option<String> {
     Some(version_family(spine))
 }
 
+/// Strip the export extension(s) off a filename to get its "set" stem, so a skeleton can be
+/// matched to the atlas of the same base name. Handles `.skel.bytes`, `.skel`, `.json`, `.atlas`,
+/// `.atlas.txt`. e.g. `9905.skel.bytes` → `9905`, `9905_Portal.atlas.txt` → `9905_portal`.
+fn export_stem(file_name: &str) -> String {
+    let mut s = file_name.to_ascii_lowercase();
+    if let Some(t) = s.strip_suffix(".bytes") {
+        s = t.to_string();
+    }
+    if let Some(t) = s.strip_suffix(".txt") {
+        s = t.to_string();
+    }
+    for ext in [".skel", ".json", ".atlas"] {
+        if let Some(t) = s.strip_suffix(ext) {
+            return t.to_string();
+        }
+    }
+    s
+}
+
+/// Choose the skeleton + atlas that actually belong together in an export dir. A folder can hold
+/// more than one set (a main rig + a separate "Portal"/effect atlas); picking the first skeleton
+/// and the first atlas independently can cross them (main skeleton + effect atlas → "region not
+/// found in atlas" → blank preview). So pair by base-name stem, preferring: the set matching the
+/// unit folder name, then JSON over binary, then the largest skeleton (the main rig). Falls back to
+/// preferred-skeleton + first-atlas when names genuinely differ and only one set exists.
+fn pick_export_pair(dir: &Path, folder_stem: &str) -> Option<(PathBuf, String, PathBuf)> {
+    let mut skels: Vec<(PathBuf, String, String, u64)> = Vec::new(); // path, format, stem, size
+    let mut atlases: Vec<(PathBuf, String)> = Vec::new(); // path, stem
+    for file in std::fs::read_dir(dir).ok()?.filter_map(Result::ok) {
+        let path = file.path();
+        if !path.is_file() {
+            continue;
+        }
+        let fname = file.file_name().to_string_lossy().to_string();
+        let lname = fname.to_ascii_lowercase();
+        if lname.ends_with(".export.json") {
+            continue;
+        }
+        if lname.contains(".atlas") {
+            atlases.push((path, export_stem(&fname)));
+        } else if lname.ends_with(".json") {
+            let sz = file.metadata().map(|m| m.len()).unwrap_or(0);
+            skels.push((path, "json".to_string(), export_stem(&fname), sz));
+        } else if lname.contains(".skel") {
+            let sz = file.metadata().map(|m| m.len()).unwrap_or(0);
+            skels.push((path, "skel".to_string(), export_stem(&fname), sz));
+        }
+    }
+    if skels.is_empty() || atlases.is_empty() {
+        return None;
+    }
+    // Stem-matched pairs (skeleton ↔ atlas of the same base name).
+    let mut pairs: Vec<(&PathBuf, &String, &str, u64, &PathBuf)> = Vec::new();
+    for (sp, fmt, st, sz) in &skels {
+        if let Some((ap, _)) = atlases.iter().find(|(_, ast)| ast == st) {
+            pairs.push((sp, fmt, st.as_str(), *sz, ap));
+        }
+    }
+    if pairs.is_empty() {
+        // Names genuinely differ: keep the old behaviour (preferred skeleton + first atlas).
+        let (sp, fmt, _, _) = skels.iter().find(|(_, f, _, _)| f == "json").or_else(|| skels.first())?;
+        return Some((sp.clone(), fmt.clone(), atlases.first()?.0.clone()));
+    }
+    // Rank: how well the set name matches the folder/id (exact > contains > none), then JSON over
+    // skel, then largest skeleton. The folder id is often only a substring of the set name
+    // (folder `9912` → set `Splash_9912`), so a plain equality check isn't enough — and a folder
+    // can carry a leftover copy-pasted set (`Splash_9911`) we must rank below the real one.
+    let name_score = |stem: &str| -> u8 {
+        if folder_stem.is_empty() {
+            0
+        } else if stem == folder_stem {
+            2
+        } else if stem.contains(folder_stem) {
+            1
+        } else {
+            0
+        }
+    };
+    pairs.sort_by(|a, b| {
+        let aj = (a.1 == "json") as u8;
+        let bj = (b.1 == "json") as u8;
+        name_score(b.2).cmp(&name_score(a.2)).then(bj.cmp(&aj)).then(b.3.cmp(&a.3))
+    });
+    let best = &pairs[0];
+    Some((best.0.clone(), best.1.clone(), best.4.clone()))
+}
+
+/// The unit folder's name, lowercased — the stem the "main" export set usually matches.
+fn folder_stem_of(unit_folder: &Path) -> String {
+    unit_folder
+        .file_name()
+        .map(|n| n.to_string_lossy().to_ascii_lowercase())
+        .unwrap_or_default()
+}
+
 /// Resolve the file set the Spine web player needs to render a unit's already-exported
 /// skeleton: skeleton (json/skel) + atlas + texture pages, plus the runtime version
 /// detected from the skeleton itself. Scans the unit's `export`/`ex` subfolder and returns
@@ -337,35 +435,9 @@ pub(crate) fn list_export_assets(folder: String) -> Result<ExportAssets, String>
         return Err("Chưa export — không có thư mục export/.".to_string());
     }
 
+    let folder_stem = folder_stem_of(&unit_folder);
     for dir in export_dirs {
-        let Ok(files) = std::fs::read_dir(&dir) else { continue };
-        let mut json_first: Option<PathBuf> = None;
-        let mut skel_first: Option<PathBuf> = None;
-        let mut atlas: Option<PathBuf> = None;
-        for file in files.filter_map(Result::ok) {
-            let path = file.path();
-            if !path.is_file() {
-                continue;
-            }
-            let lname = file.file_name().to_string_lossy().to_ascii_lowercase();
-            if lname.ends_with(".export.json") {
-                continue;
-            }
-            if lname.ends_with(".json") {
-                json_first.get_or_insert(path.clone());
-            } else if lname.contains(".skel") {
-                skel_first.get_or_insert(path.clone());
-            }
-            if lname.contains(".atlas") {
-                atlas.get_or_insert(path.clone());
-            }
-        }
-
-        // Prefer JSON (loads more reliably across runtimes) then binary `.skel`.
-        let skeleton = json_first
-            .map(|p| (p, "json".to_string()))
-            .or_else(|| skel_first.map(|p| (p, "skel".to_string())));
-        let (Some((skel_path, format)), Some(atlas_path)) = (skeleton, atlas) else {
+        let Some((skel_path, format, atlas_path)) = pick_export_pair(&dir, &folder_stem) else {
             continue;
         };
 
@@ -404,6 +476,171 @@ pub(crate) fn list_export_assets(folder: String) -> Result<ExportAssets, String>
     }
 
     Err("Không tìm thấy skeleton + atlas hợp lệ trong export/.".to_string())
+}
+
+/// Diagnose why a unit's export does/doesn't render in the thumbnail/preview player. Unlike
+/// [`list_export_assets`] (which bails on the first missing piece), this collects every check —
+/// export dirs, skeleton, atlas, the existence + size of each referenced texture page — plus the
+/// raw atlas text and skeleton header, so the cause of a blank thumbnail/failed preview is visible.
+/// Offline; never errors (a missing export is reported as a problem, not an `Err`).
+#[tauri::command]
+pub(crate) fn health_check_entry(
+    folder: String,
+    spine_file: String,
+    rel_path: String,
+    editor_version: Option<String>,
+) -> HealthReport {
+    let unit_folder = parse_quoted_path(&folder);
+    let mut report = HealthReport {
+        rel_path,
+        spine_file,
+        folder: path_to_string(&unit_folder),
+        editor_version,
+        export_dirs: Vec::new(),
+        export_files: Vec::new(),
+        skeleton_path: None,
+        skeleton_format: None,
+        skeleton_bytes: 0,
+        detected_version: None,
+        skeleton_header: None,
+        atlas_path: None,
+        atlas_content: None,
+        pages: Vec::new(),
+        problems: Vec::new(),
+        ok: false,
+    };
+
+    if !unit_folder.exists() {
+        report.problems.push("Folder của unit không tồn tại.".to_string());
+        return report;
+    }
+
+    // Collect export/ex dirs.
+    let mut export_dirs: Vec<PathBuf> = Vec::new();
+    if let Ok(children) = std::fs::read_dir(&unit_folder) {
+        for child in children.filter_map(Result::ok) {
+            if !child.file_type().map(|t| t.is_dir()).unwrap_or(false) {
+                continue;
+            }
+            let name = child.file_name().to_string_lossy().to_ascii_lowercase();
+            if name == "export" || name == "ex" {
+                export_dirs.push(child.path());
+            }
+        }
+    }
+    report.export_dirs = export_dirs.iter().map(|p| path_to_string(p)).collect();
+    if export_dirs.is_empty() {
+        report.problems.push("Chưa export — không có thư mục export/ hoặc ex/.".to_string());
+        return report;
+    }
+
+    // List every file in the export dirs (name + size) for eyeballing; note which kinds exist.
+    let mut has_skeleton = false;
+    let mut has_atlas = false;
+    for dir in &export_dirs {
+        let Ok(files) = std::fs::read_dir(dir) else { continue };
+        for file in files.filter_map(Result::ok) {
+            let path = file.path();
+            if !path.is_file() {
+                continue;
+            }
+            let size = file.metadata().map(|m| m.len()).unwrap_or(0);
+            let display = path.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
+            report.export_files.push(format!("{display} ({size} B)"));
+            let lname = display.to_ascii_lowercase();
+            if lname.ends_with(".export.json") {
+                continue;
+            }
+            if lname.contains(".atlas") {
+                has_atlas = true;
+            } else if lname.ends_with(".json") || lname.contains(".skel") {
+                has_skeleton = true;
+            }
+        }
+    }
+
+    // Pick the skeleton + atlas that belong together (paired by base name — see pick_export_pair).
+    let folder_stem = folder_stem_of(&unit_folder);
+    let pair = export_dirs.iter().find_map(|d| pick_export_pair(d, &folder_stem));
+    if let Some((skel_path, format, atlas_path)) = &pair {
+        report.skeleton_path = Some(path_to_string(skel_path));
+        report.skeleton_format = Some(format.clone());
+        report.skeleton_bytes = std::fs::metadata(skel_path).map(|m| m.len()).unwrap_or(0);
+        if format == "json" {
+            if let Ok(content) = std::fs::read_to_string(skel_path) {
+                report.detected_version = json_skeleton_version(&content);
+                // The `skeleton{}` header object carries spine version + hash + size.
+                if let Ok(root) = serde_json::from_str::<Value>(&content) {
+                    if let Some(head) = root.get("skeleton") {
+                        let mut s = head.to_string();
+                        s.truncate(2000);
+                        report.skeleton_header = Some(s);
+                    }
+                }
+            }
+        } else if let Ok(data) = std::fs::read(skel_path) {
+            report.detected_version = Some(skel_binary::read_skel_version_family(&data));
+            let hex: String = data.iter().take(16).map(|b| format!("{b:02x} ")).collect();
+            report.skeleton_header = Some(format!("first 16 bytes: {}", hex.trim_end()));
+        }
+
+        // Atlas + its referenced pages.
+        report.atlas_path = Some(path_to_string(atlas_path));
+        let atlas_dir = atlas_path.parent().unwrap_or(&unit_folder).to_path_buf();
+        match std::fs::read_to_string(atlas_path) {
+            Ok(content) => {
+                let names = atlas_page_names(&content);
+                if names.is_empty() {
+                    report.problems.push("Atlas không khai báo texture page nào.".to_string());
+                }
+                for name in names {
+                    let page_path = atlas_dir.join(&name);
+                    let (exists, bytes) = std::fs::metadata(&page_path)
+                        .map(|m| (true, m.len()))
+                        .unwrap_or((false, 0));
+                    if !exists {
+                        report.problems.push(format!("Thiếu texture page trên đĩa: {name}"));
+                    } else if bytes == 0 {
+                        report.problems.push(format!("Texture page rỗng (0 byte): {name}"));
+                    }
+                    report.pages.push(HealthPage {
+                        name,
+                        path: path_to_string(&page_path),
+                        exists,
+                        bytes,
+                    });
+                }
+                report.atlas_content = Some(content);
+            }
+            Err(_) => report.problems.push("Không đọc được file atlas.".to_string()),
+        }
+    } else {
+        if !has_skeleton {
+            report.problems.push("Không tìm thấy skeleton (.json hoặc .skel) trong export/.".to_string());
+        }
+        if !has_atlas {
+            report.problems.push("Không tìm thấy file atlas (.atlas) trong export/.".to_string());
+        }
+        if has_skeleton && has_atlas {
+            report.problems.push("Có skeleton và atlas nhưng không ghép được cặp hợp lệ.".to_string());
+        }
+    }
+
+    // Runtime-version warning: a generic/binary 4.x can load with the wrong minor runtime.
+    if report.detected_version.as_deref() == Some("4.x") {
+        report.problems.push(
+            "Không xác định được minor 4.x — có thể nạp nhầm runtime (4.2 vs 4.3).".to_string(),
+        );
+    } else if report.skeleton_format.as_deref() == Some("skel")
+        && report.detected_version.as_deref().is_some_and(|v| v.starts_with('4'))
+    {
+        report.problems.push(
+            "Skeleton binary 4.x — nếu version header sai sẽ lệch runtime ('Bone name must not be null').".to_string(),
+        );
+    }
+
+    report.ok = report.problems.is_empty();
+    report
 }
 
 // ---- filesystem watcher (auto-detect added/removed .spine on the mounted Shared drive) ---------

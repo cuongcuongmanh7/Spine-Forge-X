@@ -1,7 +1,15 @@
 import { useEffect, useRef, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import type { ExportAssets, LibraryEntry } from './config';
-import { type DisposablePlayer, applyPreferredSetup, basename, buildRawDataURIs, loadSpine38, loadSpine4x } from './spineRuntime';
+import {
+  type DisposablePlayer,
+  applyPreferredSetup,
+  basename,
+  buildRawDataURIs,
+  detectPremultipliedAlpha,
+  loadSpine38,
+  loadSpine4x,
+} from './spineRuntime';
 
 /**
  * Live skeleton preview for a Library unit's exported skeleton, rendered with the
@@ -337,9 +345,14 @@ export function useSpinePreview(entry: LibraryEntry | null, containerRef: React.
         if (resolved.version === '3.8') {
           const spine = await loadSpine38();
           if (cancelled) return;
+          // The 3.8 player assumes PMA; detect straight-alpha exports so they don't render with
+          // bright fringes. 4.x reads `pma` from its own atlas, so only 3.8 needs the hint.
+          const premultipliedAlpha = await detectPremultipliedAlpha(resolved, rawDataURIs);
+          if (cancelled) return;
           const cfg: Record<string, unknown> = {
             atlasUrl: atlasName,
             rawDataURIs,
+            premultipliedAlpha,
             showControls: true,
             alpha: true,
             backgroundColor: '#00000000',

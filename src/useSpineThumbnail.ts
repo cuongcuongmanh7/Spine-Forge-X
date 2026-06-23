@@ -8,6 +8,7 @@ import {
   applyPreferredSetup,
   basename,
   buildRawDataURIs,
+  detectPremultipliedAlpha,
   loadSpine38,
   loadSpine4x,
 } from './spineRuntime';
@@ -35,8 +36,10 @@ const RENDER_TIMEOUT_MS = 8000;
  *  empty `default` skin so rigs that hid their art under `skin_default` stop thumbnailing blank.
  *  v3: load 4.2 exports with the matching 4.2 runtime (the 4.3 reader misaligned → blank/failed).
  *  v4: pick the skin with the most attachments (skin-folder rigs left `default` near-empty → blank).
- *  v5: frame instantly + hide the loading screen so the 4.x capture isn't an unframed blank. */
-const THUMB_RENDER_VERSION = 5;
+ *  v5: frame instantly + hide the loading screen so the 4.x capture isn't an unframed blank.
+ *  v6: detect straight-alpha (non-PMA) 3.8 exports so they don't render with bright fringes;
+ *      also fixes 3.8 binary skeletons with non-ASCII names (signed-byte UTF-8 decode in the player). */
+const THUMB_RENDER_VERSION = 6;
 
 /** Filesystem-safe cache key: a stable hash of the asset's identity. Uses the library-relative
  *  path (NOT the absolute path) so the key matches across machines sharing the same Drive folder.
@@ -152,7 +155,9 @@ async function renderThumbnail(assets: ExportAssets, rawDataURIs: Record<string,
       const mount = async () => {
         if (assets.version === '3.8') {
           const spine = await loadSpine38();
-          const cfg: Record<string, unknown> = { ...common, atlasUrl: atlasName };
+          // Match the live preview: the 3.8 player assumes PMA, so detect straight-alpha exports.
+          const premultipliedAlpha = await detectPremultipliedAlpha(assets, rawDataURIs);
+          const cfg: Record<string, unknown> = { ...common, atlasUrl: atlasName, premultipliedAlpha };
           cfg[assets.skeletonFormat === 'json' ? 'jsonUrl' : 'skelUrl'] = skelName;
           player = new spine.SpinePlayer(host, cfg);
         } else {

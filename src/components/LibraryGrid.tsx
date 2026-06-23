@@ -52,6 +52,7 @@ export function LibraryGrid(props: LibraryViewProps) {
     createSessionForSection,
     onPrepareCleanScan,
     onPreview,
+    onHealthCheck,
     openNotes,
     noteCount,
     onQuickExport,
@@ -146,6 +147,7 @@ export function LibraryGrid(props: LibraryViewProps) {
                               onOpenFolder={(e) => openFolder(e)}
                               onOpenInSpine={(e) => openInSpine(e)}
                               onCreateSession={createSessionForEntry}
+                              onHealthCheck={onHealthCheck}
                               onQuickExport={(e) => onQuickExport([e.spineFile])}
                               quickExportBusy={quickExportBusy}
                               t={t}
