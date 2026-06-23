@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { confirm, open } from '@tauri-apps/plugin-dialog';
-import type { Library, LibraryCleanState, LibraryEntry, LibraryScan } from './config';
+import type { ExportAssets, Library, LibraryCleanState, LibraryEntry, LibraryScan } from './config';
+import { readSkeletonNames } from './spineRuntime';
 import type { Translations } from './i18n';
 import type { FolderScan, ToastKind } from './types';
 import { cleanRecordForEntry, scanRecordForEntry } from './library';
@@ -78,6 +79,59 @@ export function useLibrary({ t, pushToast }: Options) {
     void runScan(activeLibrary);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeLibraryId, activeLibrary]);
+
+  // Backfill anim/skin names for 4.x BINARY exports. The Rust scanner only reads names from JSON
+  // or 3.8 binary, so 4.x `.skel`/`.skel.bytes` units come back with empty lists — we parse them
+  // here with the version-matched runtime (no WebGL) and patch the cached scan so counts, sort,
+  // search and the expand panels all work. Each unit is attempted once per session; results are
+  // persisted into the scan cache, so an enriched unit (now has names) is skipped next time.
+  const enrichedRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    if (!scan || !activeLibraryId) return;
+    const libId = activeLibraryId;
+    const pending = scan.entries.filter(
+      (e) =>
+        e.exported &&
+        e.animations.length === 0 &&
+        (e.version?.startsWith('4') ?? false) &&
+        !enrichedRef.current.has(e.spineFile)
+    );
+    if (pending.length === 0) return;
+    pending.forEach((e) => enrichedRef.current.add(e.spineFile));
+
+    let cancelled = false;
+    void (async () => {
+      const patch = new Map<string, { animations: string[]; skins: string[] }>();
+      // Bounded concurrency so a big library doesn't open hundreds of parses at once.
+      const queue = [...pending];
+      const worker = async () => {
+        for (let entry = queue.shift(); entry; entry = queue.shift()) {
+          try {
+            const assets = await invoke<ExportAssets>('list_export_assets', { folder: entry.folder });
+            const names = await readSkeletonNames(assets);
+            if (names.animations.length || names.skins.length) patch.set(entry.spineFile, names);
+          } catch {
+            /* unreadable/odd export — leave it empty, it just won't list anims */
+          }
+        }
+      };
+      await Promise.all(Array.from({ length: Math.min(5, queue.length) }, worker));
+      if (cancelled || patch.size === 0) return;
+      setScan((prev) => {
+        if (!prev) return prev;
+        const entries = prev.entries.map((e) => {
+          const names = patch.get(e.spineFile);
+          return names ? { ...e, animations: names.animations, skins: names.skins, animationCount: names.animations.length } : e;
+        });
+        const next = { ...prev, entries };
+        persistLibraryScan(libId, next);
+        return next;
+      });
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [scan, activeLibraryId]);
 
   // `silent` suppresses the success toast — used by automatic rescans (the Drive/FS watcher and the
   // post-clean refresh) so they don't pop a "Scanned N files" toast over a finished action. Errors

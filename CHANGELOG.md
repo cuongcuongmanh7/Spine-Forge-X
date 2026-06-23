@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.4.25
+- **Inventory hiện được danh sách anim/skin cho file 4.x binary** — trước đây file export dạng binary 4.x (`.skel`/`.skel.bytes`, không có JSON) không đọc được tên anim/skin nên cột đếm, sort, tìm kiếm và panel mở rộng đều trống. Nay app tự parse bằng runtime khớp version (không cần WebGL) và điền vào — đầy đủ số đếm, sort, search theo tên.
+- **Sửa thumbnail / xem trước bị trống với rig kiểu "skin-folder"** — nhiều rig để skin `default` gần như rỗng và đặt art ở các skin riêng (`A/Body_0`, `A/Weapon_0`…). Trước đây app luôn chọn `default` nên ra ảnh trống. Nay chọn skin có nhiều ảnh nhất nên hiện đúng nhân vật ở cả thumbnail lẫn khung xem trước. Thumbnail cũ sẽ tự tạo lại.
+
 ## v0.4.24
 - **Sửa xem trước / thumbnail không hiện cho file Spine 4.2** — runtime đi kèm chỉ là 4.3, mà 4.2 và 4.3 không tương thích định dạng nên file 4.2 đọc bị lệch (trắng / báo lỗi). Nay app nhận đúng minor version (3.8 / 4.2 / 4.3…) từ chính file export và nạp runtime khớp — file 4.2 dùng player 4.2, file 4.3 dùng player 4.3. Thumbnail 4.2 cũ (trắng) sẽ tự tạo lại.
 

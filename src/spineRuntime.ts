@@ -69,10 +69,13 @@ export function loadSpine4x(version: string | null): Promise<typeof import('@eso
   return version === '4.2' ? loadSpine42() : loadSpine4();
 }
 
+/** A skin as seen on either runtime: a name plus the per-slot attachment maps we count. */
+type SkinLike = { name: string; attachments?: unknown };
+
 /** Minimal version-agnostic player surface needed to choose a skin + starting animation. */
 export type PreferredSetupPlayer = {
   skeleton?: {
-    data?: { skins?: { name: string }[]; animations?: { name: string; duration: number }[] };
+    data?: { skins?: SkinLike[]; animations?: { name: string; duration: number }[] };
     setSkinByName?: (name: string) => void;
     setSlotsToSetupPose?: () => void;
   } | null;
@@ -80,19 +83,53 @@ export type PreferredSetupPlayer = {
   setAnimation?: (name: string, loop?: boolean) => unknown;
 };
 
+/** How many attachments a skin defines, across both runtimes (`attachments` is a per-slot array
+ *  of `{ name → attachment }` maps on 3.8 and 4.x alike). Used to find the skin with real art. */
+function skinAttachmentCount(skin: SkinLike): number {
+  const a = skin.attachments;
+  if (!Array.isArray(a)) return 0;
+  let n = 0;
+  for (const slot of a) {
+    if (!slot) continue;
+    n += slot instanceof Map ? slot.size : Object.keys(slot as object).length;
+  }
+  return n;
+}
+
+/**
+ * Pick the skin most likely to actually show the rig's art: the one with the most attachments.
+ * Plain name priority (`skin_default` → `default` → first) is wrong for two common patterns — an
+ * EMPTY `default` skin with the art under `skin_default`, and "skin-folder" rigs (`A/Body_0`, …)
+ * where `default` holds almost nothing and each costume part is its own skin. Counting attachments
+ * covers both; we fall back to name priority only when no skin reports any (no count info).
+ */
+function pickPreferredSkin(skins: SkinLike[]): string | undefined {
+  if (skins.length === 0) return undefined;
+  const names = skins.map((s) => s.name);
+  const byName = names.includes('skin_default') ? 'skin_default' : names.includes('default') ? 'default' : names[0];
+  let best = byName;
+  let bestCount = 0;
+  for (const s of skins) {
+    const c = skinAttachmentCount(s);
+    if (c > bestCount) {
+      bestCount = c;
+      best = s.name;
+    }
+  }
+  return bestCount > 0 ? best : byName;
+}
+
 /**
  * Pick the most representative skin + animation and apply them to a freshly loaded player.
- * Skin priority is `skin_default` → `default` → first: many rigs ship an EMPTY `default` skin
- * (no region attachments) and put the real art under `skin_default`, so preferring `default`
- * blindly renders a blank skeleton. Animation priority is `idle` → first.
+ * Skin is chosen by attachment count (see {@link pickPreferredSkin}); animation priority is
+ * `idle` → first.
  *
  * Shared by the live preview and the grid thumbnail so both frame the asset identically.
  */
 export function applyPreferredSetup(player: PreferredSetupPlayer): void {
   const data = player.skeleton?.data;
 
-  const skins = (data?.skins ?? []).map((s) => s.name);
-  const skin = skins.includes('skin_default') ? 'skin_default' : skins.includes('default') ? 'default' : skins[0];
+  const skin = pickPreferredSkin(data?.skins ?? []);
   if (skin && player.skeleton?.setSkinByName) {
     player.skeleton.setSkinByName(skin);
     player.skeleton.setSlotsToSetupPose?.();
@@ -106,6 +143,54 @@ export function applyPreferredSetup(player: PreferredSetupPlayer): void {
     else player.animationState?.setAnimation?.(0, anim, true);
   }
 }
+
+/**
+ * Parse a 4.x export's skeleton with the matching bundled runtime and return its animation +
+ * skin names — no WebGL, no rendering. The Rust scanner can only read names from JSON or 3.8
+ * binary skeletons; 4.x binary exports (e.g. Unity `.skel.bytes`) come back empty, so the
+ * inventory enriches them with this. A throwaway atlas (fake textures) satisfies the attachment
+ * loader well enough to walk the structure; we only read names off the parsed `SkeletonData`.
+ */
+export async function readSkeletonNames(assets: ExportAssets): Promise<{ animations: string[]; skins: string[] }> {
+  // spine-player re-exports all of spine-core, so the version-matched module has the parsers.
+  const mod = (await loadSpine4x(assets.version)) as unknown as {
+    TextureAtlas: new (text: string) => { pages: { setTexture: (t: unknown) => void }[] };
+    AtlasAttachmentLoader: new (atlas: unknown) => unknown;
+    SkeletonBinary: new (loader: unknown) => { readSkeletonData: (data: Uint8Array) => SkeletonNameData };
+    SkeletonJson: new (loader: unknown) => { readSkeletonData: (json: unknown) => SkeletonNameData };
+  };
+  const read = (path: string) => invoke<string>('read_file_data_url', { path });
+
+  const atlas = new mod.TextureAtlas(await (await fetch(await read(assets.atlasPath))).text());
+  const fakeTexture = {
+    setFilters() {},
+    setWraps() {},
+    dispose() {},
+    getImage() {
+      return { width: 2048, height: 2048 };
+    },
+    width: 2048,
+    height: 2048,
+  };
+  for (const page of atlas.pages) page.setTexture(fakeTexture);
+  const loader = new mod.AtlasAttachmentLoader(atlas);
+
+  const skelUrl = await read(assets.skeletonPath);
+  let data: SkeletonNameData;
+  if (assets.skeletonFormat === 'json') {
+    const json = JSON.parse(await (await fetch(skelUrl)).text());
+    data = new mod.SkeletonJson(loader).readSkeletonData(json);
+  } else {
+    const bytes = new Uint8Array(await (await fetch(skelUrl)).arrayBuffer());
+    data = new mod.SkeletonBinary(loader).readSkeletonData(bytes);
+  }
+  return {
+    animations: (data.animations ?? []).map((a) => a.name),
+    skins: (data.skins ?? []).map((s) => s.name),
+  };
+}
+
+type SkeletonNameData = { animations?: { name: string }[]; skins?: { name: string }[] };
 
 /** Read every export file into a `name → dataURI` map for the player to resolve locally. */
 export async function buildRawDataURIs(assets: ExportAssets): Promise<Record<string, string>> {
