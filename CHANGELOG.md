@@ -1,5 +1,12 @@
 # Changelog
 
+## v0.4.20
+- **Sửa thumbnail bị trống ở một số file** — trình tạo thumbnail trước đây chụp skin mặc định `default`, mà nhiều rig để skin này rỗng ảnh (đồ thật nằm ở `skin_default`) nên ra thẻ trắng. Nay ưu tiên `skin_default` → `default` → skin đầu tiên (giống khung xem trước), và tự tạo lại toàn bộ thumbnail cũ.
+- **Sửa lỗi xem trước báo "Region not found in atlas" với tên méo** — file `.skel` 3.8 đôi khi bị nhận nhầm là 4.x rồi nạp sai runtime, làm lệch dữ liệu và hỏng tên vùng ảnh. Nay nhận diện phiên bản từ header của file nên nạp đúng runtime.
+- **Inventory: dọn lại phần đầu bảng** — thứ tự Thống kê → Bộ lọc → Tìm kiếm; khi thu gọn, thẻ Thống kê vẫn hiện nhanh số liệu chính (tổng / đã clean / cần kiểm tra) và thẻ Bộ lọc vẫn cho đổi nhóm + chế độ Bảng/Lưới ngay trên tiêu đề; ô tìm kiếm thẳng hàng với các thẻ và đưa icon kính lúp vào trong ô.
+- **Menu `⋯` của file/thư mục không còn bị cắt** — menu giờ nổi đè lên mọi thành phần (kể cả thanh dưới cùng) và tự lật lên khi ở sát đáy, thay vì bị khung danh sách che mất.
+- **Đồng bộ trạng thái dọn thư viện theo thời gian thực giữa các máy** — clean-state cập nhật qua lại giữa các máy mà không cần quét lại thủ công.
+
 ## v0.4.19
 - **Workspace: thêm cơ chế output "Folder export cạnh file"** — mỗi file `.spine` xuất vào thư mục `export` (tự tạo) nằm ngay trong thư mục chứa file đó, không cần chọn output root.
 - **Inventory: nút "Quick export" trong menu từng dòng** — bấm `⋯` ở dòng file (xuất đúng file đó) hoặc dòng thư mục (xuất cả nhóm) để export ngay bằng preset + output đang chọn ở tab Workspace, khỏi phải tạo session.
