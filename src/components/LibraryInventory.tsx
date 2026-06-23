@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
-import { AlertTriangle, CloudDownload, Layers, MessageSquare, RotateCw, Search, Tag, Users } from 'lucide-react';
+import { AlertTriangle, Boxes, CheckCircle2, CloudDownload, Layers, MessageSquare, RotateCw, Search, Tag, Users } from 'lucide-react';
 import { useApp } from '../useAppController';
 import { Section as CollapsibleSection } from './common';
 import { LibraryStatCards } from './LibraryStatCards';
@@ -405,57 +405,72 @@ export function LibraryInventory({
     quickExportBusy: anyRunning
   };
 
+  // Essential facet (folder / id / status) toggle — shared by the Filters body and its collapsed preview.
+  const facetControl = (
+    <span className="segmented-control">
+      <button className={facet === 'folder' ? 'active' : ''} onClick={() => filter.setFacet('folder')}>
+        {t.libraryFacetFolder}
+      </button>
+      <button className={facet === 'id' ? 'active' : ''} onClick={() => filter.setFacet('id')}>
+        {t.libraryFacetId}
+      </button>
+      <button className={facet === 'status' ? 'active' : ''} onClick={() => filter.setFacet('status')}>
+        {t.libraryFacetStatus}
+      </button>
+    </span>
+  );
+
+  // Table / grid view toggle — shared by the Filters body and its collapsed preview.
+  const viewToggle = (
+    <span className="segmented-control">
+      <button className={viewMode === 'table' ? 'active' : ''} onClick={() => updateAppConfig('libraryViewMode', 'table')}>
+        {t.libraryViewTable}
+      </button>
+      <button className={viewMode === 'grid' ? 'active' : ''} onClick={() => updateAppConfig('libraryViewMode', 'grid')}>
+        {t.libraryViewGrid}
+      </button>
+    </span>
+  );
+
+  // Key metrics surfaced when the Stats card is collapsed: total entries, clean, needs-review.
+  const statsPreview = (
+    <div className="section-mini-cards">
+      <span className="mini-card">
+        <Boxes size={14} /> <b>{entries.length}</b> {t.libraryTotalEntries}
+      </span>
+      <span className="mini-card ok">
+        <CheckCircle2 size={14} /> <b>{scanCounts.clean}</b> {t.libraryStatClean}
+      </span>
+      <span className="mini-card warn">
+        <AlertTriangle size={14} /> <b>{scanCounts.warning}</b> {t.libraryStatNeedsReview}
+      </span>
+    </div>
+  );
+
+  // Essential controls surfaced when the Filters card is collapsed: facet group + view toggle.
+  const filtersPreview = (
+    <>
+      {facetControl}
+      {viewToggle}
+    </>
+  );
+
   return (
     <div className="library-pane">
       <div className="library-pane-head">
-        <CollapsibleSection title={t.libraryStatsTitle} storageKey={STATS_KEY}>
+        <CollapsibleSection title={t.libraryStatsTitle} storageKey={STATS_KEY} collapsedPreview={statsPreview}>
           <LibraryStatCards t={t} totalEntries={entries.length} buckets={buckets} totalImageBytes={libraryScan?.totalImageBytes ?? 0} scanCounts={scanCounts} />
         </CollapsibleSection>
-
-        <div className="library-search-row">
-          <Search size={15} />
-          <input
-            className="library-search"
-            value={query}
-            aria-label={t.librarySearchPlaceholder}
-            placeholder={t.librarySearchPlaceholder}
-            onChange={(e) => filter.setQuery(e.target.value)}
-          />
-          <span className="muted library-lastscan">
-            <span>
-              {t.libraryLastScan}: {activeLibrary?.lastScanAt ? formatDate(activeLibrary.lastScanAt) : t.libraryNeverScanned}
-            </span>
-            {basicsLoadedAt && <span>{t.libraryLastDriveLoad}: {formatDate(basicsLoadedAt)}</span>}
-          </span>
-          <button className="secondary-button small" onClick={() => void rescanLibrary()} disabled={isScanningLibrary}>
-            <RotateCw size={14} className={isScanningLibrary ? 'spin' : undefined} /> {t.libraryRescan}
-          </button>
-          <button className="secondary-button small" onClick={() => void loadDriveBasics(filtered)} disabled={loadingBasics} title={t.driveLoadDataHelp}>
-            {loadingBasics ? <RotateCw size={14} className="spin" /> : <CloudDownload size={14} />} {t.driveLoadData}
-            {loadingBasics && basicsProgress ? ` ${basicsProgress.done}/${basicsProgress.total}` : ''}
-          </button>
-        </div>
 
         <CollapsibleSection
           title={t.libraryFiltersTitle}
           storageKey={FILTERS_KEY}
           accessory={activeFilterCount > 0 ? <span className="section-badge">{activeFilterCount}</span> : undefined}
+          collapsedPreview={filtersPreview}
         >
         <div className="library-chip-row">
           <span className="library-chip-label">{t.libraryFacetLabel}</span>
-          <div className="library-chip-set">
-            <span className="segmented-control">
-              <button className={facet === 'folder' ? 'active' : ''} onClick={() => filter.setFacet('folder')}>
-                {t.libraryFacetFolder}
-              </button>
-              <button className={facet === 'id' ? 'active' : ''} onClick={() => filter.setFacet('id')}>
-                {t.libraryFacetId}
-              </button>
-              <button className={facet === 'status' ? 'active' : ''} onClick={() => filter.setFacet('status')}>
-                {t.libraryFacetStatus}
-              </button>
-            </span>
-          </div>
+          <div className="library-chip-set">{facetControl}</div>
           <span className="library-view-controls">
             {viewMode === 'grid' && (
               <span className="library-sort-control">
@@ -477,14 +492,7 @@ export function LibraryInventory({
                 </button>
               </span>
             )}
-            <span className="segmented-control">
-              <button className={viewMode === 'table' ? 'active' : ''} onClick={() => updateAppConfig('libraryViewMode', 'table')}>
-                {t.libraryViewTable}
-              </button>
-              <button className={viewMode === 'grid' ? 'active' : ''} onClick={() => updateAppConfig('libraryViewMode', 'grid')}>
-                {t.libraryViewGrid}
-              </button>
-            </span>
+            {viewToggle}
           </span>
         </div>
 
@@ -576,6 +584,32 @@ export function LibraryInventory({
           </div>
         )}
         </CollapsibleSection>
+
+        <div className="library-search-row">
+          <div className="library-search-field">
+            <Search size={15} className="library-search-icon" />
+            <input
+              className="library-search"
+              value={query}
+              aria-label={t.librarySearchPlaceholder}
+              placeholder={t.librarySearchPlaceholder}
+              onChange={(e) => filter.setQuery(e.target.value)}
+            />
+          </div>
+          <span className="muted library-lastscan">
+            <span>
+              {t.libraryLastScan}: {activeLibrary?.lastScanAt ? formatDate(activeLibrary.lastScanAt) : t.libraryNeverScanned}
+            </span>
+            {basicsLoadedAt && <span>{t.libraryLastDriveLoad}: {formatDate(basicsLoadedAt)}</span>}
+          </span>
+          <button className="secondary-button small" onClick={() => void rescanLibrary()} disabled={isScanningLibrary}>
+            <RotateCw size={14} className={isScanningLibrary ? 'spin' : undefined} /> {t.libraryRescan}
+          </button>
+          <button className="secondary-button small" onClick={() => void loadDriveBasics(filtered)} disabled={loadingBasics} title={t.driveLoadDataHelp}>
+            {loadingBasics ? <RotateCw size={14} className="spin" /> : <CloudDownload size={14} />} {t.driveLoadData}
+            {loadingBasics && basicsProgress ? ` ${basicsProgress.done}/${basicsProgress.total}` : ''}
+          </button>
+        </div>
       </div>
 
       <div className="library-pane-scroll">

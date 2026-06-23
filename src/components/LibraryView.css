@@ -200,6 +200,11 @@
   overflow: hidden;
   scrollbar-gutter: stable;
 }
+/* The header lays out its rows with `gap`; drop the section's own margin so all
+   three groups (stats / search / filters) are evenly spaced. */
+.library-pane-head .section {
+  margin-bottom: 0;
+}
 .library-pane-scroll {
   flex: 1 1 auto;
   min-height: 0;
@@ -300,10 +305,26 @@
   gap: 8px 10px;
   color: var(--text-muted);
 }
-.library-search {
+/* Wraps the search input + its inline icon so the input's left edge lines up with the cards. */
+.library-search-field {
+  position: relative;
   flex: 1 1 220px;
   min-width: 0;
-  width: auto;
+  display: flex;
+  align-items: center;
+}
+.library-search-icon {
+  position: absolute;
+  left: 10px;
+  pointer-events: none;
+  color: var(--text-muted);
+}
+.library-search {
+  flex: 1 1 auto;
+  min-width: 0;
+  width: 100%;
+  /* Room for the icon tucked inside on the left. */
+  padding-left: 32px;
   /* Stand out against the soft header band; brighter focus ring in the app primary. */
   background: var(--surface);
   border: 1px solid var(--border-strong);

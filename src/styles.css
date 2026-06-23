@@ -822,6 +822,13 @@ body.col-resizing {
   top: 30px;
   right: 6px;
 }
+/* When rendered in a body portal the menu is fixed-positioned from JS (top/left inline),
+   so it floats above everything — incl. the bottom bar — and isn't clipped by scroll. */
+.library-row-menu--portal {
+  position: fixed;
+  right: auto;
+  z-index: 210;
+}
 
 .session-main {
   display: flex;
@@ -1191,11 +1198,21 @@ body.col-resizing {
   width: 100%;
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  gap: 12px;
   padding: 14px 16px;
-  border: 0;
   background: var(--surface);
   color: var(--text-strong);
+}
+
+/* Title region of a section header — the primary collapse/expand toggle. */
+.section-title-btn {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: inherit;
   cursor: pointer;
   font-size: 15px;
   font-weight: 700;

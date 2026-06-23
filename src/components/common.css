@@ -1,9 +1,62 @@
 /* Shared bits for components in common.tsx (Section header accessory + badge). */
 
 .section-header-right {
+  margin-left: auto;
+  flex: 0 0 auto;
   display: flex;
   align-items: center;
   gap: 8px;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+/* Compact summary shown inline on a collapsed section header row. */
+.section-header-preview {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+/* Inline key-metric chips used inside a collapsed preview. */
+.section-mini-cards {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.mini-card {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 9px;
+  border-radius: 7px;
+  background: var(--surface-2, rgba(127, 127, 127, 0.12));
+  border: 1px solid var(--border, rgba(127, 127, 127, 0.2));
+  font-size: 12px;
+  line-height: 1;
+  white-space: nowrap;
+  color: var(--text-muted, inherit);
+}
+
+.mini-card b {
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  color: var(--text, inherit);
+}
+
+.mini-card.ok {
+  color: var(--ok, #16a34a);
+  border-color: color-mix(in srgb, var(--ok, #16a34a) 35%, transparent);
+}
+
+.mini-card.warn {
+  color: var(--warn, #d97706);
+  border-color: color-mix(in srgb, var(--warn, #d97706) 35%, transparent);
 }
 
 /* Count badge shown in a section header (e.g. active filter count). */

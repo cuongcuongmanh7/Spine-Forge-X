@@ -18,10 +18,12 @@ type SectionProps = {
   storageKey?: string;
   /** Optional element shown in the header next to the chevron (e.g. a count badge). */
   accessory?: ReactNode;
+  /** Compact summary shown below the header only while collapsed (e.g. key stats / essential toggles). */
+  collapsedPreview?: ReactNode;
   children: ReactNode;
 };
 
-export function Section({ title, defaultOpen = true, storageKey, accessory, children }: SectionProps) {
+export function Section({ title, defaultOpen = true, storageKey, accessory, collapsedPreview, children }: SectionProps) {
   const [open, setOpen] = useState(() => {
     if (storageKey) {
       try {
@@ -48,13 +50,16 @@ export function Section({ title, defaultOpen = true, storageKey, accessory, chil
     });
   return (
     <section className="section">
-      <button className="section-header" onClick={toggle}>
-        <span>{title}</span>
-        <span className="section-header-right">
+      <div className="section-header">
+        <button className="section-title-btn" onClick={toggle}>
+          <span>{title}</span>
+        </button>
+        {!open && collapsedPreview && <div className="section-header-preview">{collapsedPreview}</div>}
+        <button className="section-header-right" onClick={toggle} aria-label={title}>
           {accessory}
           {open ? <ChevronDown size={18} /> : <ChevronRight size={18} />}
-        </span>
-      </button>
+        </button>
+      </div>
       {open && <div className="section-body">{children}</div>}
     </section>
   );
