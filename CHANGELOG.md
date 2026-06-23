@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.4.21
+- **Icon riêng cho từng loại stat** — file `.spine`, ảnh, animation và skin giờ mỗi loại có icon riêng, dùng nhất quán ở mọi nơi hiển thị số liệu: thẻ Thống kê, tiêu đề cột bảng, thẻ Lưới, và panel mở rộng anim/skin.
+- **Inventory: thêm nhóm/lọc "Chưa export"** — trong group "Theo trạng thái" có thêm nhóm **Chưa export** cho các file chưa export (trước đây gộp chung vào "Chưa scan"). Bấm chip để lọc nhanh đúng nhóm này.
+
 ## v0.4.20
 - **Sửa thumbnail bị trống ở một số file** — trình tạo thumbnail trước đây chụp skin mặc định `default`, mà nhiều rig để skin này rỗng ảnh (đồ thật nằm ở `skin_default`) nên ra thẻ trắng. Nay ưu tiên `skin_default` → `default` → skin đầu tiên (giống khung xem trước), và tự tạo lại toàn bộ thumbnail cũ.
 - **Sửa lỗi xem trước báo "Region not found in atlas" với tên méo** — file `.skel` 3.8 đôi khi bị nhận nhầm là 4.x rồi nạp sai runtime, làm lệch dữ liệu và hỏng tên vùng ảnh. Nay nhận diện phiên bản từ header của file nên nạp đúng runtime.

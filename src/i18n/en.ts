@@ -161,6 +161,7 @@ export const en: Translations = {
   libraryStatNotScanned: 'Not scanned',
   libraryStatClean: 'Clean',
   libraryStatNeedsReview: 'Needs review',
+  libraryStatNotExported: 'Not exported',
   libraryFacetLabel: 'Group',
   libraryFacetFolder: 'By type',
   libraryFacetId: 'By ID',

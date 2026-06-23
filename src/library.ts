@@ -149,7 +149,7 @@ export function groupByIdBand(entries: LibraryEntry[]): LibraryGroup[] {
 }
 
 /** Triage order for clean-scan status groups: Not scanned → Needs review → Clean. */
-const STATUS_RANK: Record<string, number> = { unknown: 0, warning: 1, clean: 2 };
+const STATUS_RANK: Record<string, number> = { 'not-exported': 0, unknown: 1, warning: 2, clean: 3 };
 
 /**
  * Group entries by clean-scan status ('unknown' | 'warning' | 'clean'). `statusOf` resolves the

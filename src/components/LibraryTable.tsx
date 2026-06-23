@@ -16,6 +16,8 @@ import { LibraryRowMenu, LibrarySectionMenu } from './LibraryRowMenu';
 import { LibraryPreviewCell } from './LibraryPreviewCell';
 import { LibraryTagCell } from './LibraryTagCell';
 import { LibraryOwnerCell } from './LibraryOwnerCell';
+import { SpineFileIcon } from './SpineFileIcon';
+import { StatIcon } from './StatIcon';
 import {
   DAY_MS,
   NotesIndicator,
@@ -126,19 +128,19 @@ export function LibraryTable(props: LibraryViewProps) {
           </th>
           <th className="num" aria-sort={ariaSort('spine')}>
             <button className="library-th-sort" onClick={() => toggleSort('spine')}>
-              {t.libraryColSpine}
+              <SpineFileIcon size={14} /> {t.libraryColSpine}
               {sortMark('spine')}
             </button>
           </th>
           <th className="num" aria-sort={ariaSort('images')}>
             <button className="library-th-sort" onClick={() => toggleSort('images')}>
-              {t.libraryColImages}
+              <StatIcon kind="image" size={14} /> {t.libraryColImages}
               {sortMark('images')}
             </button>
           </th>
           <th className="num" aria-sort={ariaSort('anims')}>
             <button className="library-th-sort" onClick={() => toggleSort('anims')}>
-              {t.libraryColAnims}
+              <StatIcon kind="anim" size={14} /> {t.libraryColAnims}
               {sortMark('anims')}
             </button>
           </th>
@@ -260,7 +262,7 @@ export function LibraryTable(props: LibraryViewProps) {
                       </td>
                       <td>{entry.version ?? <span className="muted">{t.libraryUnknownVersion}</span>}</td>
                       <td className={`num ${w.heavySpine ? 'library-warn-cell' : ''}`} title={w.heavySpine ? t.libraryWarnHeavySpine : undefined}>
-                        {w.heavySpine && <AlertTriangle size={12} />} {formatBytes(entry.spineBytes)}
+                        {w.heavySpine ? <AlertTriangle size={12} /> : <SpineFileIcon size={13} />} {formatBytes(entry.spineBytes)}
                       </td>
                       <td className={`num ${w.heavyImages ? 'library-warn-cell' : ''}`} title={w.heavyImages ? t.libraryWarnHeavyImages : undefined}>
                         {w.heavyImages && <AlertTriangle size={12} />} {formatBytes(entry.imageBytes)}{' '}
@@ -318,7 +320,7 @@ export function LibraryTable(props: LibraryViewProps) {
                         <td colSpan={10}>
                           {entry.skins.length > 0 && (
                             <div>
-                              <strong>{t.librarySkins}:</strong>{' '}
+                              <strong><StatIcon kind="skin" size={13} /> {t.librarySkins}:</strong>{' '}
                               {entry.skins.map((s) => (
                                 <span className={`library-anim-chip ${matches.skins.has(s) ? 'matched' : ''}`} key={s}>
                                   {s}
@@ -327,7 +329,7 @@ export function LibraryTable(props: LibraryViewProps) {
                             </div>
                           )}
                           <div>
-                            <strong>{t.libraryAnimations}:</strong>{' '}
+                            <strong><StatIcon kind="anim" size={13} /> {t.libraryAnimations}:</strong>{' '}
                             {entry.animations.length === 0 ? (
                               <span className="muted">—</span>
                             ) : (

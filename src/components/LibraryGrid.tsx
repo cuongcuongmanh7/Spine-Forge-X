@@ -7,6 +7,8 @@ import { LibraryOwnerCell } from './LibraryOwnerCell';
 import { LibraryPreviewButton } from './LibraryPreviewCell';
 import { LibraryRowMenuButton, LibrarySectionMenu } from './LibraryRowMenu';
 import { LibraryDriveInfoPanel } from './LibraryDriveInfoRow';
+import { SpineFileIcon } from './SpineFileIcon';
+import { StatIcon } from './StatIcon';
 import {
   DAY_MS,
   NotesIndicator,
@@ -171,16 +173,16 @@ export function LibraryGrid(props: LibraryViewProps) {
                           </button>
                         )}
                         <span className={`library-card-stat ${w.heavySpine ? 'library-warn-cell' : ''}`} title={w.heavySpine ? t.libraryWarnHeavySpine : t.libraryColSpine}>
-                          {w.heavySpine && <AlertTriangle size={12} />} {formatBytes(entry.spineBytes)}
+                          {w.heavySpine ? <AlertTriangle size={12} /> : <SpineFileIcon size={13} />} {formatBytes(entry.spineBytes)}
                         </span>
                         <span className={`library-card-stat ${w.heavyImages ? 'library-warn-cell' : ''}`} title={w.heavyImages ? t.libraryWarnHeavyImages : t.libraryColImages}>
-                          {w.heavyImages && <AlertTriangle size={12} />} {formatBytes(entry.imageBytes)} <span className="muted">· {entry.imageCount}</span>
+                          {w.heavyImages ? <AlertTriangle size={12} /> : <StatIcon kind="image" size={13} />} {formatBytes(entry.imageBytes)} <span className="muted">· {entry.imageCount}</span>
                         </span>
                         {!entry.exported ? (
                           <span className="library-badge-muted">{t.libraryNotExported}</span>
                         ) : entry.animationCount > 0 ? (
                           <button className="library-anim-toggle" onClick={() => toggleAnim(entry.spineFile)}>
-                            {entry.animationCount} {t.libraryColAnims} {animOpen ? '▴' : '▾'}
+                            <StatIcon kind="anim" size={13} /> {entry.animationCount} {t.libraryColAnims} {animOpen ? '▴' : '▾'}
                           </button>
                         ) : (
                           <span className="muted" title={t.libraryBinExport}>—</span>
@@ -191,7 +193,7 @@ export function LibraryGrid(props: LibraryViewProps) {
                         <div className="library-card-anims">
                           {entry.skins.length > 0 && (
                             <div>
-                              <strong>{t.librarySkins}:</strong>{' '}
+                              <strong><StatIcon kind="skin" size={13} /> {t.librarySkins}:</strong>{' '}
                               {entry.skins.map((s) => (
                                 <span className={`library-anim-chip ${matches.skins.has(s) ? 'matched' : ''}`} key={s}>
                                   {s}
@@ -200,7 +202,7 @@ export function LibraryGrid(props: LibraryViewProps) {
                             </div>
                           )}
                           <div>
-                            <strong>{t.libraryAnimations}:</strong>{' '}
+                            <strong><StatIcon kind="anim" size={13} /> {t.libraryAnimations}:</strong>{' '}
                             {entry.animations.length === 0 ? (
                               <span className="muted">—</span>
                             ) : (

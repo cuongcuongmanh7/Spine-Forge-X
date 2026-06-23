@@ -159,6 +159,7 @@ export const vi = {
   libraryStatNotScanned: 'Chưa scan',
   libraryStatClean: 'Đã clean',
   libraryStatNeedsReview: 'Cần kiểm tra',
+  libraryStatNotExported: 'Chưa export',
   libraryFacetLabel: 'Nhóm',
   libraryFacetFolder: 'Theo loại',
   libraryFacetId: 'Theo ID',

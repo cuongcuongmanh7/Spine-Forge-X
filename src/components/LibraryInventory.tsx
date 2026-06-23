@@ -1,6 +1,7 @@
 import { useCallback, useMemo, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
-import { AlertTriangle, Boxes, CheckCircle2, CloudDownload, Layers, MessageSquare, RotateCw, Search, Tag, Users } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, CloudDownload, Layers, MessageSquare, RotateCw, Search, Tag, Users } from 'lucide-react';
+import { SpineFileIcon } from './SpineFileIcon';
 import { useApp } from '../useAppController';
 import { Section as CollapsibleSection } from './common';
 import { LibraryStatCards } from './LibraryStatCards';
@@ -136,16 +137,23 @@ export function LibraryInventory({
     onChanges: addDriveChanges
   });
 
-  // Clean-scan status of an entry as a stable group key ('unknown' | 'warning' | 'clean'); the
-  // host owns `libraryCleanState`, so we inject this into the "By status" grouping/filter.
+  // Clean-scan status of an entry as a stable group key ('not-exported' | 'unknown' | 'warning' | 'clean');
+  // the host owns `libraryCleanState`, so we inject this into the "By status" grouping/filter. Entries that
+  // were never exported can't be clean-scanned (no atlas), so they get their own bucket ahead of the scan states.
   const statusOf = useCallback(
-    (e: LibraryEntry): string => cleanStatusForEntry(e, libraryCleanState[e.spineFile]),
+    (e: LibraryEntry): string => (e.exported ? cleanStatusForEntry(e, libraryCleanState[e.spineFile]) : 'not-exported'),
     [libraryCleanState]
   );
   // Localized label for a status group key (chips + section headers under the "By status" facet).
   const statusLabel = useCallback(
     (key: string): string =>
-      key === 'clean' ? t.libraryStatClean : key === 'warning' ? t.libraryStatNeedsReview : t.libraryStatNotScanned,
+      key === 'clean'
+        ? t.libraryStatClean
+        : key === 'warning'
+          ? t.libraryStatNeedsReview
+          : key === 'not-exported'
+            ? t.libraryStatNotExported
+            : t.libraryStatNotScanned,
     [t]
   );
 
@@ -436,7 +444,7 @@ export function LibraryInventory({
   const statsPreview = (
     <div className="section-mini-cards">
       <span className="mini-card">
-        <Boxes size={14} /> <b>{entries.length}</b> {t.libraryTotalEntries}
+        <SpineFileIcon size={14} /> <b>{entries.length}</b> {t.libraryTotalEntries}
       </span>
       <span className="mini-card ok">
         <CheckCircle2 size={14} /> <b>{scanCounts.clean}</b> {t.libraryStatClean}

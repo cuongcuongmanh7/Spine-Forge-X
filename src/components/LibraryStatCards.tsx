@@ -1,5 +1,7 @@
-import { AlertTriangle, Boxes, CheckCircle2, Circle, Images, Tag } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, Circle, Tag } from 'lucide-react';
 import { StatCard } from './StatCard';
+import { StatIcon } from './StatIcon';
+import { SpineFileIcon } from './SpineFileIcon';
 import { formatBytes } from '../time';
 import { versionLabel, type VersionBucket } from '../library';
 import type { Translations } from '../i18n';
@@ -20,11 +22,11 @@ export function LibraryStatCards({
 }) {
   return (
     <div className="stat-cards">
-      <StatCard icon={<Boxes size={18} />} label={t.libraryTotalEntries} value={totalEntries} />
+      <StatCard icon={<SpineFileIcon size={18} />} label={t.libraryTotalEntries} value={totalEntries} />
       {buckets.map((b) => (
         <StatCard key={b.major} icon={<Tag size={18} />} label={versionLabel(b.major)} value={b.count} />
       ))}
-      <StatCard icon={<Images size={18} />} label={t.libraryTotalImages} value={formatBytes(totalImageBytes)} />
+      <StatCard icon={<StatIcon kind="image" size={18} />} label={t.libraryTotalImages} value={formatBytes(totalImageBytes)} />
       <StatCard icon={<Circle size={18} />} label={t.libraryStatNotScanned} value={scanCounts.unknown} />
       <StatCard icon={<CheckCircle2 size={18} />} label={t.libraryStatClean} value={scanCounts.clean} tone={scanCounts.clean > 0 ? 'ok' : 'default'} />
       <StatCard
