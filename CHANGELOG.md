@@ -1,5 +1,10 @@
 # Changelog
 
+## v0.4.23
+- **Xem trước anim: hiện danh sách event + thời điểm** — popup xem trước giờ liệt kê các event có trong animation đang chạy, kèm icon riêng và thời điểm theo cả giây lẫn frame (ví dụ `event_a (1.5s - 45f)`).
+- **Event gắn thẳng lên thanh tua** — mỗi event là một vạch + nhãn ngay trên thanh progress gốc của trình phát (thanh này giờ luôn hiện, không còn tự ẩn khi rê chuột), khớp đúng vị trí thời gian và vẫn tua được như cũ.
+- **Tự sáng event khi playhead đi qua** — khi chạy tới event nào thì dòng event đó (và vạch tương ứng) sáng lên; hai event trùng thời điểm sẽ cùng sáng.
+
 ## v0.4.22
 - **Inventory: nhớ bộ lọc & từ khoá tìm kiếm khi đổi tab** — trước đây chuyển Inventory → Workspace → Inventory là mất sạch lựa chọn lọc và ô tìm kiếm. Nay toàn bộ trạng thái lọc (nhóm, loại, version, người, tag, các chip) cùng từ khoá search được giữ lại (qua cả lần mở app sau).
 - **Inventory: bộ lọc "Trạng thái" độc lập với nhóm** — thêm hàng chip lọc theo trạng thái (**Chưa export / Chưa scan / Cần kiểm tra / Đã clean**) dùng được cùng lúc với bất kỳ cách nhóm nào — ví dụ nhóm "Theo loại" + chip `pet` + lọc "Chưa export". Chọn nhiều chip = OR. Khi đang nhóm "Theo trạng thái" thì hàng này tự ẩn cho khỏi trùng.

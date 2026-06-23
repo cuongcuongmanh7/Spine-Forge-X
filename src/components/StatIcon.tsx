@@ -1,13 +1,15 @@
 import animUrl from '../assets/stat-anim.png';
 import imageUrl from '../assets/stat-image.png';
 import skinUrl from '../assets/stat-skin.png';
+import eventUrl from '../assets/stat-event.png';
 
-export type StatKind = 'anim' | 'image' | 'skin';
+export type StatKind = 'anim' | 'image' | 'skin' | 'event';
 
 const STAT_ICONS: Record<StatKind, string> = {
   anim: animUrl,
   image: imageUrl,
-  skin: skinUrl
+  skin: skinUrl,
+  event: eventUrl
 };
 
 /**

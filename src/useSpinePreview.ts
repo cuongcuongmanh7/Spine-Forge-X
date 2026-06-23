@@ -20,10 +20,35 @@ export type PreviewStatus = 'loading' | 'ready' | 'error';
 /** Live playback readout, refreshed each animation frame (no React re-render). */
 export type PreviewStats = { fps: number; time: number; duration: number; frame: number };
 
+/** A keyed event inside an animation, with its trigger time in seconds + frames. */
+export type AnimEvent = { name: string; time: number; frame: number };
+
 /** Editor default export rate — Spine has no authoring fps in the runtime data. */
 const ASSUMED_FPS = 30;
 
-type AnimationLike = { name?: string; duration: number };
+type AnimationLike = { name?: string; duration: number; timelines?: unknown[] };
+
+/**
+ * Pull the keyed events out of an animation by scanning its timelines for the
+ * EventTimeline (the only one carrying an `events[]` of `{ time, data.name }`).
+ * Works on both the 3.8 and 4.x runtimes — both store events the same way.
+ */
+function extractEvents(animation: AnimationLike | undefined | null): AnimEvent[] {
+  const timelines = animation?.timelines;
+  if (!Array.isArray(timelines)) return [];
+  const out: AnimEvent[] = [];
+  for (const tl of timelines) {
+    const evs = (tl as { events?: unknown })?.events;
+    if (!Array.isArray(evs)) continue;
+    for (const ev of evs) {
+      const name = ev?.data?.name ?? ev?.name;
+      if (typeof name !== 'string') continue;
+      const time = typeof ev?.time === 'number' ? ev.time : 0;
+      out.push({ name, time, frame: Math.round(time * ASSUMED_FPS) });
+    }
+  }
+  return out.sort((a, b) => a.time - b.time);
+}
 type TrackLike = { animation?: AnimationLike; getAnimationTime?: () => number; trackTime?: number };
 type ViewportBox = {
   x: number;
@@ -82,6 +107,9 @@ export function useSpinePreview(entry: LibraryEntry | null, containerRef: React.
   const [status, setStatus] = useState<PreviewStatus>('loading');
   const [error, setError] = useState<string | null>(null);
   const [assets, setAssets] = useState<ExportAssets | null>(null);
+  const [events, setEvents] = useState<AnimEvent[]>([]);
+  // Active animation's total length (seconds), used to place markers along the timeline.
+  const [animDuration, setAnimDuration] = useState(0);
   const playerRef = useRef<DisposablePlayer | null>(null);
   const statsRef = useRef<PreviewStats>({ fps: 0, time: 0, duration: 0, frame: 0 });
   const initialViewport = useRef<ViewportBox | null>(null);
@@ -220,12 +248,15 @@ export function useSpinePreview(entry: LibraryEntry | null, containerRef: React.
     setStatus('loading');
     setError(null);
     setAssets(null);
+    setEvents([]);
+    setAnimDuration(0);
     statsRef.current = { fps: 0, time: 0, duration: 0, frame: 0 };
     initialViewport.current = null;
 
     let detachInteraction: (() => void) | null = null;
     let statsRaf = 0;
     let lastSample = 0;
+    let lastAnimName: string | null = null;
 
     // Self-driven stats loop: 3.8 has no `frame` callback, so sample the player directly.
     const startStats = () => {
@@ -242,6 +273,15 @@ export function useSpinePreview(entry: LibraryEntry | null, containerRef: React.
         }
         lastSample = now;
         sampleStats(p, statsRef.current);
+        // Refresh the event list only when the active animation changes (the player's
+        // own picker can switch it), keeping React re-renders off the hot path.
+        const anim = currentTrack(p)?.animation;
+        const animName = anim?.name ?? null;
+        if (animName !== lastAnimName) {
+          lastAnimName = animName;
+          setEvents(extractEvents(anim));
+          setAnimDuration(anim?.duration ?? 0);
+        }
       };
       statsRaf = requestAnimationFrame(loop);
     };
@@ -343,5 +383,5 @@ export function useSpinePreview(entry: LibraryEntry | null, containerRef: React.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [entry]);
 
-  return { status, error, assets, statsRef, controls: controls.current };
+  return { status, error, assets, events, animDuration, statsRef, controls: controls.current };
 }
