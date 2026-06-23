@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import type { ExportAssets, LibraryEntry } from './config';
-import { type DisposablePlayer, basename, buildRawDataURIs, loadSpine38, loadSpine4 } from './spineRuntime';
+import { type DisposablePlayer, applyPreferredSetup, basename, buildRawDataURIs, loadSpine38, loadSpine4 } from './spineRuntime';
 
 /**
  * Live skeleton preview for a Library unit's exported skeleton, rendered with the
@@ -60,26 +60,6 @@ type LivePlayer = DisposablePlayer & {
 
 /** Live camera controls (zoom / reset framing), exposed to the modal. */
 export type PreviewControls = { zoomIn: () => void; zoomOut: () => void; resetView: () => void };
-
-/** Pick "skin_default" → "default" → first, and animation "idle" → first; apply to the loaded player. */
-function applyPreferredSetup(player: LivePlayer) {
-  const data = player.skeleton?.data;
-
-  const skins = (data?.skins ?? []).map((s) => s.name);
-  const skin = skins.includes('skin_default') ? 'skin_default' : skins.includes('default') ? 'default' : skins[0];
-  if (skin && player.skeleton?.setSkinByName) {
-    player.skeleton.setSkinByName(skin);
-    player.skeleton.setSlotsToSetupPose?.();
-  }
-
-  const anims = (data?.animations ?? []).map((a) => a.name);
-  const anim = anims.includes('idle') ? 'idle' : anims[0];
-  if (anim) {
-    // Prefer the player's setAnimation — it also reframes the viewport to the new clip.
-    if (typeof player.setAnimation === 'function') player.setAnimation(anim, true);
-    else player.animationState?.setAnimation?.(0, anim, true);
-  }
-}
 
 /** Current track on either runtime (4.x exposes `tracks[]`, 3.8 exposes `getCurrent`). */
 function currentTrack(player: LivePlayer): TrackLike | null {

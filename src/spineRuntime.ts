@@ -52,6 +52,44 @@ export function loadSpine4(): Promise<typeof import('@esotericsoftware/spine-pla
   return spine4Promise;
 }
 
+/** Minimal version-agnostic player surface needed to choose a skin + starting animation. */
+export type PreferredSetupPlayer = {
+  skeleton?: {
+    data?: { skins?: { name: string }[]; animations?: { name: string; duration: number }[] };
+    setSkinByName?: (name: string) => void;
+    setSlotsToSetupPose?: () => void;
+  } | null;
+  animationState?: { setAnimation?: (track: number, name: string, loop: boolean) => unknown } | null;
+  setAnimation?: (name: string, loop?: boolean) => unknown;
+};
+
+/**
+ * Pick the most representative skin + animation and apply them to a freshly loaded player.
+ * Skin priority is `skin_default` → `default` → first: many rigs ship an EMPTY `default` skin
+ * (no region attachments) and put the real art under `skin_default`, so preferring `default`
+ * blindly renders a blank skeleton. Animation priority is `idle` → first.
+ *
+ * Shared by the live preview and the grid thumbnail so both frame the asset identically.
+ */
+export function applyPreferredSetup(player: PreferredSetupPlayer): void {
+  const data = player.skeleton?.data;
+
+  const skins = (data?.skins ?? []).map((s) => s.name);
+  const skin = skins.includes('skin_default') ? 'skin_default' : skins.includes('default') ? 'default' : skins[0];
+  if (skin && player.skeleton?.setSkinByName) {
+    player.skeleton.setSkinByName(skin);
+    player.skeleton.setSlotsToSetupPose?.();
+  }
+
+  const anims = (data?.animations ?? []).map((a) => a.name);
+  const anim = anims.includes('idle') ? 'idle' : anims[0];
+  if (anim) {
+    // Prefer the player's setAnimation — it also reframes the viewport to the new clip.
+    if (typeof player.setAnimation === 'function') player.setAnimation(anim, true);
+    else player.animationState?.setAnimation?.(0, anim, true);
+  }
+}
+
 /** Read every export file into a `name → dataURI` map for the player to resolve locally. */
 export async function buildRawDataURIs(assets: ExportAssets): Promise<Record<string, string>> {
   const read = (path: string) => invoke<string>('read_file_data_url', { path });

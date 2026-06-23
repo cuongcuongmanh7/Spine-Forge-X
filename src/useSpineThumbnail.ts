@@ -2,7 +2,15 @@ import { useEffect, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import type { ExportAssets, LibraryEntry } from './config';
 import { firebaseConfigured, getThumbDownloadUrl, uploadThumb } from './firebase';
-import { type DisposablePlayer, basename, buildRawDataURIs, loadSpine38, loadSpine4 } from './spineRuntime';
+import {
+  type DisposablePlayer,
+  type PreferredSetupPlayer,
+  applyPreferredSetup,
+  basename,
+  buildRawDataURIs,
+  loadSpine38,
+  loadSpine4,
+} from './spineRuntime';
 
 /**
  * Renders a small static thumbnail of a Library unit's exported skeleton for the grid
@@ -22,11 +30,17 @@ const THUMB_W = 240;
 const THUMB_H = 180;
 const RENDER_TIMEOUT_MS = 8000;
 
+/** Bumped whenever the thumbnail RENDERER changes in a way that should supersede every cached
+ *  image (local L1 + shared L2), independent of the asset bytes. v2: prefer `skin_default` over an
+ *  empty `default` skin so rigs that hid their art under `skin_default` stop thumbnailing blank. */
+const THUMB_RENDER_VERSION = 2;
+
 /** Filesystem-safe cache key: a stable hash of the asset's identity. Uses the library-relative
  *  path (NOT the absolute path) so the key matches across machines sharing the same Drive folder.
- *  Re-export (new bytes) or an editor-version bump changes the key, superseding the old thumbnail. */
+ *  Re-export (new bytes), an editor-version bump, or a renderer-version bump changes the key,
+ *  superseding the old thumbnail. */
 export function thumbKey(entry: LibraryEntry): string {
-  const seed = `${entry.relPath.replace(/\\/g, '/')}|${entry.spineBytes}|${entry.version ?? ''}`;
+  const seed = `${entry.relPath.replace(/\\/g, '/')}|${entry.spineBytes}|${entry.version ?? ''}|r${THUMB_RENDER_VERSION}`;
   // cyrb53 — small, fast, good-enough distribution for a cache key.
   let h1 = 0xdeadbeef;
   let h2 = 0x41c6ce57;
@@ -104,6 +118,17 @@ async function renderThumbnail(assets: ExportAssets, rawDataURIs: Record<string,
         );
       const onError = (_p: unknown, msg: string) => settle(() => reject(new Error(msg || 'spine player error')));
 
+      // Choose the skin/anim that actually has art (skin_default over an often-empty `default`),
+      // matching the live preview, BEFORE capturing — otherwise many rigs thumbnail blank.
+      const onSuccess = (player: unknown) => {
+        try {
+          applyPreferredSetup(player as PreferredSetupPlayer);
+        } catch {
+          /* minimal skeletons may lack named skins/anims — keep the player's defaults */
+        }
+        capture();
+      };
+
       const common = {
         rawDataURIs,
         showControls: false,
@@ -111,7 +136,7 @@ async function renderThumbnail(assets: ExportAssets, rawDataURIs: Record<string,
         // Required so the drawing buffer survives compositing and toDataURL isn't blank.
         preserveDrawingBuffer: true,
         backgroundColor: '#00000000',
-        success: capture,
+        success: onSuccess,
         error: onError,
       };
 
