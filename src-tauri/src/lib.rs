@@ -6,6 +6,7 @@ mod concurrent;
 mod drive;
 mod error;
 mod export;
+mod health;
 mod library;
 mod model;
 mod paths;
@@ -487,7 +488,7 @@ pub fn run() {
             system::thumb_cache_fetch,
             system::resolve_app_data_dir,
             library::list_export_assets,
-            library::health_check_entry,
+            health::health_check_entry,
             clean::count_clean_units,
             clean::list_clean_units,
             clean::scan_source_folders,
