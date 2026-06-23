@@ -1,5 +1,8 @@
 # Changelog
 
+## v0.4.28
+- **Thông báo (chuông) giờ dùng chung trên mọi máy** — trước đây mỗi máy giữ danh sách thông báo riêng (lưu cục bộ), nên cùng một tài khoản đăng nhập ở máy khác lại thấy danh sách khác và badge số khác nhau. Nay thông báo thay đổi trên Drive được đồng bộ chung cho cả nhóm: máy nào phát hiện cũng góp vào một danh sách, các máy đều thấy giống nhau. Trạng thái **đã đọc / đã xoá** đi theo tài khoản — đọc ở máy này thì máy kia cũng hết badge. Mỗi thay đổi chỉ hiện một lần dù nhiều máy cùng phát hiện. Chưa đăng nhập thì vẫn chạy cục bộ như cũ.
+
 ## v0.4.27
 - **Sửa vài file bị lỗi hình ảnh (viền sáng/quầng) do Premultiply Alpha** — trình phát 3.8 mặc định coi mọi texture là premultiplied, nên file export **tắt** Premultiply alpha (straight alpha) bị render viền/vùng bán trong suốt sáng lóa. Nay app tự nhận diện từng file là PMA hay straight-alpha (quét pixel page đầu) và báo player render đúng — không cần re-export hay sửa setting. Thumbnail tạo lại để áp dụng.
 - **Sửa file binary 3.8 có tên layer tiếng Trung/Nhật/Hàn không load được** — trình phát 3.8 đọc byte skeleton dạng có dấu (signed) nên ký tự nhiều byte (vd `祥云 Copy`, `图层`) bị giải mã sai → tên attachment không khớp atlas → báo "could not load skeleton / Region not found in atlas" → trắng cả thumbnail lẫn xem trước. Nay đọc byte đúng kiểu unsigned, các file này hiện đúng. Ảnh hỏng sẽ tự tạo lại.

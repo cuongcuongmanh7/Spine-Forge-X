@@ -200,20 +200,22 @@ export function useAppControllerValue() {
   // metadata of `.spine` files.
   const { driveAccount, driveBusy, driveSignIn, driveCancelSignIn, driveSignOut } = useDrive({ t, pushToast });
 
+  // Bridge the Drive OAuth session into Firebase Auth (no second login); uid keys the workspace doc.
+  // `isLeader` comes from the Firestore-managed `config/roles` list (not hardcoded) — leaders may
+  // curate the shared library (add/remove); enforced in the UI + Firestore rules.
+  const { firebaseUid, isLeader } = useFirebaseAuth({ driveEmail: driveAccount?.email ?? null });
+
   // Realtime Drive-change notifications (bell in the top bar). The Library tab's watcher feeds
-  // classified changes in via `addDriveChanges`; the store lives here so the bell persists app-wide.
+  // classified changes in via `addDriveChanges`. When signed in, the store mirrors the shared team
+  // feed in Firestore (same notifications on every machine, per-user read state synced by uid);
+  // signed out it falls back to a localStorage-only feed.
   const {
     notifications,
     unreadCount: notificationsUnread,
     addChanges: addDriveChanges,
     markAllRead: markNotificationsRead,
     clearAll: clearNotifications
-  } = useDriveNotifications();
-
-  // Bridge the Drive OAuth session into Firebase Auth (no second login); uid keys the workspace doc.
-  // `isLeader` comes from the Firestore-managed `config/roles` list (not hardcoded) — leaders may
-  // curate the shared library (add/remove); enforced in the UI + Firestore rules.
-  const { firebaseUid, isLeader } = useFirebaseAuth({ driveEmail: driveAccount?.email ?? null });
+  } = useDriveNotifications({ uid: firebaseUid });
 
   // Shared app-data root on the Pamvis drive (auto-detected); base for sync + library + thumbnails.
   const { appDataDir, appDataResolved, appDataMissing } = useAppData();

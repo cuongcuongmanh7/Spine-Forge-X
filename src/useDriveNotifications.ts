@@ -1,4 +1,15 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  appendNotifications,
+  changeToFeedItem,
+  groupFeed,
+  mergeFeed,
+  subscribeNotificationFeed,
+  subscribeNotificationReads,
+  writeNotificationReads,
+  type FeedItem,
+  type NotifReads
+} from './notifications';
 
 // One classified change as emitted by the backend `drive-changes` event (see drive/changes.rs).
 export type DriveChangeAction = 'edit' | 'rename' | 'add' | 'delete';
@@ -16,8 +27,9 @@ export type DriveChange = {
   time?: string | null;
 };
 
-// A stored notification — either a single change or a bulk roll-up (count > 1). The bell renders
-// the localized text from these fields at display time (so it follows the current language).
+// A notification as the bell renders it — either a single change or a bulk roll-up (count > 1). The
+// bell renders the localized text from these fields at display time (so it follows the language).
+// These are DERIVED (by `groupFeed`) from the shared feed; they are not what's stored.
 export type DriveNotification = {
   id: string;
   action: DriveChangeAction;
@@ -30,8 +42,7 @@ export type DriveNotification = {
   name?: string;
   oldName?: string;
   newName?: string;
-  /** Folder the change happened in (Drive relPath, '/'-separated). For a bulk roll-up it's the
-   *  common ancestor folder of all affected files. Empty when it can't be determined. */
+  /** Folder the change happened in (Drive relPath, '/'-separated); common ancestor for a roll-up. */
   folder?: string;
   /** For click-to-locate in the Library (single tracked-file changes only). */
   relPath?: string;
@@ -39,141 +50,127 @@ export type DriveNotification = {
   read: boolean;
 };
 
-const KEY = 'spineforge.library.notifications';
-const MAX = 20;
-// More than this many same-actor + same-action changes in one batch collapse into a single
-// "user A deleted 15 files" roll-up instead of spamming one notification per file.
-const BULK_THRESHOLD = 3;
+// Local fallback (signed out / Firebase unconfigured): the same feed model, kept in localStorage so
+// the bell still works offline. When signed in, the shared Firestore feed is the source of truth.
+const KEY = 'spineforge.notifications.v2';
 
-function loadStored(): DriveNotification[] {
+type LocalState = { items: FeedItem[]; reads: NotifReads };
+
+function loadLocal(): LocalState {
   try {
     const raw = localStorage.getItem(KEY);
-    return raw ? (JSON.parse(raw) as DriveNotification[]) : [];
+    if (raw) {
+      const d = JSON.parse(raw) as Partial<LocalState>;
+      return {
+        items: Array.isArray(d.items) ? d.items : [],
+        reads: { readAt: d.reads?.readAt ?? 0, clearedAt: d.reads?.clearedAt ?? 0 }
+      };
+    }
   } catch {
-    return [];
+    /* fall through */
   }
+  return { items: [], reads: { readAt: 0, clearedAt: 0 } };
 }
 
-function persist(list: DriveNotification[]) {
+function persistLocal(state: LocalState) {
   try {
-    localStorage.setItem(KEY, JSON.stringify(list));
+    localStorage.setItem(KEY, JSON.stringify(state));
   } catch {
     /* best-effort */
   }
 }
 
-let seq = 0;
-function makeId(): string {
-  seq += 1;
-  return `${Date.now()}-${seq}`;
-}
-
-/** Best single-file label for a change (the leaf name the user recognizes). Tracked deletes carry
- *  the name in oldName; untracked (image) deletes carry it in newName — fall back across both. */
-function singleName(c: DriveChange): string | undefined {
-  if (c.action === 'delete') return c.oldName ?? c.newName ?? undefined;
-  return c.newName ?? c.oldName ?? undefined;
-}
-
-/** Folder segments of a relPath (everything before the filename). */
-function folderSegs(relPath: string): string[] {
-  return relPath.split('/').filter(Boolean).slice(0, -1);
-}
-
-/** Folder of a single change ('/'-separated). */
-function folderOf(relPath: string): string {
-  return folderSegs(relPath).join('/');
-}
-
-/** Deepest folder shared by all affected files — what a bulk roll-up shows. */
-function commonFolder(relPaths: string[]): string {
-  const all = relPaths.map(folderSegs);
-  if (!all.length) return '';
-  let prefix = all[0];
-  for (const segs of all.slice(1)) {
-    let i = 0;
-    while (i < prefix.length && i < segs.length && prefix[i] === segs[i]) i += 1;
-    prefix = prefix.slice(0, i);
-  }
-  return prefix.join('/');
-}
+type Args = {
+  /** Signed-in Firebase uid — keys this user's read watermarks and gates the shared feed. When
+   *  null we fall back to a localStorage-only feed (no cross-machine sync). */
+  uid: string | null;
+};
 
 /**
- * App-level store for the notification bell: turns batches of Drive changes into notifications,
- * collapsing bursts by (actor, action), capping the list, and persisting across restarts.
+ * App-level store for the notification bell. When signed in, it mirrors the shared team feed from
+ * Firestore (so the same notifications appear on every machine) with per-user read state synced via
+ * the `read_{uid}` doc. When signed out it degrades to a localStorage-only feed. Either way the bell
+ * renders `notifications` (derived by `groupFeed`) and never sees the storage details.
  */
-export function useDriveNotifications() {
-  const [notifications, setNotifications] = useState<DriveNotification[]>(loadStored);
+export function useDriveNotifications({ uid }: Args) {
+  // Synced (Firestore) state.
+  const [feedItems, setFeedItems] = useState<FeedItem[]>([]);
+  const [reads, setReads] = useState<NotifReads>({ readAt: 0, clearedAt: 0 });
+  // Local fallback state (only used when signed out).
+  const [local, setLocal] = useState<LocalState>(loadLocal);
 
-  const addChanges = useCallback((changes: DriveChange[]) => {
-    if (!changes.length) return;
-    // Group by who + what (incl. kind, so spine vs image never merge) → a burst becomes one roll-up.
-    const groups = new Map<string, DriveChange[]>();
-    for (const c of changes) {
-      const key = `${c.actorEmail ?? ''}|${c.action}|${c.kind}`;
-      const arr = groups.get(key);
-      if (arr) arr.push(c);
-      else groups.set(key, [c]);
+  const synced = Boolean(uid);
+  const feedItemsRef = useRef(feedItems);
+  feedItemsRef.current = feedItems;
+
+  // Subscribe to the shared feed + this user's watermarks while signed in.
+  useEffect(() => {
+    if (!uid) {
+      setFeedItems([]);
+      setReads({ readAt: 0, clearedAt: 0 });
+      return;
     }
+    const unsubFeed = subscribeNotificationFeed(setFeedItems);
+    const unsubReads = subscribeNotificationReads(uid, setReads);
+    return () => {
+      unsubFeed();
+      unsubReads();
+    };
+  }, [uid]);
 
-    const fresh: DriveNotification[] = [];
-    for (const arr of groups.values()) {
-      const first = arr[0];
-      const actorName = first.actorName || first.actorEmail || '';
-      const actorEmail = first.actorEmail ?? '';
-      if (arr.length > BULK_THRESHOLD) {
-        fresh.push({
-          id: makeId(),
-          action: first.action,
-          kind: first.kind,
-          actorName,
-          actorEmail,
-          count: arr.length,
-          folder: commonFolder(arr.map((c) => c.relPath)),
-          at: Date.now(),
-          read: false
-        });
+  const notifications = useMemo(
+    () => (synced ? groupFeed(feedItems, reads) : groupFeed(local.items, local.reads)),
+    [synced, feedItems, reads, local]
+  );
+
+  const addChanges = useCallback(
+    (changes: DriveChange[]) => {
+      if (!changes.length) return;
+      const items = changes.map(changeToFeedItem);
+      if (uid) {
+        void appendNotifications(items); // feed subscription reflects it back
       } else {
-        for (const c of arr) {
-          fresh.push({
-            id: makeId(),
-            action: c.action,
-            kind: c.kind,
-            actorName: c.actorName || c.actorEmail || '',
-            actorEmail: c.actorEmail ?? '',
-            count: 1,
-            name: singleName(c),
-            oldName: c.oldName ?? undefined,
-            newName: c.newName ?? undefined,
-            folder: folderOf(c.relPath),
-            relPath: c.relPath,
-            at: Date.now(),
-            read: false
-          });
-        }
+        setLocal((prev) => {
+          const next = { ...prev, items: mergeFeed(prev.items, items) };
+          persistLocal(next);
+          return next;
+        });
       }
-    }
-    if (!fresh.length) return;
-    setNotifications((prev) => {
-      const next = [...fresh, ...prev].slice(0, MAX); // newest first
-      persist(next);
-      return next;
-    });
-  }, []);
+    },
+    [uid]
+  );
 
   const markAllRead = useCallback(() => {
-    setNotifications((prev) => {
-      if (prev.every((n) => n.read)) return prev;
-      const next = prev.map((n) => ({ ...n, read: true }));
-      persist(next);
-      return next;
-    });
-  }, []);
+    if (uid) {
+      const maxAt = feedItemsRef.current.reduce((m, i) => Math.max(m, i.at), 0);
+      const readAt = Math.max(Date.now(), maxAt);
+      if (readAt > reads.readAt) void writeNotificationReads(uid, { readAt });
+    } else {
+      setLocal((prev) => {
+        const maxAt = prev.items.reduce((m, i) => Math.max(m, i.at), 0);
+        const readAt = Math.max(Date.now(), maxAt);
+        if (readAt <= prev.reads.readAt) return prev;
+        const next = { ...prev, reads: { ...prev.reads, readAt } };
+        persistLocal(next);
+        return next;
+      });
+    }
+  }, [uid, reads.readAt]);
 
   const clearAll = useCallback(() => {
-    persist([]);
-    setNotifications([]);
-  }, []);
+    // "Clear" hides the user's own view by advancing their watermark — it never deletes the shared
+    // team history (another teammate may not have seen those changes yet).
+    const clearedAt = Date.now();
+    if (uid) {
+      void writeNotificationReads(uid, { clearedAt });
+    } else {
+      setLocal((prev) => {
+        const next = { ...prev, reads: { ...prev.reads, clearedAt } };
+        persistLocal(next);
+        return next;
+      });
+    }
+  }, [uid]);
 
   const unreadCount = notifications.reduce((n, x) => (x.read ? n : n + 1), 0);
 

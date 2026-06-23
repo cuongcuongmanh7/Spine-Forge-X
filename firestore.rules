@@ -6,8 +6,10 @@ rules_version = '2';
 // their own workspace doc; the shared library list is writable by the whole org.
 //
 // Layout (env-scoped so dev builds can't touch prod data — see src/firebase.ts ▸ ENV):
-//   envs/{env}/workspaces/{uid}   — per-user workspace profile (uid = Firebase Auth uid)
-//   envs/{env}/library/list       — shared team library list
+//   envs/{env}/workspaces/{uid}      — per-user workspace profile (uid = Firebase Auth uid)
+//   envs/{env}/library/list          — shared team library list
+//   envs/{env}/notifications/feed    — shared team Drive-change feed (any member appends)
+//   envs/{env}/notifications/read_{uid} — per-user read/cleared markers (owner-only)
 
 service cloud.firestore {
   match /databases/{database}/documents {
@@ -45,6 +47,17 @@ service cloud.firestore {
     match /envs/{env}/library/{doc} {
       allow read: if org();
       allow create, update: if isLeader();
+      allow delete: if false;
+    }
+
+    // Drive-change notifications. The `feed` doc is a shared team activity log: any org member's
+    // machine appends to it when it detects a change (the writer merges by deterministic item id,
+    // so concurrent appends are idempotent). The `read_{uid}` docs hold each user's own
+    // read/cleared watermarks, writable only by that user — so marking read on one machine clears
+    // the badge on their other machines without touching anyone else's state.
+    match /envs/{env}/notifications/{doc} {
+      allow read: if org();
+      allow create, update: if org() && (doc == 'feed' || doc == ('read_' + request.auth.uid));
       allow delete: if false;
     }
 
