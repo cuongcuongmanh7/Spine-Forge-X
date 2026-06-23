@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import type { ExportAssets, LibraryEntry } from './config';
-import { type DisposablePlayer, applyPreferredSetup, basename, buildRawDataURIs, loadSpine38, loadSpine4 } from './spineRuntime';
+import { type DisposablePlayer, applyPreferredSetup, basename, buildRawDataURIs, loadSpine38, loadSpine4x } from './spineRuntime';
 
 /**
  * Live skeleton preview for a Library unit's exported skeleton, rendered with the
@@ -349,7 +349,7 @@ export function useSpinePreview(entry: LibraryEntry | null, containerRef: React.
           cfg[resolved.skeletonFormat === 'json' ? 'jsonUrl' : 'skelUrl'] = skelName;
           playerRef.current = new spine.SpinePlayer(container, cfg);
         } else {
-          const { SpinePlayer } = await loadSpine4();
+          const { SpinePlayer } = await loadSpine4x(resolved.version);
           if (cancelled) return;
           playerRef.current = new SpinePlayer(container, {
             skeleton: skelName,

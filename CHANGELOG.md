@@ -1,5 +1,8 @@
 # Changelog
 
+## v0.4.24
+- **Sửa xem trước / thumbnail không hiện cho file Spine 4.2** — runtime đi kèm chỉ là 4.3, mà 4.2 và 4.3 không tương thích định dạng nên file 4.2 đọc bị lệch (trắng / báo lỗi). Nay app nhận đúng minor version (3.8 / 4.2 / 4.3…) từ chính file export và nạp runtime khớp — file 4.2 dùng player 4.2, file 4.3 dùng player 4.3. Thumbnail 4.2 cũ (trắng) sẽ tự tạo lại.
+
 ## v0.4.23
 - **Xem trước anim: hiện danh sách event + thời điểm** — popup xem trước giờ liệt kê các event có trong animation đang chạy, kèm icon riêng và thời điểm theo cả giây lẫn frame (ví dụ `event_a (1.5s - 45f)`).
 - **Event gắn thẳng lên thanh tua** — mỗi event là một vạch + nhãn ngay trên thanh progress gốc của trình phát (thanh này giờ luôn hiện, không còn tự ẩn khi rê chuột), khớp đúng vị trí thời gian và vẫn tua được như cũ.

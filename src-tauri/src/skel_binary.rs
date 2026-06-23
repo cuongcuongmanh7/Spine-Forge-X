@@ -405,19 +405,33 @@ fn read_animation(r: &mut Reader, strings: &[Option<String>], event_has_audio: &
 /// misaligning every string and producing garbled region names ("Region not found in atlas").
 ///
 /// A genuine 3.8 export stores its hash as a string, so the version reads cleanly as "3.8.x".
-/// A 4.x export stores an 8-byte hash instead, so reading it as a string lands on a bogus
-/// offset and the version won't start with "3.8" → we fall through to "4.x", which is correct.
+/// A 4.x export stores an 8-byte hash instead; we re-read it that way to recover the exact 4.x
+/// minor ("4.2", "4.3", …), because the binary format differs between minors and each needs its
+/// matching runtime. Unparseable 4.x falls back to the generic "4.x" key.
 pub(crate) fn read_skel_version_family(bytes: &[u8]) -> String {
+    // 3.8 path: hash is a length-prefixed string, version reads as "3.8.x".
     let mut r = Reader::new(bytes);
-    let version = (|| {
-        r.string()?; // hash (string in 3.8; misread for 4.x, which is fine — see above)
+    let v38 = (|| {
+        r.string()?; // hash (string in 3.8)
         Ok::<_, String>(r.string()?.unwrap_or_default())
     })()
     .unwrap_or_default();
-    if version.starts_with("3.8") {
-        "3.8".to_string()
-    } else {
-        "4.x".to_string()
+    if v38.starts_with("3.8") {
+        return "3.8".to_string();
+    }
+    // 4.x path: 8-byte hash (lowHash + highHash int32) then the version string ("4.2.43").
+    let mut r4 = Reader::new(bytes);
+    let v4 = (|| {
+        r4.skip(8)?;
+        Ok::<_, String>(r4.string()?.unwrap_or_default())
+    })()
+    .unwrap_or_default();
+    let mut it = v4.split('.');
+    match (it.next(), it.next()) {
+        (Some(major), Some(minor)) if !major.is_empty() && !minor.is_empty() && minor.bytes().all(|c| c.is_ascii_digit()) => {
+            format!("{major}.{minor}")
+        }
+        _ => "4.x".to_string(),
     }
 }
 
@@ -592,6 +606,15 @@ mod tests {
         assert_eq!(read_skel_version_family(&data), "4.x");
         // Garbage/short blob → 4.x (safe default).
         assert_eq!(read_skel_version_family(b"\x00xyz"), "4.x");
+    }
+
+    #[test]
+    fn version_family_4x_minor_from_real_header() {
+        // A real 4.x header stores an 8-byte hash (not a string) before the version, so the
+        // exact minor must be recovered to pick the matching runtime (4.2 ≠ 4.3 format).
+        let mut data = vec![0u8; 8]; // 8-byte hash (lowHash + highHash)
+        data.extend(enc_string("4.2.43"));
+        assert_eq!(read_skel_version_family(&data), "4.2");
     }
 
     #[test]

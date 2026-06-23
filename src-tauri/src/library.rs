@@ -285,10 +285,21 @@ fn atlas_page_names(content: &str) -> Vec<String> {
     out
 }
 
-/// Map a full Spine version ("3.8.99", "4.3.17") to the runtime family we render with:
-/// vendored 3.8 player vs the 4.x npm player. Anything that isn't 3.8 is treated as 4.x.
+/// Map a full Spine version ("3.8.99", "4.2.43", "4.3.17") to the runtime key we render with:
+/// the vendored 3.8 player, or a specific 4.x minor ("4.2", "4.3", …) — the 4.x binary/JSON
+/// formats differ between minors, so a 4.2 export must load the 4.2 runtime, not 4.3. Unparseable
+/// 4.x falls back to the generic "4.x" key (latest bundled 4.x player).
 fn version_family(v: &str) -> String {
-    if v.starts_with("3.8") { "3.8".to_string() } else { "4.x".to_string() }
+    if v.starts_with("3.8") {
+        return "3.8".to_string();
+    }
+    let mut it = v.split('.');
+    match (it.next(), it.next()) {
+        (Some(major), Some(minor)) if !major.is_empty() && !minor.is_empty() && minor.bytes().all(|c| c.is_ascii_digit()) => {
+            format!("{major}.{minor}")
+        }
+        _ => "4.x".to_string(),
+    }
 }
 
 /// Version family of a JSON skeleton, read from its `skeleton.spine` field.
@@ -596,7 +607,8 @@ mod tests {
         let assets = list_export_assets(unit.to_string_lossy().to_string()).unwrap();
         assert_eq!(assets.skeleton_format, "json");
         assert!(assets.skeleton_path.ends_with("hero.json"));
-        assert_eq!(assets.version.as_deref(), Some("4.x"));
+        // Version family is the precise 4.x minor now, so the matching runtime is picked.
+        assert_eq!(assets.version.as_deref(), Some("4.3"));
         assert!(assets.atlas_path.ends_with("hero.atlas"));
         let names: Vec<&str> = assets.pages.iter().map(|p| p.name.as_str()).collect();
         assert_eq!(names, vec!["hero.png", "hero_1.png"], "pages only, in order");

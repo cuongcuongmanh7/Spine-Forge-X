@@ -46,10 +46,27 @@ export function loadSpine38(): Promise<{ SpinePlayer: new (el: HTMLElement, cfg:
 
 let spine4Promise: Promise<typeof import('@esotericsoftware/spine-player')> | null = null;
 
-/** Lazily import the 4.x npm player (keeps the runtime out of the main bundle). */
+/** Lazily import the latest bundled 4.x npm player (4.3). */
 export function loadSpine4(): Promise<typeof import('@esotericsoftware/spine-player')> {
   if (!spine4Promise) spine4Promise = import('@esotericsoftware/spine-player');
   return spine4Promise;
+}
+
+let spine42Promise: Promise<typeof import('@esotericsoftware/spine-player')> | null = null;
+
+/** Lazily import the 4.2 player (npm alias) — its binary/JSON format differs from 4.3. */
+export function loadSpine42(): Promise<typeof import('@esotericsoftware/spine-player')> {
+  if (!spine42Promise) spine42Promise = import('spine-player-42');
+  return spine42Promise;
+}
+
+/**
+ * Pick the 4.x player whose format matches the skeleton's minor version. Spine runtimes are not
+ * cross-minor compatible: a 4.2 export read by the 4.3 reader misaligns ("Bone name must not be
+ * null"). `version` here is the runtime key from `list_export_assets` ("4.2", "4.3", "4.x").
+ */
+export function loadSpine4x(version: string | null): Promise<typeof import('@esotericsoftware/spine-player')> {
+  return version === '4.2' ? loadSpine42() : loadSpine4();
 }
 
 /** Minimal version-agnostic player surface needed to choose a skin + starting animation. */

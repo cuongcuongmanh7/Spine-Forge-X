@@ -9,7 +9,7 @@ import {
   basename,
   buildRawDataURIs,
   loadSpine38,
-  loadSpine4,
+  loadSpine4x,
 } from './spineRuntime';
 
 /**
@@ -32,8 +32,9 @@ const RENDER_TIMEOUT_MS = 8000;
 
 /** Bumped whenever the thumbnail RENDERER changes in a way that should supersede every cached
  *  image (local L1 + shared L2), independent of the asset bytes. v2: prefer `skin_default` over an
- *  empty `default` skin so rigs that hid their art under `skin_default` stop thumbnailing blank. */
-const THUMB_RENDER_VERSION = 2;
+ *  empty `default` skin so rigs that hid their art under `skin_default` stop thumbnailing blank.
+ *  v3: load 4.2 exports with the matching 4.2 runtime (the 4.3 reader misaligned → blank/failed). */
+const THUMB_RENDER_VERSION = 3;
 
 /** Filesystem-safe cache key: a stable hash of the asset's identity. Uses the library-relative
  *  path (NOT the absolute path) so the key matches across machines sharing the same Drive folder.
@@ -147,7 +148,7 @@ async function renderThumbnail(assets: ExportAssets, rawDataURIs: Record<string,
           cfg[assets.skeletonFormat === 'json' ? 'jsonUrl' : 'skelUrl'] = skelName;
           player = new spine.SpinePlayer(host, cfg);
         } else {
-          const { SpinePlayer } = await loadSpine4();
+          const { SpinePlayer } = await loadSpine4x(assets.version);
           player = new SpinePlayer(host, { ...common, skeleton: skelName, atlas: atlasName });
         }
       };

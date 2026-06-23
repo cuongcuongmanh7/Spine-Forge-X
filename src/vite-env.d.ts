@@ -25,3 +25,8 @@ declare module '*.png' {
 }
 
 declare const __APP_VERSION__: string;
+
+// npm alias to the 4.2 Spine player (same API as the 4.3 package it mirrors).
+declare module 'spine-player-42' {
+  export * from '@esotericsoftware/spine-player';
+}
