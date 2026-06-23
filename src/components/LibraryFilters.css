@@ -1,5 +1,44 @@
 /* Inventory filter rows: a fixed label rail + a wrapping chip set, so every row aligns.
    Split out of LibraryView.css to keep that file under the line ceiling. */
+
+/* Search row in the inventory header (search box + last-scan + rescan/load buttons). */
+.library-search-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 10px;
+  color: var(--text-muted);
+}
+/* Wraps the search input + its inline icon so the input's left edge lines up with the cards. */
+.library-search-field {
+  position: relative;
+  flex: 1 1 220px;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+}
+.library-search-icon {
+  position: absolute;
+  left: 10px;
+  pointer-events: none;
+  color: var(--text-muted);
+}
+.library-search {
+  flex: 1 1 auto;
+  min-width: 0;
+  width: 100%;
+  /* Room for the icon tucked inside on the left. */
+  padding-left: 32px;
+  /* Stand out against the soft header band; brighter focus ring in the app primary. */
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  transition: border-color 0.12s var(--ease), box-shadow 0.12s var(--ease);
+}
+.library-search:focus {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary), transparent 80%);
+}
+
 .library-chip-row {
   display: flex;
   align-items: flex-start;

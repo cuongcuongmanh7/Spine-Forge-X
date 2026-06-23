@@ -1185,43 +1185,6 @@ body.col-resizing {
   }
 }
 
-.section {
-  margin-bottom: 12px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--surface);
-  box-shadow: 0 12px 28px var(--shadow);
-  overflow: hidden;
-}
-
-.section-header {
-  width: 100%;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 14px 16px;
-  background: var(--surface);
-  color: var(--text-strong);
-}
-
-/* Title region of a section header — the primary collapse/expand toggle. */
-.section-title-btn {
-  flex: 0 0 auto;
-  display: flex;
-  align-items: center;
-  border: 0;
-  padding: 0;
-  background: transparent;
-  color: inherit;
-  cursor: pointer;
-  font-size: 15px;
-  font-weight: 700;
-}
-
-.section-body {
-  padding: 0 16px 16px;
-}
-
 .notice {
   display: flex;
   align-items: flex-start;
