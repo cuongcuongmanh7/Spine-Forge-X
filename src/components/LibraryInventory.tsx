@@ -1,4 +1,5 @@
 import { useCallback, useMemo, useState } from 'react';
+import { usePersistentState, usePersistentSet } from '../usePersistentState';
 import { invoke } from '@tauri-apps/api/core';
 import { AlertTriangle, CheckCircle2, CloudDownload, Layers, MessageSquare, RotateCw, Search, Tag, Users } from 'lucide-react';
 import { SpineFileIcon } from './SpineFileIcon';
@@ -89,20 +90,25 @@ export function LibraryInventory({
   const [menuOpen, setMenuOpen] = useState<string | null>(null);
   const [sort, setSort] = useState<SortState>({ key: 'entry', direction: 'asc' });
   // "Used-by-projects": show only assets no session references — cleanup candidates.
-  const [unusedOnly, setUnusedOnly] = useState(false);
+  // These filter chips are persisted (like the shared filter) so they survive a tab switch.
+  const [unusedOnly, setUnusedOnly] = usePersistentState('libraryInventory.unusedOnly', false);
   // Tags/ownership: tag-chip filter selection.
-  const [selectedTags, setSelectedTags] = useState<Set<string>>(new Set());
+  const [selectedTags, setSelectedTags] = usePersistentSet('libraryInventory.tags');
   // Filter by responsible person: manual owner OR Drive owner/last-editor name.
-  const [selectedUsers, setSelectedUsers] = useState<Set<string>>(new Set());
+  const [selectedUsers, setSelectedUsers] = usePersistentSet('libraryInventory.users');
   // Version-mix triage: show only files that diverge from their folder group's majority version.
-  const [divergingOnly, setDivergingOnly] = useState(false);
+  const [divergingOnly, setDivergingOnly] = usePersistentState('libraryInventory.divergingOnly', false);
+  // Status filter (export + clean-scan), independent of the facet so it composes with any grouping
+  // (e.g. group by type "pet" AND show only not-exported / needs-review). Keys match statusOf:
+  // 'not-exported' | 'unknown' (not scanned) | 'warning' (needs review) | 'clean'. Empty = all.
+  const [selectedStatuses, setSelectedStatuses] = usePersistentSet('libraryInventory.statuses');
   // Notes/comments: which target's notes modal is open, and whether resolved notes are shown.
   const [notesTarget, setNotesTarget] = useState<{ key: string; label: string } | null>(null);
-  const [showResolved, setShowResolved] = useState(false);
+  const [showResolved, setShowResolved] = usePersistentState('libraryInventory.showResolved', false);
   // Count of active chip filters — surfaced as a badge on the collapsible Filters section header.
   const activeFilterCount =
     selectedCats.size + selectedVersions.size + selectedUsers.size + selectedTags.size +
-    (unusedOnly ? 1 : 0) + (showResolved ? 1 : 0) + (divergingOnly ? 1 : 0);
+    (unusedOnly ? 1 : 0) + (showResolved ? 1 : 0) + (divergingOnly ? 1 : 0) + (facet === 'status' ? 0 : selectedStatuses.size);
 
   const { tagList, metaFor, addEntryTag, removeEntryTag, setEntryOwner } = useLibraryTags({ libraryDir });
   const notes = useLibraryNotes({ libraryDir, authorEmail: driveAccount?.email ?? '', isLeader });
@@ -163,6 +169,9 @@ export function LibraryInventory({
     [entries, facet, statusOf]
   );
   const versions = useMemo(() => versionTags(entries), [entries]);
+  // Status filter chips (export + clean-scan), always available regardless of the active facet,
+  // in triage order (not-exported → not-scanned → needs-review → clean) with per-status counts.
+  const statusChips = useMemo(() => groupByStatus(entries, statusOf), [entries, statusOf]);
 
   const usage = useMemo(() => usageByEntry(entries, sessions), [entries, sessions]);
   const projectName = useMemo(() => new Map(projects.map((p) => [p.id, p.name])), [projects]);
@@ -193,12 +202,14 @@ export function LibraryInventory({
 
   const filtered = useMemo(() => {
     let base = entries.filter((e) => entryMatchesFilter(e, { facet, selectedCats, selectedVersions, query, statusOf }));
+    // Skipped under the Status facet — the category chips above already filter by status there.
+    if (facet !== 'status' && selectedStatuses.size > 0) base = base.filter((e) => selectedStatuses.has(statusOf(e)));
     if (unusedOnly) base = base.filter((e) => (usage.get(e.spineFile)?.projectIds.length ?? 0) === 0);
     if (divergingOnly) base = base.filter((e) => divergingSet.has(e.spineFile));
     if (selectedTags.size > 0) base = base.filter((e) => entryMatchesTags(metaFor(e), selectedTags));
     if (selectedUsers.size > 0) base = base.filter((e) => selectedUsers.has(effectiveOwner(e)));
     return base;
-  }, [entries, facet, selectedCats, selectedVersions, query, statusOf, unusedOnly, usage, divergingOnly, divergingSet, selectedTags, metaFor, selectedUsers, effectiveOwner]);
+  }, [entries, facet, selectedCats, selectedVersions, query, statusOf, selectedStatuses, unusedOnly, usage, divergingOnly, divergingSet, selectedTags, metaFor, selectedUsers, effectiveOwner]);
 
   const parsedQuery = useMemo(() => parseQuery(query), [query]);
 
@@ -548,6 +559,26 @@ export function LibraryInventory({
             )}
           </div>
         </div>
+
+        {/* When grouping by Status, the category chips above already are the status buckets — hide
+            this row to avoid two identical chip sets. */}
+        {facet !== 'status' && (
+        <div className="library-chip-row">
+          <span className="library-chip-label">{t.libraryFilterStatus}</span>
+          <div className="library-chip-set">
+            {statusChips.map((s) => (
+              <button
+                key={s.key}
+                className={`library-chip ${selectedStatuses.has(s.key) ? 'active' : ''}`}
+                onClick={() => toggleSet(setSelectedStatuses, s.key)}
+                aria-pressed={selectedStatuses.has(s.key)}
+              >
+                {statusLabel(s.key)} <em>{s.entries.length}</em>
+              </button>
+            ))}
+          </div>
+        </div>
+        )}
 
         <div className="library-chip-row">
           <span className="library-chip-label">{t.libraryColUsedBy}</span>

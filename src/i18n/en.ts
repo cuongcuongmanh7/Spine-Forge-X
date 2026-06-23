@@ -190,6 +190,7 @@ export const en: Translations = {
   libraryUsedByCount: 'Used by {count} project(s)',
   libraryUsedByNone: 'Not used by any project',
   libraryUnusedOnly: 'Unused only',
+  libraryFilterStatus: 'Status',
   libraryGoToSession: 'Open session',
   // Tags / ownership (Tier C #4)
   libraryColTags: 'Tags',

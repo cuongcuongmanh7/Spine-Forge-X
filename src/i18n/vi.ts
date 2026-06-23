@@ -188,6 +188,7 @@ export const vi = {
   libraryUsedByCount: 'Dùng bởi {count} project',
   libraryUsedByNone: 'Chưa project nào dùng',
   libraryUnusedOnly: 'Chỉ file chưa dùng',
+  libraryFilterStatus: 'Trạng thái',
   libraryGoToSession: 'Mở session',
   // Tags / ownership (Tier C #4)
   libraryColTags: 'Tag',

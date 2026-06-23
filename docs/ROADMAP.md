@@ -6,6 +6,15 @@ Source-of-truth tiến độ toàn dự án.
 
 ---
 
+## v0.4.22 — Inventory: nhớ filter/search qua tab + filter "Status" độc lập + dọn icon bảng ✅ Done
+
+> Bump `0.4.21 → 0.4.22`; tag `v0.4.22`. (ROADMAP nhảy từ v0.4.16 — các bản 0.4.17–0.4.21 chỉ ghi ở CHANGELOG.)
+
+- [x] **Persist filter/search qua chuyển tab** — `LibraryView` (và `LibraryInventory`) unmount khi rời `viewMode === 'library'` nên state lọc/search reset. Thêm hook `usePersistentState` + `usePersistentSet` (localStorage, nuốt lỗi quota; `Set` memo theo `arr` để identity ổn định). Áp cho facet/cats/versions/query trong [useLibraryFilter.ts](../src/useLibraryFilter.ts) và các chip cục bộ (unusedOnly/divergingOnly/showResolved/tags/users/statuses) trong [LibraryInventory.tsx](../src/components/LibraryInventory.tsx). [usePersistentState.ts](../src/usePersistentState.ts).
+- [x] **Filter "Status" độc lập với facet** — `selectedStatuses` (Set, multi-select OR) lọc theo `statusOf` (`not-exported | unknown | warning | clean`), kết hợp với mọi facet/search/chip. Chip + nhãn dùng lại `groupByStatus`/`statusLabel`. Tự ẩn + bỏ qua khi `facet === 'status'` (chip category đã làm việc đó). Nhãn `libraryFilterStatus`. [LibraryInventory.tsx](../src/components/LibraryInventory.tsx), [library.ts](../src/library.ts).
+- [x] **Chế độ Bảng: bỏ `SpineFileIcon` lặp ở cột `.spine` mỗi dòng** (đã có ở header), giữ `AlertTriangle` khi nặng. [LibraryTable.tsx](../src/components/LibraryTable.tsx).
+- [x] Verify: `tsc` xanh.
+
 ## v0.4.16 — Inventory "By status" group + sửa filter Show-resolved-notes + icon thẻ Lưới ✅ Done
 
 > Bump `0.4.15 → 0.4.16`; tag `v0.4.16`.

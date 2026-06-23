@@ -262,7 +262,7 @@ export function LibraryTable(props: LibraryViewProps) {
                       </td>
                       <td>{entry.version ?? <span className="muted">{t.libraryUnknownVersion}</span>}</td>
                       <td className={`num ${w.heavySpine ? 'library-warn-cell' : ''}`} title={w.heavySpine ? t.libraryWarnHeavySpine : undefined}>
-                        {w.heavySpine ? <AlertTriangle size={12} /> : <SpineFileIcon size={13} />} {formatBytes(entry.spineBytes)}
+                        {w.heavySpine && <AlertTriangle size={12} />} {formatBytes(entry.spineBytes)}
                       </td>
                       <td className={`num ${w.heavyImages ? 'library-warn-cell' : ''}`} title={w.heavyImages ? t.libraryWarnHeavyImages : undefined}>
                         {w.heavyImages && <AlertTriangle size={12} />} {formatBytes(entry.imageBytes)}{' '}

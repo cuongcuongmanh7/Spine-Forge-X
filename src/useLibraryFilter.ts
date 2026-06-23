@@ -1,14 +1,16 @@
-import { useState } from 'react';
+import { usePersistentState, usePersistentSet } from './usePersistentState';
 
 /**
  * Shared Library filter selection (facet + category/version chips + search), lifted above the
  * Inventory and Clean tabs so the Clean scan can be scoped to exactly what the user has filtered.
+ * State is persisted to localStorage so it survives the Library view unmounting on a tab switch
+ * (inventory → workspace → inventory).
  */
 export function useLibraryFilter() {
-  const [facet, setFacetState] = useState<'folder' | 'id' | 'status'>('folder');
-  const [selectedCats, setSelectedCats] = useState<Set<string>>(new Set());
-  const [selectedVersions, setSelectedVersions] = useState<Set<string>>(new Set());
-  const [query, setQuery] = useState('');
+  const [facet, setFacetState] = usePersistentState<'folder' | 'id' | 'status'>('libraryFilter.facet', 'folder');
+  const [selectedCats, setSelectedCats] = usePersistentSet('libraryFilter.cats');
+  const [selectedVersions, setSelectedVersions] = usePersistentSet('libraryFilter.versions');
+  const [query, setQuery] = usePersistentState('libraryFilter.query', '');
 
   function setFacet(next: 'folder' | 'id' | 'status') {
     setFacetState(next);

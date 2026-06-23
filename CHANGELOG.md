@@ -1,5 +1,10 @@
 # Changelog
 
+## v0.4.22
+- **Inventory: nhớ bộ lọc & từ khoá tìm kiếm khi đổi tab** — trước đây chuyển Inventory → Workspace → Inventory là mất sạch lựa chọn lọc và ô tìm kiếm. Nay toàn bộ trạng thái lọc (nhóm, loại, version, người, tag, các chip) cùng từ khoá search được giữ lại (qua cả lần mở app sau).
+- **Inventory: bộ lọc "Trạng thái" độc lập với nhóm** — thêm hàng chip lọc theo trạng thái (**Chưa export / Chưa scan / Cần kiểm tra / Đã clean**) dùng được cùng lúc với bất kỳ cách nhóm nào — ví dụ nhóm "Theo loại" + chip `pet` + lọc "Chưa export". Chọn nhiều chip = OR. Khi đang nhóm "Theo trạng thái" thì hàng này tự ẩn cho khỏi trùng.
+- **Inventory (chế độ Bảng): bỏ icon `.spine` lặp ở mỗi dòng** — icon đã có sẵn ở tiêu đề cột nên gỡ khỏi từng dòng cho gọn; vẫn giữ cảnh báo khi file `.spine` quá nặng.
+
 ## v0.4.21
 - **Icon riêng cho từng loại stat** — file `.spine`, ảnh, animation và skin giờ mỗi loại có icon riêng, dùng nhất quán ở mọi nơi hiển thị số liệu: thẻ Thống kê, tiêu đề cột bảng, thẻ Lưới, và panel mở rộng anim/skin.
 - **Inventory: thêm nhóm/lọc "Chưa export"** — trong group "Theo trạng thái" có thêm nhóm **Chưa export** cho các file chưa export (trước đây gộp chung vào "Chưa scan"). Bấm chip để lọc nhanh đúng nhóm này.
