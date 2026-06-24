@@ -60,6 +60,12 @@
 .library-sort-control select:focus {
   outline: none;
 }
+/* The native option popup doesn't inherit the transparent pill background — give the options an
+   explicit themed background/text so the dropdown isn't white-on-faint. */
+.library-sort-control select option {
+  background: var(--surface);
+  color: var(--text);
+}
 .library-sort-dir {
   display: inline-grid;
   place-items: center;
