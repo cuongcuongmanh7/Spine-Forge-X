@@ -1,5 +1,8 @@
 # Changelog
 
+## v0.4.33
+- **Xem trước động ngay trong panel** — chọn 1 asset, panel bên phải giờ phát skeleton sống (không chỉ ảnh tĩnh): có nút phóng/thu, đặt lại khung, **Phóng to** (mở lại trong cửa sổ lớn) và **toàn màn hình**. Cửa sổ xem trước lớn dùng chung đúng trình phát đó nên hành vi nhất quán.
+
 ## v0.4.32
 - **Bảng chi tiết bên phải (inspector) cho Inventory** — khi chọn asset, một panel bên phải hiện ra: chọn **1 asset** → ảnh xem trước + nút Preview + thông tin (version, dung lượng .spine/ảnh, số anim/skin) + các nút thao tác (Export nhanh, Tạo session, Kiểm tra export, Chuyển vào thùng rác); chọn **nhiều asset** → tổng quan (tổng dung lượng, tổng animation, thanh trạng thái clean/cần kiểm tra), danh sách asset đã chọn, và nút Export hàng loạt / Tạo project. (Xem trước động ngay trong panel sẽ thêm ở bản sau.)
 

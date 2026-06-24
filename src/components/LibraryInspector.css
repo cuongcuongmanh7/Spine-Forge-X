@@ -32,17 +32,14 @@
   white-space: nowrap;
 }
 
-/* Single-select: thumbnail + a Preview button below it. */
-.library-inspector-preview {
+/* Single-select: live preview player embedded in the panel (fixed height; Expand opens the modal). */
+.library-inspector-player {
+  position: relative;
   display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-.library-inspector-preview .library-card-thumb {
-  height: 150px;
-}
-.library-inspector-preview .secondary-button {
-  align-self: center;
+  height: 200px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
 }
 
 /* Single-select detail rows (definition list). */

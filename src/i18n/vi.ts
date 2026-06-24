@@ -117,6 +117,7 @@ export const vi = {
   libraryPreviewLoading: 'Đang nạp skeleton…',
   libraryPreviewErrorTitle: 'Không xem trước được',
   libraryPreviewFullscreen: 'Toàn màn hình',
+  libraryPreviewExpand: 'Phóng to',
   libraryPreviewExitFullscreen: 'Thoát toàn màn hình',
   libraryPreviewZoomIn: 'Phóng to',
   libraryPreviewZoomOut: 'Thu nhỏ',

@@ -1,9 +1,9 @@
 import { useMemo } from 'react';
-import { Eye, FolderPlus, Layers, Stethoscope, Trash2, X, Zap } from 'lucide-react';
+import { FolderPlus, Layers, Stethoscope, Trash2, X, Zap } from 'lucide-react';
 import { useApp } from '../useAppController';
 import { cleanStatusForEntry } from '../library';
 import { formatBytes } from '../time';
-import { LibraryCardThumb } from './LibraryCardThumb';
+import { SpinePreviewView } from './SpinePreviewView';
 import { StatIcon } from './StatIcon';
 import { splitRelPath } from './LibraryViewShared';
 import type { LibraryFilterApi } from '../useLibraryFilter';
@@ -76,11 +76,8 @@ function SingleInspector({
         </button>
       </div>
 
-      <div className="library-inspector-preview">
-        <LibraryCardThumb entry={entry} />
-        <button className="secondary-button small" onClick={() => onPreview(entry)}>
-          <Eye size={14} /> {t.libraryPreview}
-        </button>
+      <div className="library-inspector-player">
+        <SpinePreviewView key={entry.spineFile} entry={entry} compact onExpand={() => onPreview(entry)} />
       </div>
 
       <dl className="library-inspector-meta">

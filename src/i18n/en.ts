@@ -119,6 +119,7 @@ export const en: Translations = {
   libraryPreviewLoading: 'Loading skeleton…',
   libraryPreviewErrorTitle: 'Preview unavailable',
   libraryPreviewFullscreen: 'Fullscreen',
+  libraryPreviewExpand: 'Expand',
   libraryPreviewExitFullscreen: 'Exit fullscreen',
   libraryPreviewZoomIn: 'Zoom in',
   libraryPreviewZoomOut: 'Zoom out',
