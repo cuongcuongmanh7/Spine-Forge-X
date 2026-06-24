@@ -87,7 +87,8 @@
 }
 
 /* Multi-select checkbox overlaid on the thumbnail's top-left (mirrors the preview button top-right).
-   Hidden until the card is hovered or selected, so it doesn't clutter a quick scan. */
+   Hidden until the card is hovered or selected, so it doesn't clutter a quick scan. A faint dark
+   scrim (not a light surface chip) keeps the box legible on any thumbnail without flashing bright. */
 .library-card-check {
   position: absolute;
   top: 6px;
@@ -95,13 +96,10 @@
   z-index: 2;
   display: grid;
   place-items: center;
-  width: 22px;
-  height: 22px;
-  border-radius: 6px;
-  background: color-mix(in srgb, var(--surface), transparent 8%);
-  box-shadow: 0 1px 4px var(--shadow);
-  -webkit-backdrop-filter: blur(4px);
-  backdrop-filter: blur(4px);
+  width: 20px;
+  height: 20px;
+  border-radius: 5px;
+  background: rgba(0, 0, 0, 0.32);
   opacity: 0;
   transition: opacity 0.12s var(--ease);
   cursor: pointer;
@@ -112,9 +110,10 @@
   opacity: 1;
 }
 .library-card-check input {
-  width: 15px;
-  height: 15px;
+  width: 14px;
+  height: 14px;
   margin: 0;
+  accent-color: var(--primary);
   cursor: pointer;
 }
 
