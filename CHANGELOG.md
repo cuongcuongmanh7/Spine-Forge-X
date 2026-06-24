@@ -1,5 +1,8 @@
 # Changelog
 
+## v0.4.34
+- **Tab "Báo cáo" thay cho "Dọn ảnh"** — gom các phân tích vào một chỗ với danh sách bên trái: **Ảnh không dùng** (chính là luồng dọn ảnh cũ, giữ nguyên cách quét + chuyển vào `_unused_backup`), **Lệch version** (file khác version so với phần còn lại trong cùng thư mục) và **Asset quá nặng** (vượt ngưỡng dung lượng .spine/ảnh trong Settings). Mọi báo cáo dùng chung phạm vi lọc của tab Inventory (không cần chọn thư mục lại). **Thiếu attachment** và **Atlas trùng** sẽ bổ sung sau.
+
 ## v0.4.33
 - **Xem trước động ngay trong panel** — chọn 1 asset, panel bên phải giờ phát skeleton sống (không chỉ ảnh tĩnh): có nút phóng/thu, đặt lại khung, **Phóng to** (mở lại trong cửa sổ lớn) và **toàn màn hình**. Cửa sổ xem trước lớn dùng chung đúng trình phát đó nên hành vi nhất quán.
 

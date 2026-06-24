@@ -7,14 +7,14 @@ import { ModeToggle } from './ModeToggle';
 import { SidebarFooter } from './SidebarFooter';
 import { LibraryInventory } from './LibraryInventory';
 import { LibraryInspector } from './LibraryInspector';
-import { LibraryClean } from './LibraryClean';
+import { LibraryReports } from './LibraryReports';
 import { LibrarySpinePreviewModal } from './LibrarySpinePreviewModal';
 import { LibraryHealthCheckModal } from './LibraryHealthCheckModal';
 import { LibraryScanningOverlay } from './LibraryScanningOverlay';
 import type { LibraryEntry } from '../config';
 import './LibraryView.css';
 
-type Tab = 'inventory' | 'clean';
+type Tab = 'inventory' | 'reports';
 type CleanScopeRequest = { id: number; spineFiles: string[] };
 
 /** Asset Library main view: master-folder list (left) + tabbed inventory/clean (right). */
@@ -152,7 +152,7 @@ function LibraryContent({ libraryId }: { libraryId: string }) {
 
   function prepareCleanScan(spineFiles: string[]) {
     setCleanScopeRequest({ id: Date.now(), spineFiles });
-    setTab('clean');
+    setTab('reports');
   }
 
   return (
@@ -162,8 +162,8 @@ function LibraryContent({ libraryId }: { libraryId: string }) {
           <button className={`library-tab ${tab === 'inventory' ? 'active' : ''}`} onClick={() => setTab('inventory')}>
             {t.libraryTabInventory}
           </button>
-          <button className={`library-tab ${tab === 'clean' ? 'active' : ''}`} onClick={() => setTab('clean')}>
-            {t.libraryTabClean}
+          <button className={`library-tab ${tab === 'reports' ? 'active' : ''}`} onClick={() => setTab('reports')}>
+            {t.libraryTabReports}
           </button>
         </div>
       </div>
@@ -179,8 +179,8 @@ function LibraryContent({ libraryId }: { libraryId: string }) {
               onHealthCheck={setHealthEntry}
             />
           </div>
-          <div className="library-tabpane" style={{ display: tab === 'clean' ? 'block' : 'none' }}>
-            <LibraryClean filter={filter} scopeRequest={cleanScopeRequest} />
+          <div className="library-tabpane" style={{ display: tab === 'reports' ? 'block' : 'none' }}>
+            <LibraryReports filter={filter} scopeRequest={cleanScopeRequest} />
           </div>
         </div>
         {/* Inspector follows the Inventory selection; the Clean tab has its own scoped checkboxes. */}
