@@ -258,38 +258,29 @@
   font-weight: 600;
   cursor: pointer;
 }
-.library-select-all input {
-  /* Override the global input{ width:100%; min-height:36px; padding:7px 10px } so it stays a
-     small square (padding:0 is essential — border-box otherwise widens it into a rectangle). */
-  width: 15px;
-  min-width: 15px;
-  height: 15px;
-  min-height: 0;
-  margin: 0;
-  padding: 0;
-  accent-color: var(--primary);
-  cursor: pointer;
-}
 .library-select-count {
   font-size: 12px;
 }
 
-/* Folder/group select-all checkbox in a section header. Same custom look as the card checkbox,
-   inline (no overlay), with an extra indeterminate dash when only part of the group is selected. */
+/* Custom inline checkbox shared by the select-bar master ("Select") and each folder/group header,
+   so they all read the same (no native control). The card overlay checkbox mirrors this look too. */
 .library-group-check {
   display: inline-grid;
   place-items: center;
   flex: 0 0 auto;
   cursor: pointer;
 }
-.library-group-check input {
+.library-group-check input,
+.library-select-all input {
   appearance: none;
   -webkit-appearance: none;
   position: relative;
   flex: 0 0 auto;
-  width: 18px;
-  min-width: 18px;
-  height: 18px;
+  /* Override the global input{ width:100%; min-height:36px; padding:7px 10px } — without padding:0 +
+     min:0 the border-box would widen these into rectangles. */
+  width: 17px;
+  min-width: 17px;
+  height: 17px;
   min-height: 0;
   margin: 0;
   padding: 0;
@@ -300,11 +291,14 @@
   transition: background 0.12s var(--ease), border-color 0.12s var(--ease);
 }
 .library-group-check input:checked,
-.library-group-check input:indeterminate {
+.library-group-check input:indeterminate,
+.library-select-all input:checked,
+.library-select-all input:indeterminate {
   border-color: var(--primary);
   background: var(--primary);
 }
-.library-group-check input:checked::after {
+.library-group-check input:checked::after,
+.library-select-all input:checked::after {
   content: '';
   position: absolute;
   top: 46%;
@@ -315,7 +309,8 @@
   border-width: 0 2px 2px 0;
   transform: translate(-50%, -50%) rotate(45deg);
 }
-.library-group-check input:indeterminate::after {
+.library-group-check input:indeterminate::after,
+.library-select-all input:indeterminate::after {
   content: '';
   position: absolute;
   top: 50%;

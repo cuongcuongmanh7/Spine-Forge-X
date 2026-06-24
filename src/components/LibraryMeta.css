@@ -8,6 +8,27 @@
   align-items: center;
   gap: 10px;
 }
+/* Subtle link-style "Clear all" that sits with the right-hand controls; reads as a reset
+   affordance (muted, red on hover) rather than a primary bordered button. */
+.library-clear-filters {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 5px 9px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.12s var(--ease), color 0.12s var(--ease);
+}
+.library-clear-filters:hover {
+  color: var(--danger);
+  background: color-mix(in srgb, var(--danger), transparent 90%);
+}
 .library-sort-control {
   display: flex;
   align-items: center;

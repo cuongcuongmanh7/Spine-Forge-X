@@ -556,12 +556,12 @@ export function LibraryInventory({
         <div className="library-chip-row">
           <span className="library-chip-label">{t.libraryFacetLabel}</span>
           <div className="library-chip-set">{facetControl}</div>
-          {activeFilterCount > 0 && (
-            <button className="ghost-button small library-clear-filters" onClick={clearAllFilters}>
-              <X size={13} /> {t.libraryClearFilters}
-            </button>
-          )}
           <span className="library-view-controls">
+            {activeFilterCount > 0 && (
+              <button className="library-clear-filters" onClick={clearAllFilters} title={t.libraryClearFilters}>
+                <X size={13} /> {t.libraryClearFilters}
+              </button>
+            )}
             {viewMode === 'grid' && (
               <span className="library-sort-control">
                 <span className="library-chip-label">{t.librarySortBy}</span>
