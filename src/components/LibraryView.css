@@ -143,6 +143,9 @@
   background: transparent;
   color: var(--text-muted);
   font: inherit;
+  /* Match .mode-toggle button (13px) so the tabbar and sidebar header are the same height and
+     their bottom borders line up — `font: inherit` otherwise pulls the 16px root size. */
+  font-size: 13px;
   padding: 6px 12px;
   border-radius: 8px;
   cursor: pointer;
