@@ -192,7 +192,6 @@ export const vi = {
   libraryScanFailed: 'Quét thư viện thất bại',
   libraryLastScan: 'Quét lần cuối',
   libraryNeverScanned: 'Chưa quét',
-  libraryStatTotalAssets: 'Tổng asset',
   libraryTotalEntries: 'File .spine',
   libraryTotalSpine: 'Dung lượng .spine',
   libraryTotalImages: 'Dung lượng ảnh',

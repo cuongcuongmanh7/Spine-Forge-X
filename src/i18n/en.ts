@@ -194,7 +194,6 @@ export const en: Translations = {
   libraryScanFailed: 'Library scan failed',
   libraryLastScan: 'Last scan',
   libraryNeverScanned: 'Never',
-  libraryStatTotalAssets: 'Total assets',
   libraryTotalEntries: 'Spine files',
   libraryTotalSpine: '.spine size',
   libraryTotalImages: 'Image size',

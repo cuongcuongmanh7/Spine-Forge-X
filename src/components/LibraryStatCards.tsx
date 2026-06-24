@@ -1,4 +1,4 @@
-import { AlertTriangle, Boxes, CheckCircle2, Circle } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, Circle } from 'lucide-react';
 import { StatCard } from './StatCard';
 import { StatIcon } from './StatIcon';
 import { SpineFileIcon } from './SpineFileIcon';
@@ -19,8 +19,7 @@ export function LibraryStatCards({
 }) {
   return (
     <div className="stat-cards">
-      <StatCard icon={<Boxes size={18} />} label={t.libraryStatTotalAssets} value={totalEntries} tone="info" />
-      <StatCard icon={<SpineFileIcon size={18} />} label={t.libraryTotalEntries} value={totalEntries} />
+      <StatCard icon={<SpineFileIcon size={18} />} label={t.libraryTotalEntries} value={totalEntries} tone="info" />
       <StatCard icon={<StatIcon kind="image" size={18} />} label={t.libraryTotalImages} value={formatBytes(totalImageBytes)} />
       <StatCard icon={<Circle size={18} />} label={t.libraryStatNotScanned} value={scanCounts.unknown} />
       <StatCard icon={<CheckCircle2 size={18} />} label={t.libraryStatClean} value={scanCounts.clean} tone={scanCounts.clean > 0 ? 'ok' : 'default'} />
