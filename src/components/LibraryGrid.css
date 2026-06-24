@@ -112,11 +112,13 @@
   position: relative;
   width: 22px;
   height: 22px;
-  /* Override the global input{ width:100%; min-height:36px } so the box stays a 22px square. */
+  /* Override the global input{ width:100%; min-height:36px; padding:7px 10px } — without resetting
+     padding, border-box widens the box past 22px to fit the padding and it stops being square. */
   min-width: 0;
   min-height: 0;
   flex: 0 0 auto;
   margin: 0;
+  padding: 0;
   border: 1.5px solid color-mix(in srgb, var(--text-strong), transparent 55%);
   border-radius: 6px;
   background: color-mix(in srgb, var(--surface), transparent 8%);
