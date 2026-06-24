@@ -170,6 +170,13 @@
   min-height: 0;
   display: flex;
 }
+/* Main column (tab panes) sits left of the optional inspector column. */
+.library-main-col {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+}
 /* Both tab panes stay mounted (toggled via display) so filters/scroll persist across tabs. */
 .library-tabpane {
   flex: 1 1 auto;

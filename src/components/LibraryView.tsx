@@ -6,6 +6,7 @@ import { useLibraryFilter } from '../useLibraryFilter';
 import { ModeToggle } from './ModeToggle';
 import { SidebarFooter } from './SidebarFooter';
 import { LibraryInventory } from './LibraryInventory';
+import { LibraryInspector } from './LibraryInspector';
 import { LibraryClean } from './LibraryClean';
 import { LibrarySpinePreviewModal } from './LibrarySpinePreviewModal';
 import { LibraryHealthCheckModal } from './LibraryHealthCheckModal';
@@ -168,18 +169,22 @@ function LibraryContent({ libraryId }: { libraryId: string }) {
       </div>
 
       <div className="library-panel">
-        {/* Both panes stay mounted so Inventory filters + Clean scan survive a tab switch. */}
-        <div className="library-tabpane" style={{ display: tab === 'inventory' ? 'block' : 'none' }}>
-          <LibraryInventory
-            filter={filter}
-            onPrepareCleanScan={prepareCleanScan}
-            onPreview={setPreviewEntry}
-            onHealthCheck={setHealthEntry}
-          />
+        <div className="library-main-col">
+          {/* Both panes stay mounted so Inventory filters + Clean scan survive a tab switch. */}
+          <div className="library-tabpane" style={{ display: tab === 'inventory' ? 'block' : 'none' }}>
+            <LibraryInventory
+              filter={filter}
+              onPrepareCleanScan={prepareCleanScan}
+              onPreview={setPreviewEntry}
+              onHealthCheck={setHealthEntry}
+            />
+          </div>
+          <div className="library-tabpane" style={{ display: tab === 'clean' ? 'block' : 'none' }}>
+            <LibraryClean filter={filter} scopeRequest={cleanScopeRequest} />
+          </div>
         </div>
-        <div className="library-tabpane" style={{ display: tab === 'clean' ? 'block' : 'none' }}>
-          <LibraryClean filter={filter} scopeRequest={cleanScopeRequest} />
-        </div>
+        {/* Inspector follows the Inventory selection; the Clean tab has its own scoped checkboxes. */}
+        {tab === 'inventory' && <LibraryInspector filter={filter} onPreview={setPreviewEntry} onHealthCheck={setHealthEntry} />}
       </div>
 
       {previewEntry && <LibrarySpinePreviewModal entry={previewEntry} onClose={() => setPreviewEntry(null)} />}

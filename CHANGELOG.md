@@ -1,5 +1,8 @@
 # Changelog
 
+## v0.4.32
+- **Bảng chi tiết bên phải (inspector) cho Inventory** — khi chọn asset, một panel bên phải hiện ra: chọn **1 asset** → ảnh xem trước + nút Preview + thông tin (version, dung lượng .spine/ảnh, số anim/skin) + các nút thao tác (Export nhanh, Tạo session, Kiểm tra export, Chuyển vào thùng rác); chọn **nhiều asset** → tổng quan (tổng dung lượng, tổng animation, thanh trạng thái clean/cần kiểm tra), danh sách asset đã chọn, và nút Export hàng loạt / Tạo project. (Xem trước động ngay trong panel sẽ thêm ở bản sau.)
+
 ## v0.4.31
 - **Chọn nhiều asset trong Inventory** — mỗi card/hàng giờ có ô tích để chọn; card được chọn có viền xanh nổi bật. Thanh phía trên danh sách có nút **Chọn** (chọn/bỏ tất cả kết quả đang lọc) và hiển thị số "kết quả" hoặc số "đã chọn", kèm nút **Bỏ chọn**. Mỗi **folder/nhóm** cũng có ô tích riêng để chọn nhanh cả nhóm (hiện dấu gạch khi mới chọn một phần). (Các thao tác hàng loạt trên vùng chọn sẽ thêm ở bản sau.)
 

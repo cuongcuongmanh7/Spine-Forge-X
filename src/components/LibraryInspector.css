@@ -1,0 +1,207 @@
+/* Right-hand inspector column for the Inventory tab (single- or multi-select details). */
+.library-inspector {
+  flex: 0 0 340px;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  border-left: 1px solid var(--border);
+  background: var(--surface);
+  overflow-y: auto;
+}
+
+.library-inspector-body {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 14px;
+}
+
+.library-inspector-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.library-inspector-head h3 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 650;
+  color: var(--text-strong);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Single-select: thumbnail + a Preview button below it. */
+.library-inspector-preview {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.library-inspector-preview .library-card-thumb {
+  height: 150px;
+}
+.library-inspector-preview .secondary-button {
+  align-self: center;
+}
+
+/* Single-select detail rows (definition list). */
+.library-inspector-meta {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.library-inspector-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 12px;
+}
+.library-inspector-row dt {
+  color: var(--text-muted);
+}
+.library-inspector-row dd {
+  margin: 0;
+  font-weight: 600;
+  color: var(--text-strong);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Multi-select aggregate stats. */
+.library-inspector-overview {
+  display: flex;
+  gap: 8px;
+}
+.library-inspector-stat {
+  flex: 1 1 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface-soft);
+}
+.library-inspector-stat-value {
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--text-strong);
+  font-variant-numeric: tabular-nums;
+}
+.library-inspector-stat-label {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+/* Status breakdown bar + legend. */
+.library-inspector-breakdown {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.library-inspector-bar {
+  display: flex;
+  height: 8px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: var(--surface-soft);
+}
+.library-inspector-bar .seg {
+  display: block;
+}
+.library-inspector-bar .seg.clean {
+  background: var(--success-fill);
+}
+.library-inspector-bar .seg.warn {
+  background: var(--warning-fill);
+}
+.library-inspector-bar .seg.unknown {
+  background: color-mix(in srgb, var(--text-muted), transparent 40%);
+}
+.library-inspector-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+.library-inspector-legend i {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin-right: 4px;
+  border-radius: 50%;
+  vertical-align: baseline;
+}
+.library-inspector-legend .dot.clean {
+  background: var(--success-fill);
+}
+.library-inspector-legend .dot.warn {
+  background: var(--warning-fill);
+}
+.library-inspector-legend .dot.unknown {
+  background: color-mix(in srgb, var(--text-muted), transparent 40%);
+}
+
+/* Multi-select: scrollable list of selected assets. */
+.library-inspector-section-label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+.library-inspector-list ul {
+  list-style: none;
+  margin: 6px 0 0;
+  padding: 0;
+  max-height: 220px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.library-inspector-list li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 4px;
+  border-radius: 6px;
+  font-size: 12px;
+}
+.library-inspector-list li:hover {
+  background: var(--sidebar-hover);
+}
+.library-inspector-list-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.icon-button.tiny {
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  flex: 0 0 auto;
+}
+
+/* Action buttons (single + multi). */
+.library-inspector-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.library-inspector-actions .secondary-button.danger {
+  color: var(--danger);
+  border-color: color-mix(in srgb, var(--danger), transparent 60%);
+}
+
+/* Narrow windows: let the inspector shrink a little rather than crush the list. */
+@media (max-width: 1100px) {
+  .library-inspector {
+    flex-basis: 300px;
+  }
+}
