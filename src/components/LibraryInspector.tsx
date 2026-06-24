@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { FolderPlus, Layers, Stethoscope, Trash2, X, Zap } from 'lucide-react';
+import { FolderPlus, Stethoscope, Trash2, X, Zap } from 'lucide-react';
 import { useApp } from '../useAppController';
 import { cleanStatusForEntry } from '../library';
 import { formatBytes } from '../time';
@@ -108,7 +108,7 @@ function SingleInspector({
 
 /** Multiple assets selected: aggregate overview + status breakdown + bulk actions. */
 function MultiInspector({ entries, filter }: { entries: LibraryEntry[]; filter: LibraryFilterApi }) {
-  const { t, libraryCleanState, quickExport, anyRunning, createProjectFromLibrary, activeLibrary, setViewMode, pushToast } = useApp();
+  const { t, libraryCleanState, quickExport, anyRunning } = useApp();
 
   const stats = useMemo(() => {
     let bytes = 0;
@@ -131,14 +131,6 @@ function MultiInspector({ entries, filter }: { entries: LibraryEntry[]; filter: 
 
   function exportSelected() {
     void quickExport(entries.map((e) => e.spineFile));
-  }
-
-  function createProject() {
-    if (!activeLibrary) return;
-    const items = [{ name: activeLibrary.name, spineFiles: entries.map((e) => e.spineFile), inputPath: activeLibrary.rootPath }];
-    createProjectFromLibrary(activeLibrary.name, items);
-    pushToast(t.libraryProjectCreated.replace('{name}', activeLibrary.name).replace('{count}', '1'), 'success');
-    setViewMode('workspace');
   }
 
   return (
@@ -196,9 +188,6 @@ function MultiInspector({ entries, filter }: { entries: LibraryEntry[]; filter: 
       <div className="library-inspector-actions">
         <button className="secondary-button small" onClick={exportSelected} disabled={anyRunning}>
           <Zap size={14} /> {t.libraryInspectorExportSelected}
-        </button>
-        <button className="primary-button" onClick={createProject} disabled={!activeLibrary}>
-          <Layers size={14} /> {t.libraryCreateProject}
         </button>
       </div>
     </div>
