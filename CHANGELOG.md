@@ -1,5 +1,8 @@
 # Changelog
 
+## v0.4.31
+- **Chọn nhiều asset trong Inventory** — mỗi card/hàng giờ có ô tích để chọn; card được chọn có viền xanh nổi bật. Thanh phía trên danh sách có nút **Chọn** (chọn/bỏ tất cả kết quả đang lọc) và hiển thị số "kết quả" hoặc số "đã chọn", kèm nút **Bỏ chọn**. (Các thao tác hàng loạt trên vùng chọn sẽ thêm ở bản sau.)
+
 ## v0.4.30
 - **Thẻ thống kê Inventory gọn theo dashboard** — hàng thẻ đầu Inventory giờ là 6 thẻ cố định: **Tổng asset · File .spine · Dung lượng ảnh · Chưa scan · Đã clean · Cần kiểm tra** (bỏ các thẻ tách theo version). Lọc theo version vẫn dùng được qua chip bộ lọc như cũ.
 

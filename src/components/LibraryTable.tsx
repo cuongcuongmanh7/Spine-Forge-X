@@ -69,7 +69,9 @@ export function LibraryTable(props: LibraryViewProps) {
     noteCount,
     onQuickExport,
     quickExportBusy,
-    onMoveToTrash
+    onMoveToTrash,
+    selected,
+    toggleSelected
   } = props;
 
   const tableRef = useRef<HTMLTableElement>(null);
@@ -92,6 +94,7 @@ export function LibraryTable(props: LibraryViewProps) {
   return (
     <table className="library-table" ref={tableRef}>
       <colgroup>
+        <col className="lib-col-check" />
         <col className="lib-col-entry" />
         <col className="lib-col-version" />
         <col className="lib-col-size" />
@@ -105,6 +108,7 @@ export function LibraryTable(props: LibraryViewProps) {
       </colgroup>
       <thead ref={theadRef}>
         <tr>
+          <th className="lib-col-check-head" aria-hidden="true" />
           <th aria-sort={ariaSort('entry')}>
             <span className="library-th-actions">
               <button
@@ -171,7 +175,7 @@ export function LibraryTable(props: LibraryViewProps) {
         return (
           <tbody key={section.key}>
             <tr className={`library-group-row${folderNotes > 0 ? ' library-has-notes' : ''}`}>
-              <td colSpan={10}>
+              <td colSpan={11}>
                 <div className="library-group-head-row">
                   <span className="library-group-head-left">
                     <button className="library-group-toggle" onClick={() => toggleCollapsed(section.key)} aria-expanded={!isCollapsed}>
@@ -223,9 +227,18 @@ export function LibraryTable(props: LibraryViewProps) {
                 const recent = Number.isFinite(modifiedMs) && Date.now() - modifiedMs < 7 * DAY_MS;
                 const entryKey = metaKeyForEntry(entry);
                 const entryNotes = noteCount(entryKey);
+                const isSel = selected.has(entry.spineFile);
                 return (
                   <Fragment key={entry.spineFile}>
-                    <tr className={entryNotes > 0 ? 'library-has-notes' : undefined}>
+                    <tr className={`${isSel ? 'library-row-selected' : ''}${entryNotes > 0 ? ' library-has-notes' : ''}`.trim() || undefined}>
+                      <td className="library-check-cell">
+                        <input
+                          type="checkbox"
+                          checked={isSel}
+                          onChange={() => toggleSelected(entry.spineFile)}
+                          aria-label={`${t.librarySelectAll} ${splitRelPath(entry.relPath).name}`}
+                        />
+                      </td>
                       <td className="library-path" title={entry.spineFile}>
                         <span className="library-path-line">
                           {cleanStatusIcon(cleanStatus(entry), t)}
@@ -321,7 +334,7 @@ export function LibraryTable(props: LibraryViewProps) {
                     </tr>
                     {animOpen && entry.exported && (
                       <tr className="library-anim-list">
-                        <td colSpan={10}>
+                        <td colSpan={11}>
                           {entry.skins.length > 0 && (
                             <div>
                               <strong><StatIcon kind="skin" size={13} /> {t.librarySkins}:</strong>{' '}

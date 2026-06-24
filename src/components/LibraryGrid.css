@@ -86,6 +86,45 @@
   opacity: 1;
 }
 
+/* Multi-select checkbox overlaid on the thumbnail's top-left (mirrors the preview button top-right).
+   Hidden until the card is hovered or selected, so it doesn't clutter a quick scan. */
+.library-card-check {
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--surface), transparent 8%);
+  box-shadow: 0 1px 4px var(--shadow);
+  -webkit-backdrop-filter: blur(4px);
+  backdrop-filter: blur(4px);
+  opacity: 0;
+  transition: opacity 0.12s var(--ease);
+  cursor: pointer;
+}
+.library-card:hover .library-card-check,
+.library-card.selected .library-card-check,
+.library-card-check:focus-within {
+  opacity: 1;
+}
+.library-card-check input {
+  width: 15px;
+  height: 15px;
+  margin: 0;
+  cursor: pointer;
+}
+
+/* Selected card — blue border + soft glow per the redesign spec. */
+.library-card.selected,
+.library-card.selected:hover {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 1px var(--primary), 0 4px 14px color-mix(in srgb, var(--primary), transparent 70%);
+}
+
 .library-card-thumb {
   display: flex;
   align-items: center;

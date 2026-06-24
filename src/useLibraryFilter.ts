@@ -1,3 +1,4 @@
+import { useCallback, useState } from 'react';
 import { usePersistentState, usePersistentSet } from './usePersistentState';
 
 /**
@@ -19,6 +20,34 @@ export function useLibraryFilter(libraryId: string | null) {
   const [selectedVersions, setSelectedVersions] = usePersistentSet(`${ns}.versions`);
   const [query, setQuery] = usePersistentState(`${ns}.query`, '');
   const [invert, setInvert] = usePersistentState(`${ns}.invert`, false);
+
+  // Multi-select of asset cards/rows, keyed by `spineFile` (the unique entry id used everywhere).
+  // Kept in component state (not persisted): it's a transient working set that should reset when the
+  // active library changes (the hook is remounted per library id) — unlike the filter chips, which persist.
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+
+  const toggleSelected = useCallback((spineFile: string) => {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(spineFile)) next.delete(spineFile);
+      else next.add(spineFile);
+      return next;
+    });
+  }, []);
+
+  // Add or remove a batch (used by "select all matched"): `on=false` deselects exactly those keys.
+  const setManySelected = useCallback((spineFiles: string[], on: boolean) => {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      for (const f of spineFiles) {
+        if (on) next.add(f);
+        else next.delete(f);
+      }
+      return next;
+    });
+  }, []);
+
+  const clearSelected = useCallback(() => setSelected(new Set()), []);
 
   function setFacet(next: 'folder' | 'id' | 'status') {
     setFacetState(next);
@@ -45,7 +74,11 @@ export function useLibraryFilter(libraryId: string | null) {
     query,
     setQuery,
     invert,
-    setInvert
+    setInvert,
+    selected,
+    toggleSelected,
+    setManySelected,
+    clearSelected
   };
 }
 

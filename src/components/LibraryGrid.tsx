@@ -57,7 +57,9 @@ export function LibraryGrid(props: LibraryViewProps) {
     noteCount,
     onQuickExport,
     quickExportBusy,
-    onMoveToTrash
+    onMoveToTrash,
+    selected,
+    toggleSelected
   } = props;
 
   return (
@@ -123,9 +125,18 @@ export function LibraryGrid(props: LibraryViewProps) {
                   const usedCount = u?.projectIds.length ?? 0;
                   const entryKey = metaKeyForEntry(entry);
                   const entryNotes = noteCount(entryKey);
+                  const isSel = selected.has(entry.spineFile);
                   return (
-                    <article className={`library-card${entryNotes > 0 ? ' library-has-notes' : ''}`} key={entry.spineFile}>
+                    <article className={`library-card${isSel ? ' selected' : ''}${entryNotes > 0 ? ' library-has-notes' : ''}`} key={entry.spineFile}>
                       <div className="library-card-thumb-wrap">
+                        <label className="library-card-check" title={t.librarySelectAll}>
+                          <input
+                            type="checkbox"
+                            checked={isSel}
+                            onChange={() => toggleSelected(entry.spineFile)}
+                            aria-label={`${t.librarySelectAll} ${name}`}
+                          />
+                        </label>
                         <LibraryCardThumb entry={entry} />
                         <LibraryPreviewButton entry={entry} onPreview={onPreview} t={t} />
                       </div>

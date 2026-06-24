@@ -80,7 +80,7 @@ export function LibraryDriveInfoPanel({ entry, info, t, onOpenRevision, onClose 
 export function LibraryDriveInfoRow(props: Props) {
   return (
     <tr className="library-anim-list library-drive-row">
-      <td colSpan={10}>
+      <td colSpan={11}>
         <LibraryDriveInfoPanel {...props} />
       </td>
     </tr>

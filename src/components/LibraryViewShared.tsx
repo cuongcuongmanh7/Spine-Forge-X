@@ -151,4 +151,8 @@ export interface LibraryViewProps {
   quickExportBusy: boolean;
   /** Move an entry to the library trash (hidden from inventory + scans until restored). */
   onMoveToTrash: (entry: LibraryEntry) => void;
+  /** Multi-select working set, keyed by `spineFile`. Drives the card/row checkbox + selected style. */
+  selected: Set<string>;
+  /** Toggle one entry's membership in the selection. */
+  toggleSelected: (spineFile: string) => void;
 }

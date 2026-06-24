@@ -88,7 +88,7 @@ export function LibraryInventory({
     trashedEntries
   } = useApp();
 
-  const { facet, selectedCats, selectedVersions, query, invert } = filter;
+  const { facet, selectedCats, selectedVersions, query, invert, selected, toggleSelected, setManySelected, clearSelected } = filter;
   const viewMode = appConfig.libraryViewMode;
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [expandedAnims, setExpandedAnims] = useState<Set<string>>(new Set());
@@ -431,7 +431,9 @@ export function LibraryInventory({
     onHealthCheck,
     onQuickExport: (spineFiles) => void quickExport(spineFiles),
     quickExportBusy: anyRunning,
-    onMoveToTrash: (e: LibraryEntry) => addToTrash(e)
+    onMoveToTrash: (e: LibraryEntry) => addToTrash(e),
+    selected,
+    toggleSelected
   };
 
   // Essential facet (folder / id / status) toggle — shared by the Filters body and its collapsed preview.
@@ -721,6 +723,38 @@ export function LibraryInventory({
           </button>
         </div>
       </div>
+
+      {sections.length > 0 && (() => {
+        const matchedKeys = filtered.map((e) => e.spineFile);
+        const matchedCount = matchedKeys.length;
+        const selectedCount = selected.size;
+        const allMatchedSelected = matchedCount > 0 && matchedKeys.every((k) => selected.has(k));
+        const someMatchedSelected = !allMatchedSelected && matchedKeys.some((k) => selected.has(k));
+        return (
+          <div className="library-select-bar">
+            <label className="library-select-all">
+              <input
+                type="checkbox"
+                checked={allMatchedSelected}
+                ref={(el) => { if (el) el.indeterminate = someMatchedSelected; }}
+                onChange={() => setManySelected(matchedKeys, !allMatchedSelected)}
+                aria-label={t.librarySelectAll}
+              />
+              <span>{t.librarySelectAll}</span>
+            </label>
+            <span className="muted library-select-count">
+              {selectedCount > 0
+                ? t.librarySelectedCount.replace('{count}', String(selectedCount))
+                : t.libraryMatchedCount.replace('{count}', String(matchedCount))}
+            </span>
+            {selectedCount > 0 && (
+              <button type="button" className="link-button" onClick={clearSelected}>
+                {t.libraryClearSelection}
+              </button>
+            )}
+          </div>
+        );
+      })()}
 
       <div className="library-pane-scroll">
         {sections.length === 0 ? (

@@ -230,6 +230,34 @@
   margin: 0;
 }
 
+/* Selection toolbar between the controls header and the scrolling list: select-all + matched/selected count. */
+.library-select-bar {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 7px max(18px, calc((100% - var(--lib-content-max)) / 2));
+  border-bottom: 1px solid var(--border);
+  background: color-mix(in srgb, var(--surface-soft), transparent 30%);
+}
+.library-select-all {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.library-select-all input {
+  width: 15px;
+  height: 15px;
+  margin: 0;
+  cursor: pointer;
+}
+.library-select-count {
+  font-size: 12px;
+}
+
 .library-th-toggle {
   display: inline-flex;
   align-items: center;
@@ -553,6 +581,13 @@
 }
 .library-table col.lib-col-check {
   width: 36px;
+}
+.library-table td.library-check-cell {
+  text-align: center;
+  vertical-align: middle;
+}
+.library-table tr.library-row-selected > td {
+  background: color-mix(in srgb, var(--primary), transparent 90%);
 }
 .library-table th.num,
 .library-table td.num {
