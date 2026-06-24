@@ -109,8 +109,7 @@
 .library-card-check input {
   appearance: none;
   -webkit-appearance: none;
-  display: grid;
-  place-items: center;
+  position: relative;
   width: 22px;
   height: 22px;
   /* Override the global input{ width:100%; min-height:36px } so the box stays a 22px square. */
@@ -131,15 +130,18 @@
   border-color: var(--primary);
   background: var(--primary);
 }
-/* Checkmark drawn as a rotated bottom/right border on a pseudo-element. */
+/* Checkmark drawn as a rotated bottom/right border, centered with absolute positioning.
+   top:46% (just above center) optically centers the tick, whose visual weight sits lower-right. */
 .library-card-check input:checked::after {
   content: '';
+  position: absolute;
+  top: 46%;
+  left: 50%;
   width: 5px;
   height: 9px;
-  margin-top: -2px;
   border: solid var(--primary-text);
   border-width: 0 2px 2px 0;
-  transform: rotate(45deg);
+  transform: translate(-50%, -50%) rotate(45deg);
 }
 
 /* Selected card — blue border + soft glow per the redesign spec. */
