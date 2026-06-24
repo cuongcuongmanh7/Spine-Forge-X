@@ -200,11 +200,16 @@
   font-size: 12px;
 }
 
-/* Action buttons (single + multi). */
+/* Action buttons (single + multi): two equal columns per row; a lone button fills the row. */
 .library-inspector-actions {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
+}
+.library-inspector-actions > button {
+  flex: 1 1 calc(50% - 4px);
+  min-width: calc(50% - 4px);
+  justify-content: center;
 }
 .library-inspector-actions .secondary-button.danger {
   color: var(--danger);
