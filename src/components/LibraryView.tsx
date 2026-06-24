@@ -32,18 +32,8 @@ export function LibraryView() {
     isLeader
   } = useApp();
 
-  const [tab, setTab] = useState<Tab>('inventory');
-  const [cleanScopeRequest, setCleanScopeRequest] = useState<CleanScopeRequest | null>(null);
-  const [previewEntry, setPreviewEntry] = useState<LibraryEntry | null>(null);
-  const [healthEntry, setHealthEntry] = useState<LibraryEntry | null>(null);
   const { width, setWidth, startResize } = useSidebarWidth();
-  const filter = useLibraryFilter();
   const entries = libraryScan?.entries ?? [];
-
-  function prepareCleanScan(spineFiles: string[]) {
-    setCleanScopeRequest({ id: Date.now(), spineFiles });
-    setTab('clean');
-  }
 
   return (
     <div className="library-view">
@@ -140,38 +130,60 @@ export function LibraryView() {
             <LibraryScanningOverlay title={t.libraryScanning} subtitle={activeLibrary?.rootPath} />
           </div>
         ) : (
-          <>
-            <div className="library-tabbar">
-              <div className="library-tabs">
-                <button className={`library-tab ${tab === 'inventory' ? 'active' : ''}`} onClick={() => setTab('inventory')}>
-                  {t.libraryTabInventory}
-                </button>
-                <button className={`library-tab ${tab === 'clean' ? 'active' : ''}`} onClick={() => setTab('clean')}>
-                  {t.libraryTabClean}
-                </button>
-              </div>
-            </div>
-
-            <div className="library-panel">
-              {/* Both panes stay mounted so Inventory filters + Clean scan survive a tab switch. */}
-              <div className="library-tabpane" style={{ display: tab === 'inventory' ? 'block' : 'none' }}>
-                <LibraryInventory
-                  filter={filter}
-                  onPrepareCleanScan={prepareCleanScan}
-                  onPreview={setPreviewEntry}
-                  onHealthCheck={setHealthEntry}
-                />
-              </div>
-              <div className="library-tabpane" style={{ display: tab === 'clean' ? 'block' : 'none' }}>
-                <LibraryClean filter={filter} scopeRequest={cleanScopeRequest} />
-              </div>
-            </div>
-          </>
+          // Keyed by library id: remounting reloads the per-library filter namespace (useLibraryFilter
+          // only reads localStorage on mount), so each library keeps its own filter setup.
+          <LibraryContent key={activeLibrary.id} libraryId={activeLibrary.id} />
         )}
+      </div>
+    </div>
+  );
+}
+
+/** Tabbed inventory/clean content for one library. Mounted fresh per library id so its filter
+ *  selection (and the open tab / modals) reset cleanly when the user switches libraries. */
+function LibraryContent({ libraryId }: { libraryId: string }) {
+  const { t } = useApp();
+  const [tab, setTab] = useState<Tab>('inventory');
+  const [cleanScopeRequest, setCleanScopeRequest] = useState<CleanScopeRequest | null>(null);
+  const [previewEntry, setPreviewEntry] = useState<LibraryEntry | null>(null);
+  const [healthEntry, setHealthEntry] = useState<LibraryEntry | null>(null);
+  const filter = useLibraryFilter(libraryId);
+
+  function prepareCleanScan(spineFiles: string[]) {
+    setCleanScopeRequest({ id: Date.now(), spineFiles });
+    setTab('clean');
+  }
+
+  return (
+    <>
+      <div className="library-tabbar">
+        <div className="library-tabs">
+          <button className={`library-tab ${tab === 'inventory' ? 'active' : ''}`} onClick={() => setTab('inventory')}>
+            {t.libraryTabInventory}
+          </button>
+          <button className={`library-tab ${tab === 'clean' ? 'active' : ''}`} onClick={() => setTab('clean')}>
+            {t.libraryTabClean}
+          </button>
+        </div>
+      </div>
+
+      <div className="library-panel">
+        {/* Both panes stay mounted so Inventory filters + Clean scan survive a tab switch. */}
+        <div className="library-tabpane" style={{ display: tab === 'inventory' ? 'block' : 'none' }}>
+          <LibraryInventory
+            filter={filter}
+            onPrepareCleanScan={prepareCleanScan}
+            onPreview={setPreviewEntry}
+            onHealthCheck={setHealthEntry}
+          />
+        </div>
+        <div className="library-tabpane" style={{ display: tab === 'clean' ? 'block' : 'none' }}>
+          <LibraryClean filter={filter} scopeRequest={cleanScopeRequest} />
+        </div>
       </div>
 
       {previewEntry && <LibrarySpinePreviewModal entry={previewEntry} onClose={() => setPreviewEntry(null)} />}
       {healthEntry && <LibraryHealthCheckModal entry={healthEntry} onClose={() => setHealthEntry(null)} />}
-    </div>
+    </>
   );
 }

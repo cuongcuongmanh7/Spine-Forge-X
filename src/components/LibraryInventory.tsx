@@ -1,8 +1,10 @@
 import { useCallback, useMemo, useState } from 'react';
 import { usePersistentState, usePersistentSet } from '../usePersistentState';
 import { invoke } from '@tauri-apps/api/core';
-import { AlertTriangle, CheckCircle2, CloudDownload, Layers, MessageSquare, RotateCw, Search, Tag, Users } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, CloudDownload, Layers, MessageSquare, RotateCw, Search, SearchX, Tag, Trash2, Users, X } from 'lucide-react';
 import { SpineFileIcon } from './SpineFileIcon';
+import { MenuPopover } from './MenuPopover';
+import { LibraryTrashModal } from './LibraryTrashModal';
 import { useApp } from '../useAppController';
 import { Section as CollapsibleSection } from './common';
 import { LibraryStatCards } from './LibraryStatCards';
@@ -81,10 +83,13 @@ export function LibraryInventory({
     selectSession,
     addDriveChanges,
     quickExport,
-    anyRunning
+    anyRunning,
+    addToTrash,
+    restoreFromTrash,
+    trashedEntries
   } = useApp();
 
-  const { facet, selectedCats, selectedVersions, query } = filter;
+  const { facet, selectedCats, selectedVersions, query, invert } = filter;
   const viewMode = appConfig.libraryViewMode;
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [expandedAnims, setExpandedAnims] = useState<Set<string>>(new Set());
@@ -107,6 +112,9 @@ export function LibraryInventory({
   // Notes/comments: which target's notes modal is open, and whether resolved notes are shown.
   const [notesTarget, setNotesTarget] = useState<{ key: string; label: string } | null>(null);
   const [showResolved, setShowResolved] = usePersistentState('libraryInventory.showResolved', false);
+  // Collapsed-filter chip preview: anchor for the overflow ("… +k") popover, and the trash modal.
+  const [chipsOverflowAnchor, setChipsOverflowAnchor] = useState<HTMLElement | null>(null);
+  const [trashOpen, setTrashOpen] = useState(false);
   // Count of active chip filters — surfaced as a badge on the collapsible Filters section header.
   const activeFilterCount =
     selectedCats.size + selectedVersions.size + selectedUsers.size + selectedTags.size +
@@ -203,7 +211,7 @@ export function LibraryInventory({
   }, [entries, effectiveOwner]);
 
   const filtered = useMemo(() => {
-    let base = entries.filter((e) => entryMatchesFilter(e, { facet, selectedCats, selectedVersions, query, statusOf }));
+    let base = entries.filter((e) => entryMatchesFilter(e, { facet, selectedCats, selectedVersions, query, invert, statusOf }));
     // Skipped under the Status facet — the category chips above already filter by status there.
     if (facet !== 'status' && selectedStatuses.size > 0) base = base.filter((e) => selectedStatuses.has(statusOf(e)));
     if (unusedOnly) base = base.filter((e) => (usage.get(e.spineFile)?.projectIds.length ?? 0) === 0);
@@ -211,7 +219,7 @@ export function LibraryInventory({
     if (selectedTags.size > 0) base = base.filter((e) => entryMatchesTags(metaFor(e), selectedTags));
     if (selectedUsers.size > 0) base = base.filter((e) => selectedUsers.has(effectiveOwner(e)));
     return base;
-  }, [entries, facet, selectedCats, selectedVersions, query, statusOf, selectedStatuses, unusedOnly, usage, divergingOnly, divergingSet, selectedTags, metaFor, selectedUsers, effectiveOwner]);
+  }, [entries, facet, selectedCats, selectedVersions, query, invert, statusOf, selectedStatuses, unusedOnly, usage, divergingOnly, divergingSet, selectedTags, metaFor, selectedUsers, effectiveOwner]);
 
   const parsedQuery = useMemo(() => parseQuery(query), [query]);
 
@@ -424,7 +432,8 @@ export function LibraryInventory({
     onPreview,
     onHealthCheck,
     onQuickExport: (spineFiles) => void quickExport(spineFiles),
-    quickExportBusy: anyRunning
+    quickExportBusy: anyRunning,
+    onMoveToTrash: (e: LibraryEntry) => addToTrash(e)
   };
 
   // Essential facet (folder / id / status) toggle — shared by the Filters body and its collapsed preview.
@@ -469,10 +478,56 @@ export function LibraryInventory({
     </div>
   );
 
-  // Essential controls surfaced when the Filters card is collapsed: facet group + view toggle.
+  // Flat list of every active filter as a removable chip — drives the collapsed-card preview and its
+  // overflow popover. Each chip's `remove` toggles exactly the selection it represents back off.
+  const activeChips: { id: string; label: string; remove: () => void }[] = [
+    ...[...selectedCats].map((key) => ({
+      id: `cat:${key}`,
+      label: facet === 'status' ? statusLabel(key) : key,
+      remove: () => filter.toggleCat(key)
+    })),
+    ...[...selectedVersions].map((key) => ({
+      id: `ver:${key}`,
+      label: key || t.libraryUnknownVersion,
+      remove: () => filter.toggleVersion(key)
+    })),
+    ...(facet !== 'status'
+      ? [...selectedStatuses].map((key) => ({ id: `st:${key}`, label: statusLabel(key), remove: () => toggleSet(setSelectedStatuses, key) }))
+      : []),
+    ...[...selectedUsers].map((name) => ({ id: `usr:${name}`, label: name, remove: () => toggleSet(setSelectedUsers, name) })),
+    ...[...selectedTags].map((tag) => ({ id: `tag:${tag}`, label: tag, remove: () => toggleSet(setSelectedTags, tag) })),
+    ...(unusedOnly ? [{ id: 'unused', label: t.libraryUnusedOnly, remove: () => setUnusedOnly(false) }] : []),
+    ...(divergingOnly ? [{ id: 'diverging', label: t.libraryVersionOnlyDiverging, remove: () => setDivergingOnly(false) }] : []),
+    ...(showResolved ? [{ id: 'resolved', label: t.notesShowResolved, remove: () => setShowResolved(false) }] : []),
+    ...(query.trim() ? [{ id: 'query', label: `${invert ? '≠ ' : ''}"${query.trim()}"`, remove: () => filter.setQuery('') }] : [])
+  ];
+  const CHIP_PREVIEW_MAX = 4;
+  const previewChips = activeChips.slice(0, CHIP_PREVIEW_MAX);
+  const overflowChips = activeChips.slice(CHIP_PREVIEW_MAX);
+
+  // Essential controls surfaced when the Filters card is collapsed: facet group + active-filter chips
+  // (overflow folded into a popover) + view toggle.
   const filtersPreview = (
     <>
       {facetControl}
+      {activeChips.length > 0 && (
+        <span className="library-preview-chips">
+          {previewChips.map((c) => (
+            <button key={c.id} type="button" className="library-preview-chip" onClick={(e) => { e.stopPropagation(); c.remove(); }} title={c.label}>
+              {c.label} <span className="library-preview-chip-x">×</span>
+            </button>
+          ))}
+          {overflowChips.length > 0 && (
+            <button
+              type="button"
+              className="library-preview-chip more"
+              onClick={(e) => { e.stopPropagation(); setChipsOverflowAnchor(chipsOverflowAnchor ? null : (e.currentTarget as HTMLElement)); }}
+            >
+              … +{overflowChips.length}
+            </button>
+          )}
+        </span>
+      )}
       {viewToggle}
     </>
   );
@@ -592,6 +647,11 @@ export function LibraryInventory({
             <button className={`library-chip ${showResolved ? 'active' : ''}`} onClick={() => setShowResolved((v) => !v)} aria-pressed={showResolved}>
               <MessageSquare size={12} /> {t.notesShowResolved}
             </button>
+            {trashedEntries.length > 0 && (
+              <button className="library-chip" onClick={() => setTrashOpen(true)} title={t.libraryTrashTitle}>
+                <Trash2 size={12} /> {t.libraryTrashFilter} <em>{trashedEntries.length}</em>
+              </button>
+            )}
           </div>
         </div>
 
@@ -637,6 +697,16 @@ export function LibraryInventory({
               placeholder={t.librarySearchPlaceholder}
               onChange={(e) => filter.setQuery(e.target.value)}
             />
+            <button
+              type="button"
+              className={`library-search-invert ${invert ? 'active' : ''}`}
+              onClick={() => filter.setInvert((v) => !v)}
+              aria-pressed={invert}
+              title={t.libraryInvertSearch}
+              aria-label={t.libraryInvertSearch}
+            >
+              <SearchX size={15} />
+            </button>
           </div>
           <span className="muted library-lastscan">
             <span>
@@ -685,6 +755,31 @@ export function LibraryInventory({
           onDelete={(id) => notes.deleteNote(notesTarget.key, id)}
           canDelete={notes.canDelete}
           onClose={() => setNotesTarget(null)}
+        />
+      )}
+
+      {/* Overflow chips from the collapsed Filters preview — each removable from here. */}
+      {chipsOverflowAnchor && (
+        <MenuPopover
+          anchor={chipsOverflowAnchor}
+          onClose={() => setChipsOverflowAnchor(null)}
+          className="session-menu library-row-menu library-row-menu--portal library-chip-overflow"
+        >
+          {overflowChips.map((c) => (
+            <button key={c.id} type="button" onClick={() => c.remove()}>
+              <X size={13} /> {c.label}
+            </button>
+          ))}
+        </MenuPopover>
+      )}
+
+      {trashOpen && (
+        <LibraryTrashModal
+          t={t}
+          entries={trashedEntries}
+          onRestore={(relPath) => restoreFromTrash(relPath)}
+          onRestoreAll={() => trashedEntries.forEach((e) => restoreFromTrash(e.relPath))}
+          onClose={() => setTrashOpen(false)}
         />
       )}
     </div>

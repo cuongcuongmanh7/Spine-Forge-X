@@ -26,6 +26,7 @@ const KEYS = {
   activeLibraryId: 'spineforge.activeLibraryId',
   libraryScanPrefix: 'spineforge.libraryScan.',
   libraryCleanPrefix: 'spineforge.libraryClean.',
+  libraryTrashPrefix: 'spineforge.libraryTrash.',
   viewMode: 'spineforge.viewMode'
 } as const;
 
@@ -528,7 +529,25 @@ export function persistLibraryCleanState(id: string, state: LibraryCleanState) {
   localStorage.setItem(KEYS.libraryCleanPrefix + id, JSON.stringify(state));
 }
 
+/** Per-library trash: relPaths the user excluded from the inventory. Hidden from the inventory + clean
+ *  scans and skipped on rescan, until restored. Synced across the team (see sync.ts). */
+export function loadLibraryTrash(id: string): string[] {
+  const stored = localStorage.getItem(KEYS.libraryTrashPrefix + id);
+  if (!stored) return [];
+  try {
+    const parsed = JSON.parse(stored) as unknown;
+    return Array.isArray(parsed) ? (parsed.filter((p) => typeof p === 'string') as string[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+export function persistLibraryTrash(id: string, relPaths: string[]) {
+  localStorage.setItem(KEYS.libraryTrashPrefix + id, JSON.stringify(relPaths));
+}
+
 export function clearLibraryScan(id: string) {
   localStorage.removeItem(KEYS.libraryScanPrefix + id);
   localStorage.removeItem(KEYS.libraryCleanPrefix + id);
+  localStorage.removeItem(KEYS.libraryTrashPrefix + id);
 }

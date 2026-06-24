@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { confirm, open } from '@tauri-apps/plugin-dialog';
 import type { ExportAssets, Library, LibraryCleanState, LibraryEntry, LibraryScan } from './config';
@@ -13,11 +13,13 @@ import {
   loadLibraries,
   loadLibraryCleanState,
   loadLibraryScan,
+  loadLibraryTrash,
   makeId,
   persistActiveLibraryId,
   persistLibraryCleanState,
   persistLibraries,
-  persistLibraryScan
+  persistLibraryScan,
+  persistLibraryTrash
 } from './sessions';
 
 type Options = {
@@ -46,6 +48,12 @@ export function useLibrary({ t, pushToast }: Options) {
     return id ? loadLibraryCleanState(id) : {};
   });
   const [isScanning, setIsScanning] = useState(false);
+  // Per-library "trash": relPaths the user excluded. Hidden from inventory/clean + skipped on rescan,
+  // until restored. Synced across the team (see sync.ts / useSync).
+  const [trash, setTrash] = useState<Set<string>>(() => {
+    const id = loadActiveLibraryId();
+    return new Set(id ? loadLibraryTrash(id) : []);
+  });
 
   const activeLibrary = libraries.find((l) => l.id === activeLibraryId) ?? null;
 
@@ -61,6 +69,7 @@ export function useLibrary({ t, pushToast }: Options) {
   useEffect(() => {
     setScan(activeLibraryId ? loadLibraryScan(activeLibraryId) : null);
     setCleanState(activeLibraryId ? loadLibraryCleanState(activeLibraryId) : {});
+    setTrash(new Set(activeLibraryId ? loadLibraryTrash(activeLibraryId) : []));
   }, [activeLibraryId]);
 
   // Auto-scan a library that has no cached inventory on THIS machine yet. The library *list* syncs
@@ -143,7 +152,14 @@ export function useLibrary({ t, pushToast }: Options) {
       persistLibraryScan(library.id, result);
       setScan(result);
       setLibraries((list) => list.map((l) => (l.id === library.id ? { ...l, lastScanAt: Date.now() } : l)));
-      if (!silent) pushToast(t.libraryScanDone.replace('{count}', String(result.entries.length)), 'success');
+      if (!silent) {
+        pushToast(t.libraryScanDone.replace('{count}', String(result.entries.length)), 'success');
+        // Light notice: how many freshly-scanned entries are auto-hidden by the trash list. Read trash
+        // straight from storage so the count is right even when `library` isn't the active one yet.
+        const trashed = new Set(loadLibraryTrash(library.id));
+        const hidden = result.entries.filter((e) => trashed.has(e.relPath)).length;
+        if (hidden > 0) pushToast(t.libraryTrashHidden.replace('{n}', String(hidden)), 'info');
+      }
       return result;
     } catch (error) {
       pushToast(`${t.libraryScanFailed}: ${String(error)}`, 'error');
@@ -216,6 +232,45 @@ export function useLibrary({ t, pushToast }: Options) {
     setActiveLibraryId(id);
   }
 
+  // Exclude an entry from the inventory (move to trash). Identity is `relPath` so it survives rescans.
+  function addToTrash(entry: LibraryEntry) {
+    if (!activeLibraryId) return;
+    setTrash((prev) => {
+      if (prev.has(entry.relPath)) return prev;
+      const next = new Set(prev);
+      next.add(entry.relPath);
+      persistLibraryTrash(activeLibraryId, [...next]);
+      return next;
+    });
+  }
+
+  function restoreFromTrash(relPath: string) {
+    if (!activeLibraryId) return;
+    setTrash((prev) => {
+      if (!prev.has(relPath)) return prev;
+      const next = new Set(prev);
+      next.delete(relPath);
+      persistLibraryTrash(activeLibraryId, [...next]);
+      return next;
+    });
+  }
+
+  // Re-read the active library's trash from localStorage (after sync adopts a teammate's newer list).
+  function reloadTrash() {
+    setTrash(new Set(activeLibraryId ? loadLibraryTrash(activeLibraryId) : []));
+  }
+
+  // Inventory/clean see the scan with trashed entries removed; the full list stays in `scan` for the
+  // restore view and internal bookkeeping.
+  const visibleScan = useMemo<LibraryScan | null>(() => {
+    if (!scan || trash.size === 0) return scan;
+    return { ...scan, entries: scan.entries.filter((e) => !trash.has(e.relPath)) };
+  }, [scan, trash]);
+  const trashedEntries = useMemo(
+    () => (scan ? scan.entries.filter((e) => trash.has(e.relPath)) : []),
+    [scan, trash]
+  );
+
   // Re-read the active library's clean-state from localStorage into memory. Used after sync adopts a
   // teammate's newer clean-state (written to localStorage by `applyLibraryCleanProfile`) so the
   // inventory stats recompute without a window reload. Mirrors the active-library load effect above.
@@ -246,7 +301,7 @@ export function useLibrary({ t, pushToast }: Options) {
     libraries,
     activeLibrary,
     activeLibraryId,
-    libraryScan: scan,
+    libraryScan: visibleScan,
     libraryCleanState: cleanState,
     isScanningLibrary: isScanning,
     importLibrary,
@@ -255,6 +310,11 @@ export function useLibrary({ t, pushToast }: Options) {
     markLibraryEntriesScanned,
     selectLibrary,
     deleteLibrary,
-    reloadCleanState
+    reloadCleanState,
+    libraryTrash: trash,
+    trashedEntries,
+    addToTrash,
+    restoreFromTrash,
+    reloadTrash
   };
 }

@@ -68,7 +68,7 @@ const session: Session = {
   updatedAt: 2
 };
 const library: Library = { id: 'l1', name: 'Lib', rootPath: 'G:\\GDrive\\Spine', createdAt: 1, lastScanAt: null };
-const data: SyncData = { appConfig: { ...defaultAppConfig }, projects: [project], sessions: [session], libraries: [library], libraryCleanState: {} };
+const data: SyncData = { appConfig: { ...defaultAppConfig }, projects: [project], sessions: [session], libraries: [library], libraryCleanState: {}, libraryTrash: new Set() };
 
 describe('workspace Firestore IO', () => {
   beforeEach(() => {

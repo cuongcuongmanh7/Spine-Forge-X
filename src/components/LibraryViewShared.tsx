@@ -149,4 +149,6 @@ export interface LibraryViewProps {
   onQuickExport: (spineFiles: string[]) => void;
   /** Disable Quick export while another run is in progress. */
   quickExportBusy: boolean;
+  /** Move an entry to the library trash (hidden from inventory + scans until restored). */
+  onMoveToTrash: (entry: LibraryEntry) => void;
 }

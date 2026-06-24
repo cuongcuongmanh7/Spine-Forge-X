@@ -86,15 +86,15 @@ export function LibraryClean({ filter, scopeRequest }: { filter: LibraryFilterAp
   const cancelledRef = useRef(false);
   const root = activeLibrary?.rootPath ?? '';
 
-  const { facet, selectedCats, selectedVersions, query } = filter;
+  const { facet, selectedCats, selectedVersions, query, invert } = filter;
   const entries = libraryScan?.entries ?? [];
   // Clean-scan status as a group key — facet 'status' is shared with the Inventory tab, so honour it.
   const statusOf = (e: LibraryEntry): string => cleanStatusForEntry(e, libraryCleanState[e.spineFile]);
   const statusLabel = (key: string): string =>
     key === 'clean' ? t.libraryStatClean : key === 'warning' ? t.libraryStatNeedsReview : t.libraryStatNotScanned;
   const included = useMemo(
-    () => entries.filter((e) => entryMatchesFilter(e, { facet, selectedCats, selectedVersions, query, statusOf })),
-    [entries, facet, selectedCats, selectedVersions, query, libraryCleanState]
+    () => entries.filter((e) => entryMatchesFilter(e, { facet, selectedCats, selectedVersions, query, invert, statusOf })),
+    [entries, facet, selectedCats, selectedVersions, query, invert, libraryCleanState]
   );
   const includedKeys = useMemo(() => included.map((e) => e.spineFile).join('\n'), [included]);
   const scanGroups = useMemo(

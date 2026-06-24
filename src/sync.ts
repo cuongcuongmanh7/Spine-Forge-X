@@ -23,9 +23,11 @@ import {
 } from './config';
 import {
   loadLibraryCleanState,
+  loadLibraryTrash,
   persistAppConfig,
   persistLibraries,
   persistLibraryCleanState,
+  persistLibraryTrash,
   persistProjects,
   persistSessions
 } from './sessions';
@@ -40,7 +42,8 @@ const SYNC_KEYS = {
   enabled: 'spineforge.sync.enabled',
   workspaceSyncedAt: 'spineforge.sync.workspaceSyncedAt',
   librarySyncedAt: 'spineforge.sync.librarySyncedAt',
-  cleanSyncedAt: 'spineforge.sync.cleanSyncedAt'
+  cleanSyncedAt: 'spineforge.sync.cleanSyncedAt',
+  trashSyncedAt: 'spineforge.sync.trashSyncedAt'
 } as const;
 
 export type SyncSettings = {
@@ -50,6 +53,8 @@ export type SyncSettings = {
   librarySyncedAt: number | null;
   /** updatedAt of the shared library clean-state doc we last read or wrote; drives newer-wins. */
   cleanSyncedAt: number | null;
+  /** updatedAt of the shared library trash doc we last read or wrote; drives newer-wins. */
+  trashSyncedAt: number | null;
 };
 
 /** Live app data the profiles are built from (passed in by the controller). */
@@ -61,6 +66,9 @@ export type SyncData = {
   /** Active library's clean-state. Carried only so a clean scan triggers a debounced push; the
    *  pushed snapshot is read fresh from localStorage (all libraries) in buildLibraryCleanProfile. */
   libraryCleanState: LibraryCleanState;
+  /** Active library's trash (excluded relPaths). Carried only so editing it triggers a debounced
+   *  push; the pushed snapshot is read fresh from localStorage in buildLibraryTrashProfile. */
+  libraryTrash: Set<string>;
 };
 
 /** Per-user workspace profile. `appConfig` omits the machine-local `spinePath`. */
@@ -92,6 +100,18 @@ export type LibraryCleanProfile = {
   states: Record<string, LibraryCleanRecord[]>;
 };
 
+/**
+ * Shared library trash (team-wide): the relPaths each library excludes from its inventory, grouped
+ * by library id. relPaths are already root-relative (portable), so unlike clean-state they need no
+ * `${SPINE_ROOT}` tokenizing. Every known library id is included (value possibly `[]`) so emptying a
+ * library's trash on one machine propagates as a clear on the others.
+ */
+export type LibraryTrashProfile = {
+  schema: number;
+  updatedAt: number;
+  trash: Record<string, string[]>;
+};
+
 // ---- machine-local settings -------------------------------------------------
 
 export function loadSyncSettings(): SyncSettings {
@@ -106,7 +126,8 @@ export function loadSyncSettings(): SyncSettings {
     enabled: enabledRaw === null ? true : enabledRaw === 'true',
     workspaceSyncedAt: num(SYNC_KEYS.workspaceSyncedAt),
     librarySyncedAt: num(SYNC_KEYS.librarySyncedAt),
-    cleanSyncedAt: num(SYNC_KEYS.cleanSyncedAt)
+    cleanSyncedAt: num(SYNC_KEYS.cleanSyncedAt),
+    trashSyncedAt: num(SYNC_KEYS.trashSyncedAt)
   };
 }
 
@@ -120,6 +141,7 @@ export function persistSyncSettings(patch: Partial<SyncSettings>): void {
   stamp(SYNC_KEYS.workspaceSyncedAt, patch.workspaceSyncedAt);
   stamp(SYNC_KEYS.librarySyncedAt, patch.librarySyncedAt);
   stamp(SYNC_KEYS.cleanSyncedAt, patch.cleanSyncedAt);
+  stamp(SYNC_KEYS.trashSyncedAt, patch.trashSyncedAt);
 }
 
 // ---- path helpers -----------------------------------------------------------
@@ -270,6 +292,26 @@ export function applyLibraryCleanProfile(profile: LibraryCleanProfile, anchor: s
   }
 }
 
+/**
+ * Snapshot every library's trash from localStorage. Reads localStorage directly (the caller passes
+ * the live `libraries` so we only snapshot known ids). Includes empty arrays so a restore-all on one
+ * machine clears the others; relPaths are sorted for a stable `sameLibraryTrashBody`.
+ */
+export function buildLibraryTrashProfile(libraries: Library[], updatedAt: number): LibraryTrashProfile {
+  const trash: Record<string, string[]> = {};
+  for (const lib of libraries) {
+    trash[lib.id] = [...loadLibraryTrash(lib.id)].sort((a, b) => a.localeCompare(b));
+  }
+  return { schema: SCHEMA, updatedAt, trash };
+}
+
+/** Write the shared trash into localStorage (per library). */
+export function applyLibraryTrashProfile(profile: LibraryTrashProfile): void {
+  for (const [libId, relPaths] of Object.entries(profile.trash)) {
+    persistLibraryTrash(libId, relPaths);
+  }
+}
+
 /** Stable comparison ignoring `updatedAt` — used to skip no-op writes. */
 export function sameWorkspaceBody(a: WorkspaceProfile, b: WorkspaceProfile): boolean {
   const body = (p: WorkspaceProfile) => JSON.stringify({ appConfig: p.appConfig, projects: p.projects, sessions: p.sessions });
@@ -280,6 +322,9 @@ export function sameLibraryBody(a: LibraryProfile, b: LibraryProfile): boolean {
 }
 export function sameLibraryCleanBody(a: LibraryCleanProfile, b: LibraryCleanProfile): boolean {
   return JSON.stringify(a.states) === JSON.stringify(b.states);
+}
+export function sameLibraryTrashBody(a: LibraryTrashProfile, b: LibraryTrashProfile): boolean {
+  return JSON.stringify(a.trash) === JSON.stringify(b.trash);
 }
 
 // ---- Firestore IO: read / write profile documents --------------------------
@@ -380,6 +425,39 @@ export function subscribeLibraryCleanProfile(cb: (profile: LibraryCleanProfile |
 export async function writeLibraryCleanProfile(profile: LibraryCleanProfile): Promise<number> {
   const ref = envDoc('library', 'clean');
   await setDoc(ref, { schema: profile.schema, states: profile.states, updatedAt: serverTimestamp() });
+  const snap = await getDoc(ref);
+  return tsToMillis(snap.get('updatedAt')) ?? profile.updatedAt;
+}
+
+/** Validate a trash doc snapshot into a profile (shared by the one-shot read + live sub). */
+function parseTrashSnap(snap: { exists: () => boolean; data: () => Record<string, unknown> | undefined; get: (k: string) => unknown }): LibraryTrashProfile | null {
+  if (!snap.exists()) return null;
+  const d = snap.data();
+  if (!d) return null;
+  const updatedAt = tsToMillis(d.updatedAt);
+  if (updatedAt === null || typeof d.trash !== 'object' || d.trash === null) return null;
+  return { schema: typeof d.schema === 'number' ? d.schema : SCHEMA, updatedAt, trash: d.trash as LibraryTrashProfile['trash'] };
+}
+
+/** Reads the shared library trash doc (`envs/{env}/library/trash`). */
+export async function readLibraryTrashProfile(): Promise<LibraryTrashProfile | null> {
+  return parseTrashSnap(await getDoc(envDoc('library', 'trash')));
+}
+
+/** Live subscription to the shared trash doc; emits the parsed profile (or `null`). Mirrors
+ *  `subscribeLibraryCleanProfile`. Returns an unsubscribe fn; callable only after sign-in. */
+export function subscribeLibraryTrashProfile(cb: (profile: LibraryTrashProfile | null) => void): () => void {
+  return onSnapshot(
+    envDoc('library', 'trash'),
+    (snap) => cb(parseTrashSnap(snap)),
+    () => cb(null)
+  );
+}
+
+/** Writes the shared trash doc; returns the server-resolved `updatedAt` in millis. */
+export async function writeLibraryTrashProfile(profile: LibraryTrashProfile): Promise<number> {
+  const ref = envDoc('library', 'trash');
+  await setDoc(ref, { schema: profile.schema, trash: profile.trash, updatedAt: serverTimestamp() });
   const snap = await getDoc(ref);
   return tsToMillis(snap.get('updatedAt')) ?? profile.updatedAt;
 }

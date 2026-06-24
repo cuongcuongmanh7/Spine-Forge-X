@@ -1,66 +1,9 @@
-import { useLayoutEffect, useRef, useState, type ReactNode } from 'react';
-import { createPortal } from 'react-dom';
-import { FolderOpen, FolderPlus, History, ListChecks, MoreHorizontal, Stethoscope, Zap } from 'lucide-react';
+import { useRef } from 'react';
+import { FolderOpen, FolderPlus, History, ListChecks, MoreHorizontal, Stethoscope, Trash2, Zap } from 'lucide-react';
 import type { Translations } from '../i18n';
 import type { LibraryEntry } from '../config';
 import { SpineFileIcon } from './SpineFileIcon';
-
-/** Renders the dropdown in a body portal, fixed-positioned under (or above) its anchor. This
- *  escapes the scroll container's `overflow` clipping so the menu floats over the rest of the
- *  app — including the bottom bar — instead of being cut off on the last rows. */
-function MenuPopover({ anchor, onClose, children }: { anchor: HTMLElement | null; onClose: () => void; children: ReactNode }) {
-  const menuRef = useRef<HTMLDivElement>(null);
-  const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
-
-  useLayoutEffect(() => {
-    if (!anchor) return;
-    const place = () => {
-      const a = anchor.getBoundingClientRect();
-      const menu = menuRef.current;
-      const mw = menu?.offsetWidth ?? 168;
-      const mh = menu?.offsetHeight ?? 0;
-      const gap = 4;
-      const margin = 8;
-      // Default below the trigger; flip above if it would overflow the viewport bottom.
-      let top = a.bottom + gap;
-      if (mh && top + mh > window.innerHeight - margin) {
-        top = Math.max(margin, a.top - gap - mh);
-      }
-      // Right-align to the trigger, clamped to the viewport.
-      let left = a.right - mw;
-      left = Math.min(Math.max(margin, left), window.innerWidth - mw - margin);
-      setPos({ top, left });
-    };
-    place();
-    window.addEventListener('resize', place);
-    window.addEventListener('scroll', place, true);
-    return () => {
-      window.removeEventListener('resize', place);
-      window.removeEventListener('scroll', place, true);
-    };
-  }, [anchor]);
-
-  return createPortal(
-    <>
-      <div
-        className="menu-backdrop"
-        onClick={(e) => {
-          e.stopPropagation();
-          onClose();
-        }}
-      />
-      <div
-        ref={menuRef}
-        className="session-menu library-row-menu library-row-menu--portal"
-        style={pos ? { top: pos.top, left: pos.left } : { visibility: 'hidden' }}
-        onClick={(e) => e.stopPropagation()}
-      >
-        {children}
-      </div>
-    </>,
-    document.body
-  );
-}
+import { MenuPopover } from './MenuPopover';
 
 /** The per-row "⋯" action menu cell (Drive history / clean scan / open / create session). Split out
  *  of LibraryInventory to keep that component under the line-size guard. */
@@ -76,6 +19,7 @@ type Props = {
   onCreateSession: (entry: LibraryEntry) => void;
   onHealthCheck: (entry: LibraryEntry) => void;
   onQuickExport: (entry: LibraryEntry) => void;
+  onMoveToTrash: (entry: LibraryEntry) => void;
   quickExportBusy: boolean;
   t: Translations;
 };
@@ -93,6 +37,7 @@ export function LibraryRowMenuButton({
   onCreateSession,
   onHealthCheck,
   onQuickExport,
+  onMoveToTrash,
   quickExportBusy,
   t
 }: Props) {
@@ -137,6 +82,9 @@ export function LibraryRowMenuButton({
           </button>
           <button disabled={quickExportBusy} onClick={() => act(onQuickExport)}>
             <Zap size={14} /> {t.libraryQuickExport}
+          </button>
+          <button className="danger" onClick={() => act(onMoveToTrash)}>
+            <Trash2 size={14} /> {t.libraryMoveToTrash}
           </button>
         </MenuPopover>
       )}

@@ -27,8 +27,9 @@
   flex: 1 1 auto;
   min-width: 0;
   width: 100%;
-  /* Room for the icon tucked inside on the left. */
+  /* Room for the icon tucked inside on the left, and the invert toggle on the right. */
   padding-left: 32px;
+  padding-right: 34px;
   /* Stand out against the soft header band; brighter focus ring in the app primary. */
   background: var(--surface);
   border: 1px solid var(--border-strong);
@@ -37,6 +38,30 @@
 .library-search:focus {
   border-color: var(--primary);
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary), transparent 80%);
+}
+/* Invert toggle tucked at the right edge of the search field — when active, exclude matches. */
+.library-search-invert {
+  position: absolute;
+  right: 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: color 0.12s var(--ease), background 0.12s var(--ease), border-color 0.12s var(--ease);
+}
+.library-search-invert:hover {
+  color: var(--text);
+  background: color-mix(in srgb, var(--text), transparent 92%);
+}
+.library-search-invert.active {
+  color: var(--primary);
+  border-color: color-mix(in srgb, var(--primary), transparent 55%);
+  background: color-mix(in srgb, var(--primary), transparent 86%);
 }
 
 .library-chip-row {
@@ -101,4 +126,73 @@
   font-weight: 700;
   opacity: 0.7;
   font-size: 11px;
+}
+
+/* --- Collapsed-card active-filter chip preview ------------------------------------------------ */
+/* Compact, removable chips shown in the Filters card header while it is collapsed. */
+.library-preview-chips {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+}
+.library-preview-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 160px;
+  padding: 1px 7px;
+  border: 1px solid color-mix(in srgb, var(--primary), transparent 55%);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--primary), transparent 88%);
+  color: var(--text);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.7;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+}
+.library-preview-chip:hover {
+  border-color: var(--primary);
+}
+.library-preview-chip.more {
+  background: var(--surface);
+  border-color: var(--border-strong);
+  color: var(--text-muted);
+}
+.library-preview-chip-x {
+  opacity: 0.6;
+  font-weight: 700;
+}
+/* The overflow popover reuses the row-menu portal shell; just relax the min-width for short labels. */
+.library-chip-overflow {
+  min-width: 160px;
+  max-width: 280px;
+}
+
+/* --- Library trash modal ---------------------------------------------------------------------- */
+.library-trash-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.library-trash-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 8px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+}
+.library-trash-path {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
 }

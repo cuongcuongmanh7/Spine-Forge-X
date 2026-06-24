@@ -196,26 +196,31 @@ export type LibrarySelection = {
   selectedCats: Set<string>;
   selectedVersions: Set<string>;
   query: string;
+  /** When true, invert the search-term match (show entries that DON'T match the term). Only affects
+   *  the search term — chip filters above still narrow normally. A blank term ignores invert. */
+  invert?: boolean;
   /** Clean-scan status of an entry — required when `facet === 'status'` (cleanState lives in the host,
    *  not here). Returns the raw status key ('unknown' | 'warning' | 'clean'). */
   statusOf?: (entry: LibraryEntry) => string;
 };
 
 /** Which facet a search term is scoped to: path+anim+skin (default), or just one of them. */
-export type SearchScope = 'all' | 'anim' | 'skin';
+export type SearchScope = 'all' | 'anim' | 'skin' | 'path';
 
 export type ParsedQuery = { scope: SearchScope; term: string };
 
 /**
- * Parse the Library search box into a scope + term. A leading `anim:` / `animation:` or `skin:`
- * prefix narrows the search to that facet ("anim:attack" → only animation names); otherwise the
- * term matches path, animation, and skin names alike. Term is lower-cased for case-insensitive use.
+ * Parse the Library search box into a scope + term. A leading `anim:` / `animation:`, `skin:`, or
+ * `path:` prefix narrows the search to that facet ("anim:attack" → only animation names, "path:bk" →
+ * only the file path); otherwise the term matches path, animation, and skin names alike. Term is
+ * lower-cased for case-insensitive use.
  */
 export function parseQuery(raw: string): ParsedQuery {
   const trimmed = raw.trim();
-  const match = /^(anim|animation|skin)\s*:\s*(.*)$/i.exec(trimmed);
+  const match = /^(anim|animation|skin|path)\s*:\s*(.*)$/i.exec(trimmed);
   if (match) {
-    const scope: SearchScope = match[1].toLowerCase().startsWith('skin') ? 'skin' : 'anim';
+    const prefix = match[1].toLowerCase();
+    const scope: SearchScope = prefix.startsWith('skin') ? 'skin' : prefix === 'path' ? 'path' : 'anim';
     return { scope, term: match[2].trim().toLowerCase() };
   }
   return { scope: 'all', term: trimmed.toLowerCase() };
@@ -225,11 +230,13 @@ export function parseQuery(raw: string): ParsedQuery {
 export function entryMatchesQuery(entry: LibraryEntry, parsed: ParsedQuery): boolean {
   const { scope, term } = parsed;
   if (!term) return true;
+  const inPath = entry.relPath.toLowerCase().includes(term);
+  if (scope === 'path') return inPath;
   const inAnims = entry.animations.some((a) => a.toLowerCase().includes(term));
   const inSkins = entry.skins.some((s) => s.toLowerCase().includes(term));
   if (scope === 'anim') return inAnims;
   if (scope === 'skin') return inSkins;
-  return entry.relPath.toLowerCase().includes(term) || inAnims || inSkins;
+  return inPath || inAnims || inSkins;
 }
 
 /**
@@ -258,7 +265,11 @@ export function entryMatchesFilter(entry: LibraryEntry, sel: LibrarySelection): 
     sel.facet === 'status' ? (sel.statusOf?.(entry) ?? 'unknown') : sel.facet === 'id' ? idBand(entry) : topFolder(entry);
   if (sel.selectedCats.size > 0 && !sel.selectedCats.has(catKey)) return false;
   if (sel.selectedVersions.size > 0 && !sel.selectedVersions.has(entry.version ?? '')) return false;
-  return entryMatchesQuery(entry, parseQuery(sel.query));
+  const parsed = parseQuery(sel.query);
+  // A blank term matches everything regardless of invert (inverting "all" would hide everything).
+  if (!parsed.term) return true;
+  const matches = entryMatchesQuery(entry, parsed);
+  return sel.invert ? !matches : matches;
 }
 
 /** Short human summary of the active selection, e.g. "Hero, NPC · 3.8.99" or "" when none. */

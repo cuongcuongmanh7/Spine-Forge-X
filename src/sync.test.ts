@@ -99,7 +99,8 @@ describe('build / apply profiles', () => {
     projects: [project],
     sessions: [session],
     libraries: [library],
-    libraryCleanState: {}
+    libraryCleanState: {},
+    libraryTrash: new Set()
   };
 
   it('workspace profile tokenizes source paths, drops spinePath, omits libraries', () => {

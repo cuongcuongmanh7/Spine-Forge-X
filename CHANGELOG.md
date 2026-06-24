@@ -1,5 +1,12 @@
 # Changelog
 
+## v0.4.29
+- **Tìm kiếm "đảo" (invert)** — bật nút đảo cạnh ô tìm kiếm để chỉ hiện các mục **không** chứa từ khoá. Ví dụ gõ `idle` rồi bật đảo → ẩn hết mục có `idle`, hiện phần còn lại. Bỏ trống ô tìm thì nút đảo không ảnh hưởng gì. Chỉ áp cho từ khoá tìm — các chip lọc (nhóm/loại/version…) vẫn hoạt động như thường.
+- **Tìm theo đường dẫn (`path:`)** — thêm cú pháp `path:bk` để lọc **chỉ** theo đường dẫn file (bỏ qua tên anim/skin), nhất quán với `anim:` / `skin:`. (Gõ chữ thường không prefix vẫn tìm cả path + anim + skin như cũ.)
+- **Thùng rác cho Library** — mở menu ⋯ của file → **Chuyển vào thùng rác** để loại mục đó khỏi inventory; rescan vẫn ẩn (không hiện lại). Mỗi thư viện có thùng rác riêng và **đồng bộ cho cả nhóm**: thành viên khác cũng thấy mục đã ẩn. Khi quét/nhập lại thư viện mà có mục nằm trong thùng rác, app tự ẩn và báo nhẹ số lượng. Mở chip **Thùng rác (n)** để xem lại và **Khôi phục** từng mục hoặc tất cả.
+- **Bộ lọc thu gọn vẫn thấy chip đang chọn** — khi thu gọn thẻ Bộ lọc, các chip đang chọn hiện ngay trên tiêu đề (bấm × để bỏ); nếu nhiều quá thì nút `… +k` mở danh sách đầy đủ.
+- **Mỗi thư viện nhớ bộ lọc riêng** — đổi/nhập thư viện mới thì bộ lọc reset sạch, quay lại thư viện cũ thì khôi phục đúng bộ lọc đã đặt (thay vì dùng chung một bộ lọc cho mọi thư viện như trước).
+
 ## v0.4.28
 - **Thông báo (chuông) giờ dùng chung trên mọi máy** — trước đây mỗi máy giữ danh sách thông báo riêng (lưu cục bộ), nên cùng một tài khoản đăng nhập ở máy khác lại thấy danh sách khác và badge số khác nhau. Nay thông báo thay đổi trên Drive được đồng bộ chung cho cả nhóm: máy nào phát hiện cũng góp vào một danh sách, các máy đều thấy giống nhau. Trạng thái **đã đọc / đã xoá** đi theo tài khoản — đọc ở máy này thì máy kia cũng hết badge. Mỗi thay đổi chỉ hiện một lần dù nhiều máy cùng phát hiện. Chưa đăng nhập thì vẫn chạy cục bộ như cũ.
 

@@ -6,6 +6,17 @@ Source-of-truth tiến độ toàn dự án.
 
 ---
 
+## v0.4.29 — Inventory: invert search + `path:` scope + per-library filter + chip preview + Trash (sync) ✅ Done
+
+> Bump `0.4.28 → 0.4.29`; tag `v0.4.29`. (ROADMAP nhảy từ v0.4.22 — các bản 0.4.23–0.4.28 chỉ ghi ở CHANGELOG.)
+
+- [x] **Invert search** — `invert` (persistent) trong [useLibraryFilter.ts](../src/useLibraryFilter.ts); `entryMatchesFilter` đảo kết quả `entryMatchesQuery` khi `invert` và term không rỗng (term rỗng → match tất cả, không đảo). Nút toggle `SearchX` trong ô search, truyền `invert` vào cả Inventory & Clean. [library.ts](../src/library.ts), [LibraryInventory.tsx](../src/components/LibraryInventory.tsx), [LibraryClean.tsx](../src/components/LibraryClean.tsx).
+- [x] **Scope `path:`** — `SearchScope` thêm `'path'`; `parseQuery` regex `(anim|animation|skin|path)`; `entryMatchesQuery` trả riêng `relPath.includes`. `matchedNames` không tô chip cho path. [library.ts](../src/library.ts).
+- [x] **Filter theo từng library** — `useLibraryFilter(libraryId)` namespace key `libraryFilter.<id>.*`; `LibraryView` tách `LibraryContent` render `key={activeLibraryId}` để remount → reload đúng namespace (vì `usePersistentState` chỉ đọc localStorage lúc mount). [LibraryView.tsx](../src/components/LibraryView.tsx).
+- [x] **Chip preview + overflow popup** — tách `MenuPopover` ra [MenuPopover.tsx](../src/components/MenuPopover.tsx) (dùng chung với row-menu); `filtersPreview` hiện ≤4 chip removable + nút `… +k` mở popover liệt kê hết. [LibraryInventory.tsx](../src/components/LibraryInventory.tsx), [LibraryFilters.css](../src/components/LibraryFilters.css).
+- [x] **Trash per-library + sync team** — định danh `relPath`; persist `spineforge.libraryTrash.<id>` ([sessions.ts](../src/sessions.ts)); `useLibrary` lọc trashed khỏi `libraryScan`, `addToTrash`/`restoreFromTrash`/`reloadTrash` + toast "đã ẩn n" sau scan thủ công ([useLibrary.ts](../src/useLibrary.ts)). Row-menu "Chuyển vào thùng rác" + modal khôi phục ([LibraryTrashModal.tsx](../src/components/LibraryTrashModal.tsx)). Sync: `LibraryTrashProfile` doc `library/trash` (relPath portable, không cần anchor) mirror clean-state — build/apply/same/read/write/subscribe trong [sync.ts](../src/sync.ts); push/reconcile/realtime + `onRemoteTrashApplied` trong [useSync.ts](../src/useSync.ts) → `reloadTrash` ([useAppController.tsx](../src/useAppController.tsx)). Rule `library/{doc}` đã bao doc mới.
+- [x] Verify: `tsc` + `npm test` (120) + `npm run build` (file-size guard, tách `MenuPopover`/`LibraryTrashModal`) xanh.
+
 ## v0.4.22 — Inventory: nhớ filter/search qua tab + filter "Status" độc lập + dọn icon bảng ✅ Done
 
 > Bump `0.4.21 → 0.4.22`; tag `v0.4.22`. (ROADMAP nhảy từ v0.4.16 — các bản 0.4.17–0.4.21 chỉ ghi ở CHANGELOG.)

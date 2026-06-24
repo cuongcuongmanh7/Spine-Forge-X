@@ -1,16 +1,24 @@
 import { usePersistentState, usePersistentSet } from './usePersistentState';
 
 /**
- * Shared Library filter selection (facet + category/version chips + search), lifted above the
- * Inventory and Clean tabs so the Clean scan can be scoped to exactly what the user has filtered.
+ * Shared Library filter selection (facet + category/version chips + search + invert), lifted above
+ * the Inventory and Clean tabs so the Clean scan can be scoped to exactly what the user has filtered.
  * State is persisted to localStorage so it survives the Library view unmounting on a tab switch
  * (inventory → workspace → inventory).
+ *
+ * Keys are namespaced per library (`libraryFilter.<id>.*`) so each imported folder remembers its own
+ * filter setup: switching to a fresh library starts clean ("auto reset"), switching back restores the
+ * previous selection. The hook is meant to be remounted (via a React `key`) when the active library
+ * changes — `usePersistentState` only reads localStorage on mount, so a stable mount per library id
+ * is what reloads the right namespace.
  */
-export function useLibraryFilter() {
-  const [facet, setFacetState] = usePersistentState<'folder' | 'id' | 'status'>('libraryFilter.facet', 'folder');
-  const [selectedCats, setSelectedCats] = usePersistentSet('libraryFilter.cats');
-  const [selectedVersions, setSelectedVersions] = usePersistentSet('libraryFilter.versions');
-  const [query, setQuery] = usePersistentState('libraryFilter.query', '');
+export function useLibraryFilter(libraryId: string | null) {
+  const ns = `libraryFilter.${libraryId ?? 'none'}`;
+  const [facet, setFacetState] = usePersistentState<'folder' | 'id' | 'status'>(`${ns}.facet`, 'folder');
+  const [selectedCats, setSelectedCats] = usePersistentSet(`${ns}.cats`);
+  const [selectedVersions, setSelectedVersions] = usePersistentSet(`${ns}.versions`);
+  const [query, setQuery] = usePersistentState(`${ns}.query`, '');
+  const [invert, setInvert] = usePersistentState(`${ns}.invert`, false);
 
   function setFacet(next: 'folder' | 'id' | 'status') {
     setFacetState(next);
@@ -35,7 +43,9 @@ export function useLibraryFilter() {
     selectedVersions,
     toggleVersion: (key: string) => toggle(setSelectedVersions, key),
     query,
-    setQuery
+    setQuery,
+    invert,
+    setInvert
   };
 }
 

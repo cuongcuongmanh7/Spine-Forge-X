@@ -68,7 +68,8 @@ export function LibraryTable(props: LibraryViewProps) {
     openNotes,
     noteCount,
     onQuickExport,
-    quickExportBusy
+    quickExportBusy,
+    onMoveToTrash
   } = props;
 
   const tableRef = useRef<HTMLTableElement>(null);
@@ -313,6 +314,7 @@ export function LibraryTable(props: LibraryViewProps) {
                         onCreateSession={createSessionForEntry}
                         onHealthCheck={onHealthCheck}
                         onQuickExport={(e) => onQuickExport([e.spineFile])}
+                        onMoveToTrash={onMoveToTrash}
                         quickExportBusy={quickExportBusy}
                         t={t}
                       />

@@ -4,22 +4,28 @@ import type { ToastKind } from './types';
 import {
   applyLibraryCleanProfile,
   applyLibraryProfile,
+  applyLibraryTrashProfile,
   applyWorkspaceProfile,
   buildLibraryCleanProfile,
   buildLibraryProfile,
+  buildLibraryTrashProfile,
   buildWorkspaceProfile,
   deriveAnchor,
   loadSyncSettings,
   persistSyncSettings,
   readLibraryCleanProfile,
   readLibraryProfile,
+  readLibraryTrashProfile,
   readWorkspaceProfile,
   sameLibraryBody,
   sameLibraryCleanBody,
+  sameLibraryTrashBody,
   sameWorkspaceBody,
   subscribeLibraryCleanProfile,
+  subscribeLibraryTrashProfile,
   writeLibraryCleanProfile,
   writeLibraryProfile,
+  writeLibraryTrashProfile,
   writeWorkspaceProfile,
   type SyncData
 } from './sync';
@@ -42,6 +48,9 @@ type Args = {
   /** Fired after a realtime clean-state update is adopted into localStorage — the controller uses it
    *  to refresh the in-memory inventory stats (and silently rescan to realign scan-entry metadata). */
   onRemoteCleanApplied?: () => void;
+  /** Fired after a realtime trash update is adopted into localStorage — the controller reloads the
+   *  in-memory trash so the inventory hides/shows the affected entries without a reload. */
+  onRemoteTrashApplied?: () => void;
 };
 
 /**
@@ -51,7 +60,7 @@ type Args = {
  * remote reloads the window so module-scope `loadPersistedState` re-runs with it. The app-data root
  * is still needed to derive the `${SPINE_ROOT}` rebase anchor for source paths.
  */
-export function useSync({ data, t, pushToast, appDataDir, userUid, isLeader, onRemoteCleanApplied }: Args) {
+export function useSync({ data, t, pushToast, appDataDir, userUid, isLeader, onRemoteCleanApplied, onRemoteTrashApplied }: Args) {
   const initial = loadSyncSettings();
   const [enabled, setEnabled] = useState(initial.enabled);
   const [status, setStatus] = useState<SyncStatus>('idle');
@@ -59,6 +68,7 @@ export function useSync({ data, t, pushToast, appDataDir, userUid, isLeader, onR
   const [workspaceSyncedAt, setWorkspaceSyncedAt] = useState<number | null>(initial.workspaceSyncedAt);
   const [librarySyncedAt, setLibrarySyncedAt] = useState<number | null>(initial.librarySyncedAt);
   const [cleanSyncedAt, setCleanSyncedAt] = useState<number | null>(initial.cleanSyncedAt);
+  const [trashSyncedAt, setTrashSyncedAt] = useState<number | null>(initial.trashSyncedAt);
 
   // Workspace sync needs both the shared drive (for the rebase anchor) AND a signed-in Firebase
   // identity; the library list only needs the drive.
@@ -68,8 +78,8 @@ export function useSync({ data, t, pushToast, appDataDir, userUid, isLeader, onR
   // Async callbacks read live values through refs so they never close over stale state.
   const dataRef = useRef(data);
   dataRef.current = data;
-  const settingsRef = useRef({ enabled, appDataDir, userUid, isLeader, workspaceSyncedAt, librarySyncedAt, cleanSyncedAt });
-  settingsRef.current = { enabled, appDataDir, userUid, isLeader, workspaceSyncedAt, librarySyncedAt, cleanSyncedAt };
+  const settingsRef = useRef({ enabled, appDataDir, userUid, isLeader, workspaceSyncedAt, librarySyncedAt, cleanSyncedAt, trashSyncedAt });
+  settingsRef.current = { enabled, appDataDir, userUid, isLeader, workspaceSyncedAt, librarySyncedAt, cleanSyncedAt, trashSyncedAt };
   // t/pushToast are recreated each render; read through refs so the callbacks keep a STABLE identity
   // (otherwise the debounce effect re-subscribes every render and cancels the pending timer).
   const tRef = useRef(t);
@@ -78,10 +88,13 @@ export function useSync({ data, t, pushToast, appDataDir, userUid, isLeader, onR
   pushToastRef.current = pushToast;
   const onRemoteCleanAppliedRef = useRef(onRemoteCleanApplied);
   onRemoteCleanAppliedRef.current = onRemoteCleanApplied;
+  const onRemoteTrashAppliedRef = useRef(onRemoteTrashApplied);
+  onRemoteTrashAppliedRef.current = onRemoteTrashApplied;
   // Bodies we last read/wrote — let the debounced writer skip no-op pushes.
   const lastWsBodyRef = useRef<string | null>(null);
   const lastLibBodyRef = useRef<string | null>(null);
   const lastCleanBodyRef = useRef<string | null>(null);
+  const lastTrashBodyRef = useRef<string | null>(null);
   const debounceRef = useRef<number | null>(null);
   // Gate pushes until the first reconcile establishes a baseline (else a fresh machine clobbers remote).
   const reconcilingRef = useRef(false);
@@ -112,6 +125,13 @@ export function useSync({ data, t, pushToast, appDataDir, userUid, isLeader, onR
     setCleanSyncedAt(at);
     settingsRef.current = { ...settingsRef.current, cleanSyncedAt: at };
     if (body !== null) lastCleanBodyRef.current = body;
+  }, []);
+
+  const markTrash = useCallback((at: number, body: string | null) => {
+    persistSyncSettings({ trashSyncedAt: at });
+    setTrashSyncedAt(at);
+    settingsRef.current = { ...settingsRef.current, trashSyncedAt: at };
+    if (body !== null) lastTrashBodyRef.current = body;
   }, []);
 
   // Push local edits up (no reload). Writes only the scope(s) whose body changed.
@@ -151,6 +171,16 @@ export function useSync({ data, t, pushToast, appDataDir, userUid, isLeader, onR
           const at = await writeLibraryCleanProfile(clean);
           markClean(at, cleanBody);
         }
+        // Trash rides the same leader gate. Unlike clean, an empty body is a legitimate state to push
+        // (a restore-all should propagate as a clear), so there's no non-empty guard here — the body
+        // compare + reconcile baseline already prevent spurious writes.
+        const trash = buildLibraryTrashProfile(dataRef.current.libraries, Date.now());
+        const trashBody = JSON.stringify(trash.trash);
+        if (trashBody !== lastTrashBodyRef.current) {
+          setStatus('syncing');
+          const at = await writeLibraryTrashProfile(trash);
+          markTrash(at, trashBody);
+        }
       }
       setStatus('synced');
     } catch (e) {
@@ -158,7 +188,7 @@ export function useSync({ data, t, pushToast, appDataDir, userUid, isLeader, onR
       setStatus('error');
       pushToastRef.current(tRef.current.syncErrorWrite, 'error');
     }
-  }, [markWorkspace, markLibrary, markClean]);
+  }, [markWorkspace, markLibrary, markClean, markTrash]);
 
   // Startup / manual reconcile: newer of (local, remote) wins, per scope.
   const reconcile = useCallback(async () => {
@@ -169,7 +199,8 @@ export function useSync({ data, t, pushToast, appDataDir, userUid, isLeader, onR
       isLeader: leader,
       workspaceSyncedAt: wsAt,
       librarySyncedAt: libAt,
-      cleanSyncedAt: cleanAt
+      cleanSyncedAt: cleanAt,
+      trashSyncedAt: trashAt
     } = settingsRef.current;
     // Firestore needs the shared drive (for the rebase anchor) AND a Firebase session (rules gate
     // every read/write). Signed out → nothing to reconcile; the badge shows "needs sign-in".
@@ -269,6 +300,46 @@ export function useSync({ data, t, pushToast, appDataDir, userUid, isLeader, onR
         }
       }
 
+      // --- library trash (shared, leader-curated) — same gating as the list. relPaths are portable,
+      //     so adopting a remote needs no reload: the controller reloads the in-memory trash instead. ---
+      const remoteTrash = await readLibraryTrashProfile();
+      const localTrash = buildLibraryTrashProfile(dataRef.current.libraries, Date.now());
+      const localTrashBody = JSON.stringify(localTrash.trash);
+      const trashHasAny = Object.values(localTrash.trash).some((arr) => arr.length > 0);
+      let trashAdopted = false;
+      if (leader) {
+        if (!remoteTrash) {
+          // Don't seed an empty doc — wait until there's at least one excluded entry to share.
+          if (trashHasAny) {
+            const at = await writeLibraryTrashProfile(localTrash);
+            markTrash(at, localTrashBody);
+          }
+        } else if (sameLibraryTrashBody(remoteTrash, localTrash)) {
+          markTrash(remoteTrash.updatedAt, localTrashBody);
+        } else if (remoteTrash.updatedAt > (trashAt ?? 0)) {
+          persistSyncSettings({ trashSyncedAt: remoteTrash.updatedAt });
+          applyLibraryTrashProfile(remoteTrash);
+          markTrash(remoteTrash.updatedAt, JSON.stringify(remoteTrash.trash));
+          trashAdopted = true;
+        } else {
+          // Local diverges and remote isn't newer → push local (empty included, so a restore-all
+          // propagates as a clear).
+          const at = await writeLibraryTrashProfile(localTrash);
+          markTrash(at, localTrashBody);
+        }
+      } else if (remoteTrash) {
+        // Member: pull-only.
+        if (sameLibraryTrashBody(remoteTrash, localTrash)) {
+          markTrash(remoteTrash.updatedAt, localTrashBody);
+        } else if (remoteTrash.updatedAt > (trashAt ?? 0)) {
+          persistSyncSettings({ trashSyncedAt: remoteTrash.updatedAt });
+          applyLibraryTrashProfile(remoteTrash);
+          markTrash(remoteTrash.updatedAt, JSON.stringify(remoteTrash.trash));
+          trashAdopted = true;
+        }
+      }
+      if (trashAdopted) onRemoteTrashAppliedRef.current?.();
+
       syncedOnceRef.current = true;
       setError(null);
       if (needReload) {
@@ -288,7 +359,7 @@ export function useSync({ data, t, pushToast, appDataDir, userUid, isLeader, onR
     } finally {
       reconcilingRef.current = false;
     }
-  }, [markWorkspace, markLibrary, markClean]);
+  }, [markWorkspace, markLibrary, markClean, markTrash]);
 
   // Reconcile when sync becomes usable, and again whenever the identity (drive/email) changes.
   useEffect(() => {
@@ -301,6 +372,7 @@ export function useSync({ data, t, pushToast, appDataDir, userUid, isLeader, onR
     lastWsBodyRef.current = null;
     lastLibBodyRef.current = null;
     lastCleanBodyRef.current = null;
+    lastTrashBodyRef.current = null;
     void reconcile();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [connected, appDataDir, userUid]);
@@ -332,6 +404,28 @@ export function useSync({ data, t, pushToast, appDataDir, userUid, isLeader, onR
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [connected, appDataDir, userUid]);
 
+  // Realtime: adopt a teammate's newer trash into an already-open window (no reload). Mirrors the
+  // clean-state subscription; relPaths are portable so no anchor rebasing is needed.
+  useEffect(() => {
+    const { appDataDir: dir, userUid: uid } = settingsRef.current;
+    if (!connected || !dir || !uid) return;
+    const unsub = subscribeLibraryTrashProfile((remote) => {
+      if (!remote) return;
+      // Strictly-newer only: equal `updatedAt` is this machine's own write echoing back.
+      if (remote.updatedAt <= (settingsRef.current.trashSyncedAt ?? 0)) return;
+      const local = buildLibraryTrashProfile(dataRef.current.libraries, Date.now());
+      if (sameLibraryTrashBody(remote, local)) {
+        markTrash(remote.updatedAt, JSON.stringify(local.trash));
+        return;
+      }
+      applyLibraryTrashProfile(remote);
+      markTrash(remote.updatedAt, JSON.stringify(remote.trash));
+      onRemoteTrashAppliedRef.current?.();
+    });
+    return unsub;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [connected, appDataDir, userUid]);
+
   // Debounce-write whenever the synced data changes (skip the initial mount render).
   const skipWriteRef = useRef(true);
   useEffect(() => {
@@ -346,7 +440,7 @@ export function useSync({ data, t, pushToast, appDataDir, userUid, isLeader, onR
     return () => {
       if (debounceRef.current) window.clearTimeout(debounceRef.current);
     };
-  }, [data.appConfig, data.projects, data.sessions, data.libraries, data.libraryCleanState, workspaceReady, pushLocal]);
+  }, [data.appConfig, data.projects, data.sessions, data.libraries, data.libraryCleanState, data.libraryTrash, workspaceReady, pushLocal]);
 
   const setSyncEnabled = useCallback((value: boolean) => {
     setEnabled(value);

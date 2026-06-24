@@ -193,7 +193,8 @@ export function useAppControllerValue() {
     markLibraryEntriesScanned,
     selectLibrary,
     deleteLibrary,
-    reloadCleanState
+    reloadCleanState,
+    libraryTrash, trashedEntries, addToTrash, restoreFromTrash, reloadTrash
   } = useLibrary({ t, pushToast });
 
   // App-data sync (Tier B): Google Drive account — identifies the user AND powers owner/history
@@ -225,8 +226,8 @@ export function useAppControllerValue() {
   // App-data sync (Tier A v2): per-user workspace + shared library list in Firestore, keyed by the
   // signed-in Firebase uid, with `${SPINE_ROOT}` path rebasing (anchor derived from appDataDir).
   const syncData = useMemo<SyncData>(
-    () => ({ appConfig, projects, sessions, libraries, libraryCleanState }),
-    [appConfig, projects, sessions, libraries, libraryCleanState]
+    () => ({ appConfig, projects, sessions, libraries, libraryCleanState, libraryTrash }),
+    [appConfig, projects, sessions, libraries, libraryCleanState, libraryTrash]
   );
   const {
     syncEnabled,
@@ -249,7 +250,9 @@ export function useAppControllerValue() {
     onRemoteCleanApplied: () => {
       reloadCleanState();
       void rescanLibrary(true);
-    }
+    },
+    // A teammate's newer trash landed: reload in-memory trash so the inventory hides/shows entries.
+    onRemoteTrashApplied: () => reloadTrash()
   });
 
   const merged = useMemo<MergedConfig>(() => ({ ...appConfig, ...sessionConfig }), [appConfig, sessionConfig]);
@@ -669,6 +672,7 @@ export function useAppControllerValue() {
     markLibraryEntriesScanned,
     selectLibrary,
     deleteLibrary,
+    libraryTrash, trashedEntries, addToTrash, restoreFromTrash,
 
     isDragOver,
     dragPosition,
