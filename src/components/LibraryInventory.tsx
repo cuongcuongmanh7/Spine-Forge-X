@@ -564,7 +564,7 @@ export function LibraryInventory({
             )}
             {viewMode === 'grid' && (
               <span className="library-sort-control">
-                <span className="library-chip-label">{t.librarySortBy}</span>
+                <span className="library-sort-label">{t.librarySortBy}:</span>
                 <select value={sort.key} onChange={(e) => setSort((s) => ({ ...s, key: e.target.value as SortKey }))}>
                   {SORT_KEYS.map((k) => (
                     <option key={k} value={k}>
@@ -573,7 +573,7 @@ export function LibraryInventory({
                   ))}
                 </select>
                 <button
-                  className="icon-button"
+                  className="library-sort-dir"
                   onClick={() => setSort((s) => ({ ...s, direction: s.direction === 'asc' ? 'desc' : 'asc' }))}
                   title={sort.direction === 'asc' ? t.libraryCollapseAll : t.libraryExpandAll}
                   aria-label="sort direction"

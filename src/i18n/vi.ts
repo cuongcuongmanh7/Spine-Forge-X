@@ -121,7 +121,7 @@ export const vi = {
   libraryVersionOnlyDiverging: 'Lệch version',
   libraryViewTable: 'Bảng',
   libraryViewGrid: 'Lưới',
-  librarySortBy: 'Sắp xếp',
+  librarySortBy: 'Sắp xếp theo',
   librarySearchPlaceholder: 'Tìm theo file/anim/skin — hoặc anim:attack, skin:red, path:bk…',
   libraryInvertSearch: 'Đảo kết quả tìm (chỉ hiện mục KHÔNG khớp từ khoá)',
   libraryColAnims: 'Anim',

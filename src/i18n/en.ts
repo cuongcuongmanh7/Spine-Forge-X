@@ -123,7 +123,7 @@ export const en: Translations = {
   libraryVersionOnlyDiverging: 'Version outliers',
   libraryViewTable: 'Table',
   libraryViewGrid: 'Grid',
-  librarySortBy: 'Sort',
+  librarySortBy: 'Sort by',
   librarySearchPlaceholder: 'Search file/anim/skin — or anim:attack, skin:red, path:bk…',
   libraryInvertSearch: 'Invert search (show only items that DON\'T match)',
   libraryColAnims: 'Anim',
