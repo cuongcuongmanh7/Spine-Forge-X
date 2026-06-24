@@ -20,6 +20,7 @@ import { SpineFileIcon } from './SpineFileIcon';
 import { StatIcon } from './StatIcon';
 import {
   DAY_MS,
+  GroupSelectCheckbox,
   NotesIndicator,
   cleanStatusIcon,
   sectionCleanStatus,
@@ -71,7 +72,8 @@ export function LibraryTable(props: LibraryViewProps) {
     quickExportBusy,
     onMoveToTrash,
     selected,
-    toggleSelected
+    toggleSelected,
+    setManySelected
   } = props;
 
   const tableRef = useRef<HTMLTableElement>(null);
@@ -178,6 +180,7 @@ export function LibraryTable(props: LibraryViewProps) {
               <td colSpan={11}>
                 <div className="library-group-head-row">
                   <span className="library-group-head-left">
+                    <GroupSelectCheckbox entries={section.entries} selected={selected} setManySelected={setManySelected} t={t} />
                     <button className="library-group-toggle" onClick={() => toggleCollapsed(section.key)} aria-expanded={!isCollapsed}>
                       {isCollapsed ? <ChevronRight size={15} /> : <ChevronDown size={15} />}
                       {secStatus && cleanStatusIcon(secStatus, t)}

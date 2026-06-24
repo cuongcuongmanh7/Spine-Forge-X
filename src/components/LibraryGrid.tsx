@@ -11,6 +11,7 @@ import { SpineFileIcon } from './SpineFileIcon';
 import { StatIcon } from './StatIcon';
 import {
   DAY_MS,
+  GroupSelectCheckbox,
   NotesIndicator,
   cleanStatusIcon,
   sectionCleanStatus,
@@ -59,7 +60,8 @@ export function LibraryGrid(props: LibraryViewProps) {
     quickExportBusy,
     onMoveToTrash,
     selected,
-    toggleSelected
+    toggleSelected,
+    setManySelected
   } = props;
 
   return (
@@ -73,6 +75,7 @@ export function LibraryGrid(props: LibraryViewProps) {
           <section className="library-grid-group" key={section.key}>
             <div className={`library-group-head-row${folderNotes > 0 ? ' library-has-notes' : ''}`}>
               <span className="library-group-head-left">
+                <GroupSelectCheckbox entries={section.entries} selected={selected} setManySelected={setManySelected} t={t} />
                 <button className="library-group-toggle" onClick={() => toggleCollapsed(section.key)} aria-expanded={!isCollapsed}>
                   {isCollapsed ? <ChevronRight size={15} /> : <ChevronDown size={15} />}
                   {secStatus && cleanStatusIcon(secStatus, t)}

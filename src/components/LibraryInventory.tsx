@@ -433,7 +433,8 @@ export function LibraryInventory({
     quickExportBusy: anyRunning,
     onMoveToTrash: (e: LibraryEntry) => addToTrash(e),
     selected,
-    toggleSelected
+    toggleSelected,
+    setManySelected
   };
 
   // Essential facet (folder / id / status) toggle — shared by the Filters body and its collapsed preview.

@@ -94,6 +94,40 @@ export function NotesIndicator({
   );
 }
 
+/**
+ * Folder/group select-all checkbox for a section header (shared by table + grid). Checked when every
+ * entry in the group is selected, indeterminate when only some are; toggling adds/removes the whole
+ * group. `stopPropagation` keeps a click from also toggling the section's collapse.
+ */
+export function GroupSelectCheckbox({
+  entries,
+  selected,
+  setManySelected,
+  t
+}: {
+  entries: LibraryEntry[];
+  selected: Set<string>;
+  setManySelected: (spineFiles: string[], on: boolean) => void;
+  t: Translations;
+}): ReactNode {
+  const keys = entries.map((e) => e.spineFile);
+  const all = keys.length > 0 && keys.every((k) => selected.has(k));
+  const some = !all && keys.some((k) => selected.has(k));
+  return (
+    <label className="library-group-check" title={t.librarySelectAll} onClick={(e) => e.stopPropagation()}>
+      <input
+        type="checkbox"
+        checked={all}
+        ref={(el) => {
+          if (el) el.indeterminate = some;
+        }}
+        onChange={() => setManySelected(keys, !all)}
+        aria-label={t.librarySelectAll}
+      />
+    </label>
+  );
+}
+
 type TagsApi = ReturnType<typeof useLibraryTags>;
 type DriveApi = ReturnType<typeof useLibraryDrive>;
 
@@ -155,4 +189,6 @@ export interface LibraryViewProps {
   selected: Set<string>;
   /** Toggle one entry's membership in the selection. */
   toggleSelected: (spineFile: string) => void;
+  /** Add or remove a batch of entries from the selection (drives the folder/group select-all). */
+  setManySelected: (spineFiles: string[], on: boolean) => void;
 }
