@@ -34,7 +34,6 @@ import {
   parseQuery,
   usageByEntry,
   divergingFileSet,
-  versionSummary,
   versionTags,
   type LibraryThresholds
 } from '../library';
@@ -173,7 +172,6 @@ export function LibraryInventory({
     [t]
   );
 
-  const buckets = useMemo(() => versionSummary(entries), [entries]);
   const catChips = useMemo(
     () => (facet === 'status' ? groupByStatus(entries, statusOf) : facet === 'id' ? groupByIdBand(entries) : groupByFolder(entries)),
     [entries, facet, statusOf]
@@ -536,7 +534,7 @@ export function LibraryInventory({
     <div className="library-pane">
       <div className="library-pane-head">
         <CollapsibleSection title={t.libraryStatsTitle} storageKey={STATS_KEY} collapsedPreview={statsPreview}>
-          <LibraryStatCards t={t} totalEntries={entries.length} buckets={buckets} totalImageBytes={libraryScan?.totalImageBytes ?? 0} scanCounts={scanCounts} />
+          <LibraryStatCards t={t} totalEntries={entries.length} totalImageBytes={libraryScan?.totalImageBytes ?? 0} scanCounts={scanCounts} />
         </CollapsibleSection>
 
         <CollapsibleSection

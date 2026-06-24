@@ -1,5 +1,8 @@
 # Changelog
 
+## v0.4.30
+- **Thẻ thống kê Inventory gọn theo dashboard** — hàng thẻ đầu Inventory giờ là 6 thẻ cố định: **Tổng asset · File .spine · Dung lượng ảnh · Chưa scan · Đã clean · Cần kiểm tra** (bỏ các thẻ tách theo version). Lọc theo version vẫn dùng được qua chip bộ lọc như cũ.
+
 ## v0.4.29
 - **Tìm kiếm "đảo" (invert)** — bật nút đảo cạnh ô tìm kiếm để chỉ hiện các mục **không** chứa từ khoá. Ví dụ gõ `idle` rồi bật đảo → ẩn hết mục có `idle`, hiện phần còn lại. Bỏ trống ô tìm thì nút đảo không ảnh hưởng gì. Chỉ áp cho từ khoá tìm — các chip lọc (nhóm/loại/version…) vẫn hoạt động như thường.
 - **Tìm theo đường dẫn (`path:`)** — thêm cú pháp `path:bk` để lọc **chỉ** theo đường dẫn file (bỏ qua tên anim/skin), nhất quán với `anim:` / `skin:`. (Gõ chữ thường không prefix vẫn tìm cả path + anim + skin như cũ.)
