@@ -57,6 +57,10 @@
   margin-top: 26px;
   overflow: visible;
 }
+/* Hide the player's built-in fullscreen button — the floating toolbar already provides one. */
+.spine-preview-view .spine-player-button:has(.spine-player-button-icon-fullscreen) {
+  display: none !important;
+}
 
 /* A keyed event pinned onto the scrubber: a tick on the line + a floating label.
    `left` (set inline) shares the slider's 0–100% coordinate, so it lines up. */
