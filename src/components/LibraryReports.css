@@ -92,3 +92,22 @@
 .library-report-table {
   width: 100%;
 }
+
+/* Report pane head: scope text on the left, an optional action (e.g. Run check) on the right. */
+.library-report-head-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.library-report-head-row .library-clean-scope {
+  margin: 0;
+}
+
+/* Clickable rows (Missing report → opens the health-check modal). */
+.library-report-clickable {
+  cursor: pointer;
+}
+.library-report-clickable:hover > td {
+  background: var(--sidebar-hover);
+}

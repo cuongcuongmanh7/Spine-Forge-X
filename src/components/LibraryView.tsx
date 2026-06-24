@@ -180,7 +180,7 @@ function LibraryContent({ libraryId }: { libraryId: string }) {
             />
           </div>
           <div className="library-tabpane" style={{ display: tab === 'reports' ? 'block' : 'none' }}>
-            <LibraryReports filter={filter} scopeRequest={cleanScopeRequest} />
+            <LibraryReports filter={filter} scopeRequest={cleanScopeRequest} onHealthCheck={setHealthEntry} />
           </div>
         </div>
         {/* Inspector follows the Inventory selection; the Clean tab has its own scoped checkboxes. */}

@@ -1,5 +1,8 @@
 # Changelog
 
+## v0.4.35
+- **Báo cáo "Thiếu attachment" và "Atlas trùng"** — hai mục cuối trong tab Báo cáo giờ chạy thật. Bấm **Quét kiểm tra** để rà các asset trong phạm vi đang lọc: *Thiếu attachment* liệt kê asset thiếu atlas/skeleton/trang texture (bấm vào để mở Kiểm tra export chi tiết); *Atlas trùng* gom các asset dùng atlas giống hệt nhau (byte-identical) — bắt đúng case copy-paste, không báo nhầm.
+
 ## v0.4.34
 - **Tab "Báo cáo" thay cho "Dọn ảnh"** — gom các phân tích vào một chỗ với danh sách bên trái: **Ảnh không dùng** (chính là luồng dọn ảnh cũ, giữ nguyên cách quét + chuyển vào `_unused_backup`), **Lệch version** (file khác version so với phần còn lại trong cùng thư mục) và **Asset quá nặng** (vượt ngưỡng dung lượng .spine/ảnh trong Settings). Mọi báo cáo dùng chung phạm vi lọc của tab Inventory (không cần chọn thư mục lại). **Thiếu attachment** và **Atlas trùng** sẽ bổ sung sau.
 
