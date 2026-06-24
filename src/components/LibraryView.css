@@ -249,6 +249,10 @@
   padding: 7px max(18px, calc((100% - var(--lib-content-max)) / 2));
   border-bottom: 1px solid var(--border);
   background: color-mix(in srgb, var(--surface-soft), transparent 30%);
+  /* Reserve the same scrollbar gutter as .library-pane-scroll so the right-aligned sort/view
+     controls line up with the list below instead of overhanging it. */
+  overflow: hidden;
+  scrollbar-gutter: stable;
 }
 .library-select-all {
   display: inline-flex;
