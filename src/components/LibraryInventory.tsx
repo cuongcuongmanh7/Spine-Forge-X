@@ -471,6 +471,44 @@ export function LibraryInventory({
     </span>
   );
 
+  // Sort (grid only) + view toggle — right-aligned cluster, shown on the selection bar row.
+  const sortAndView = (
+    <span className="library-view-controls">
+      {viewMode === 'grid' && (
+        <span className="library-sort-control">
+          <span className="library-sort-label">{t.librarySortBy}:</span>
+          <select value={sort.key} onChange={(e) => setSort((s) => ({ ...s, key: e.target.value as SortKey }))}>
+            {SORT_KEYS.map((k) => (
+              <option key={k} value={k}>
+                {sortLabels[k]}
+              </option>
+            ))}
+          </select>
+          <button
+            className="library-sort-dir"
+            onClick={() => setSort((s) => ({ ...s, direction: s.direction === 'asc' ? 'desc' : 'asc' }))}
+            title={sort.direction === 'asc' ? t.libraryCollapseAll : t.libraryExpandAll}
+            aria-label="sort direction"
+          >
+            {sort.direction === 'asc' ? '↑' : '↓'}
+          </button>
+        </span>
+      )}
+      {viewToggle}
+    </span>
+  );
+
+  // Filters header accessory: a "Clear all" link beside the active-filter count badge.
+  const filtersAccessory =
+    activeFilterCount > 0 ? (
+      <>
+        <button className="library-clear-filters" onClick={clearAllFilters} title={t.libraryClearFilters}>
+          <X size={13} /> {t.libraryClearFilters}
+        </button>
+        <span className="section-badge">{activeFilterCount}</span>
+      </>
+    ) : undefined;
+
   // Key metrics surfaced when the Stats card is collapsed: total entries, clean, needs-review.
   const statsPreview = (
     <div className="section-mini-cards">
@@ -536,7 +574,6 @@ export function LibraryInventory({
           )}
         </span>
       )}
-      {viewToggle}
     </>
   );
 
@@ -550,40 +587,12 @@ export function LibraryInventory({
         <CollapsibleSection
           title={t.libraryFiltersTitle}
           storageKey={FILTERS_KEY}
-          accessory={activeFilterCount > 0 ? <span className="section-badge">{activeFilterCount}</span> : undefined}
+          accessory={filtersAccessory}
           collapsedPreview={filtersPreview}
         >
         <div className="library-chip-row">
           <span className="library-chip-label">{t.libraryFacetLabel}</span>
           <div className="library-chip-set">{facetControl}</div>
-          <span className="library-view-controls">
-            {activeFilterCount > 0 && (
-              <button className="library-clear-filters" onClick={clearAllFilters} title={t.libraryClearFilters}>
-                <X size={13} /> {t.libraryClearFilters}
-              </button>
-            )}
-            {viewMode === 'grid' && (
-              <span className="library-sort-control">
-                <span className="library-sort-label">{t.librarySortBy}:</span>
-                <select value={sort.key} onChange={(e) => setSort((s) => ({ ...s, key: e.target.value as SortKey }))}>
-                  {SORT_KEYS.map((k) => (
-                    <option key={k} value={k}>
-                      {sortLabels[k]}
-                    </option>
-                  ))}
-                </select>
-                <button
-                  className="library-sort-dir"
-                  onClick={() => setSort((s) => ({ ...s, direction: s.direction === 'asc' ? 'desc' : 'asc' }))}
-                  title={sort.direction === 'asc' ? t.libraryCollapseAll : t.libraryExpandAll}
-                  aria-label="sort direction"
-                >
-                  {sort.direction === 'asc' ? '↑' : '↓'}
-                </button>
-              </span>
-            )}
-            {viewToggle}
-          </span>
         </div>
 
         <div className="library-chip-row">
@@ -765,6 +774,7 @@ export function LibraryInventory({
                 {t.libraryClearSelection}
               </button>
             )}
+            {sortAndView}
           </div>
         );
       })()}

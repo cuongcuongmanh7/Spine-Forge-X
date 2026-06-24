@@ -55,10 +55,14 @@ export function Section({ title, defaultOpen = true, storageKey, accessory, coll
           <span>{title}</span>
         </button>
         {!open && collapsedPreview && <div className="section-header-preview">{collapsedPreview}</div>}
-        <button className="section-header-right" onClick={toggle} aria-label={title}>
+        {/* Accessory sits beside the chevron but outside the toggle button, so it can hold its own
+            interactive controls (e.g. a "Clear all" button) without nesting buttons / toggling. */}
+        <div className="section-header-right">
           {accessory}
-          {open ? <ChevronDown size={18} /> : <ChevronRight size={18} />}
-        </button>
+          <button className="section-header-toggle" onClick={toggle} aria-label={title}>
+            {open ? <ChevronDown size={18} /> : <ChevronRight size={18} />}
+          </button>
+        </div>
       </div>
       {open && <div className="section-body">{children}</div>}
     </section>
