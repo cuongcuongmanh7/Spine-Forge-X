@@ -86,9 +86,10 @@
   opacity: 1;
 }
 
-/* Multi-select checkbox overlaid on the thumbnail's top-left (mirrors the preview button top-right).
-   Hidden until the card is hovered or selected, so it doesn't clutter a quick scan. A faint dark
-   scrim (not a light surface chip) keeps the box legible on any thumbnail without flashing bright. */
+/* Multi-select checkbox overlaid on the thumbnail's top-left, visually paired with the preview
+   button (top-right): same translucent surface chip + rounded square. Hidden until the card is
+   hovered or selected. The native control is restyled (appearance:none) so an unchecked box reads
+   as a clean outlined square rather than a bright default checkbox. */
 .library-card-check {
   position: absolute;
   top: 6px;
@@ -96,10 +97,6 @@
   z-index: 2;
   display: grid;
   place-items: center;
-  width: 20px;
-  height: 20px;
-  border-radius: 5px;
-  background: rgba(0, 0, 0, 0.32);
   opacity: 0;
   transition: opacity 0.12s var(--ease);
   cursor: pointer;
@@ -110,11 +107,39 @@
   opacity: 1;
 }
 .library-card-check input {
-  width: 14px;
-  height: 14px;
+  appearance: none;
+  -webkit-appearance: none;
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  /* Override the global input{ width:100%; min-height:36px } so the box stays a 22px square. */
+  min-width: 0;
+  min-height: 0;
+  flex: 0 0 auto;
   margin: 0;
-  accent-color: var(--primary);
+  border: 1.5px solid color-mix(in srgb, var(--text-strong), transparent 55%);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--surface), transparent 8%);
+  box-shadow: 0 1px 4px var(--shadow);
+  -webkit-backdrop-filter: blur(4px);
+  backdrop-filter: blur(4px);
   cursor: pointer;
+  transition: background 0.12s var(--ease), border-color 0.12s var(--ease);
+}
+.library-card-check input:checked {
+  border-color: var(--primary);
+  background: var(--primary);
+}
+/* Checkmark drawn as a rotated bottom/right border on a pseudo-element. */
+.library-card-check input:checked::after {
+  content: '';
+  width: 5px;
+  height: 9px;
+  margin-top: -2px;
+  border: solid var(--primary-text);
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
 }
 
 /* Selected card — blue border + soft glow per the redesign spec. */
