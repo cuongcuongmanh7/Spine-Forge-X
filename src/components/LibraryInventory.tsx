@@ -1,7 +1,7 @@
 import { useCallback, useMemo, useState } from 'react';
 import { usePersistentState, usePersistentSet } from '../usePersistentState';
 import { invoke } from '@tauri-apps/api/core';
-import { AlertTriangle, CheckCircle2, CloudDownload, Layers, MessageSquare, RotateCw, Search, SearchX, Tag, Trash2, Users, X } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, CloudDownload, Layers, LayoutGrid, List, MessageSquare, RotateCw, Search, SearchX, Tag, Trash2, Users, X } from 'lucide-react';
 import { SpineFileIcon } from './SpineFileIcon';
 import { MenuPopover } from './MenuPopover';
 import { LibraryTrashModal } from './LibraryTrashModal';
@@ -91,7 +91,7 @@ export function LibraryInventory({
     trashedEntries
   } = useApp();
 
-  const { facet, selectedCats, selectedVersions, query, invert, selected, toggleSelected, setManySelected, clearSelected } = filter;
+  const { facet, selectedCats, selectedVersions, query, invert, clearFilters, selected, toggleSelected, setManySelected, clearSelected } = filter;
   const viewMode = appConfig.libraryViewMode;
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [expandedAnims, setExpandedAnims] = useState<Set<string>>(new Set());
@@ -121,6 +121,17 @@ export function LibraryInventory({
   const activeFilterCount =
     selectedCats.size + selectedVersions.size + selectedUsers.size + selectedTags.size +
     (unusedOnly ? 1 : 0) + (showResolved ? 1 : 0) + (divergingOnly ? 1 : 0) + (facet === 'status' ? 0 : selectedStatuses.size);
+
+  // Reset every filter at once — the shared chips/search (via the hook) plus the chip sets owned here.
+  function clearAllFilters() {
+    clearFilters();
+    setSelectedTags(new Set());
+    setSelectedUsers(new Set());
+    setSelectedStatuses(new Set());
+    setUnusedOnly(false);
+    setDivergingOnly(false);
+    setShowResolved(false);
+  }
 
   const { tagList, metaFor, addEntryTag, removeEntryTag, setEntryOwner } = tags;
   const notes = useLibraryNotes({ libraryDir, authorEmail: driveAccount?.email ?? '', isLeader });
@@ -452,10 +463,10 @@ export function LibraryInventory({
   const viewToggle = (
     <span className="segmented-control">
       <button className={viewMode === 'table' ? 'active' : ''} onClick={() => updateAppConfig('libraryViewMode', 'table')}>
-        {t.libraryViewTable}
+        <List size={14} /> {t.libraryViewTable}
       </button>
       <button className={viewMode === 'grid' ? 'active' : ''} onClick={() => updateAppConfig('libraryViewMode', 'grid')}>
-        {t.libraryViewGrid}
+        <LayoutGrid size={14} /> {t.libraryViewGrid}
       </button>
     </span>
   );
@@ -545,6 +556,11 @@ export function LibraryInventory({
         <div className="library-chip-row">
           <span className="library-chip-label">{t.libraryFacetLabel}</span>
           <div className="library-chip-set">{facetControl}</div>
+          {activeFilterCount > 0 && (
+            <button className="ghost-button small library-clear-filters" onClick={clearAllFilters}>
+              <X size={13} /> {t.libraryClearFilters}
+            </button>
+          )}
           <span className="library-view-controls">
             {viewMode === 'grid' && (
               <span className="library-sort-control">

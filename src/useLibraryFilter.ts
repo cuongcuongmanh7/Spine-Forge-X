@@ -55,6 +55,15 @@ export function useLibraryFilter(libraryId: string | null) {
     setSelectedCats(new Set());
   }
 
+  // Reset the shared filter state (category/version chips + search). Chip sets owned by
+  // LibraryInventory (tags/users/statuses/toggles) are cleared by the caller alongside this.
+  function clearFilters() {
+    setSelectedCats(new Set());
+    setSelectedVersions(new Set());
+    setQuery('');
+    setInvert(false);
+  }
+
   function toggle(setter: React.Dispatch<React.SetStateAction<Set<string>>>, key: string) {
     setter((prev) => {
       const next = new Set(prev);
@@ -75,6 +84,7 @@ export function useLibraryFilter(libraryId: string | null) {
     setQuery,
     invert,
     setInvert,
+    clearFilters,
     selected,
     toggleSelected,
     setManySelected,

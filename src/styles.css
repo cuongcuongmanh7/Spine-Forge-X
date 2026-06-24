@@ -1112,8 +1112,13 @@ body.col-resizing {
 }
 
 .segmented-control button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
   min-width: 44px;
   height: 26px;
+  padding: 0 10px;
   border: 0;
   border-radius: 999px;
   background: transparent;

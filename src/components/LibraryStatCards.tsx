@@ -19,7 +19,7 @@ export function LibraryStatCards({
 }) {
   return (
     <div className="stat-cards">
-      <StatCard icon={<Boxes size={18} />} label={t.libraryStatTotalAssets} value={totalEntries} />
+      <StatCard icon={<Boxes size={18} />} label={t.libraryStatTotalAssets} value={totalEntries} tone="info" />
       <StatCard icon={<SpineFileIcon size={18} />} label={t.libraryTotalEntries} value={totalEntries} />
       <StatCard icon={<StatIcon kind="image" size={18} />} label={t.libraryTotalImages} value={formatBytes(totalImageBytes)} />
       <StatCard icon={<Circle size={18} />} label={t.libraryStatNotScanned} value={scanCounts.unknown} />

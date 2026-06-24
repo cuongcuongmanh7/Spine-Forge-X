@@ -16,7 +16,8 @@
   padding: 10px 12px;
   border: 1px solid var(--border);
   border-radius: 10px;
-  background: var(--surface);
+  /* Subtle top-left→bottom-right gradient for depth (tone variants tint the top-left corner). */
+  background: linear-gradient(145deg, var(--surface) 0%, color-mix(in srgb, var(--surface), var(--bg) 45%) 100%);
   box-shadow: 0 1px 2px var(--shadow);
   transition: border-color 0.15s var(--ease), box-shadow 0.15s var(--ease);
 }
@@ -64,7 +65,7 @@
 
 .stat-card.warn {
   border-color: color-mix(in srgb, var(--warning), transparent 62%);
-  background: color-mix(in srgb, var(--warning), transparent 94%);
+  background: linear-gradient(145deg, color-mix(in srgb, var(--warning-fill), var(--surface) 80%) 0%, color-mix(in srgb, var(--surface), var(--bg) 38%) 72%);
 }
 
 .stat-card.warn .stat-card-icon {
@@ -78,7 +79,7 @@
 
 .stat-card.ok {
   border-color: color-mix(in srgb, var(--success), transparent 62%);
-  background: color-mix(in srgb, var(--success), transparent 94%);
+  background: linear-gradient(145deg, color-mix(in srgb, var(--success-fill), var(--surface) 80%) 0%, color-mix(in srgb, var(--surface), var(--bg) 38%) 72%);
 }
 
 .stat-card.ok .stat-card-icon {
@@ -88,4 +89,16 @@
 
 .stat-card.ok .stat-card-value {
   color: var(--success);
+}
+
+.stat-card.info {
+  border-color: color-mix(in srgb, var(--primary), transparent 62%);
+  background: linear-gradient(145deg, color-mix(in srgb, var(--primary), var(--surface) 80%) 0%, color-mix(in srgb, var(--surface), var(--bg) 38%) 72%);
+}
+.stat-card.info .stat-card-icon {
+  background: color-mix(in srgb, var(--primary), transparent 84%);
+  color: var(--primary);
+}
+.stat-card.info .stat-card-value {
+  color: var(--primary);
 }

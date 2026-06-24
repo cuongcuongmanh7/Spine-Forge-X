@@ -15,7 +15,7 @@ export function StatCard({
   icon?: ReactNode;
   label: string;
   value: ReactNode;
-  tone?: 'default' | 'ok' | 'warn';
+  tone?: 'default' | 'ok' | 'warn' | 'info';
 }) {
   return (
     <div className={`stat-card${tone !== 'default' ? ` ${tone}` : ''}`}>

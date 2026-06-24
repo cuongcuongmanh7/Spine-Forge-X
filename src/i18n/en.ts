@@ -207,6 +207,7 @@ export const en: Translations = {
   libraryFacetFolder: 'By type',
   libraryFacetId: 'By ID',
   libraryFacetStatus: 'By status',
+  libraryClearFilters: 'Clear all',
   librarySelectAll: 'Select',
   librarySelectedCount: '{count} selected',
   libraryMatchedCount: '{count} matched',

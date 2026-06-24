@@ -205,6 +205,7 @@ export const vi = {
   libraryFacetFolder: 'Theo loại',
   libraryFacetId: 'Theo ID',
   libraryFacetStatus: 'Theo trạng thái',
+  libraryClearFilters: 'Xoá lọc',
   librarySelectAll: 'Chọn',
   librarySelectedCount: 'Đã chọn {count}',
   libraryMatchedCount: '{count} kết quả',
