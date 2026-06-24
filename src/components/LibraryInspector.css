@@ -185,6 +185,21 @@
   flex: 0 0 auto;
 }
 
+/* Owner / modified / revision-history cluster (single-select). */
+.library-inspector-history {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.library-inspector-history .library-card-drive {
+  position: relative;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-soft);
+  font-size: 12px;
+}
+
 /* Action buttons (single + multi). */
 .library-inspector-actions {
   display: flex;

@@ -1,14 +1,20 @@
 import { useMemo } from 'react';
-import { FolderPlus, Stethoscope, Trash2, X, Zap } from 'lucide-react';
+import { FolderPlus, History, Stethoscope, Trash2, X, Zap } from 'lucide-react';
 import { useApp } from '../useAppController';
 import { cleanStatusForEntry } from '../library';
-import { formatBytes } from '../time';
+import { formatBytes, formatDate } from '../time';
 import { SpinePreviewView } from './SpinePreviewView';
-import { StatIcon } from './StatIcon';
+import { SpineFileIcon } from './SpineFileIcon';
+import { LibraryDriveInfoPanel } from './LibraryDriveInfoRow';
 import { splitRelPath } from './LibraryViewShared';
 import type { LibraryFilterApi } from '../useLibraryFilter';
+import type { useLibraryTags } from '../useLibraryTags';
+import type { useLibraryDrive } from '../useLibraryDrive';
 import type { LibraryEntry } from '../config';
 import './LibraryInspector.css';
+
+type TagsApi = ReturnType<typeof useLibraryTags>;
+type DriveApi = ReturnType<typeof useLibraryDrive>;
 
 /**
  * Right-hand inspector for the Inventory tab, driven by the current selection:
@@ -19,10 +25,14 @@ import './LibraryInspector.css';
  */
 export function LibraryInspector({
   filter,
+  tags,
+  drive,
   onPreview,
   onHealthCheck
 }: {
   filter: LibraryFilterApi;
+  tags: TagsApi;
+  drive: DriveApi;
   onPreview: (entry: LibraryEntry) => void;
   onHealthCheck: (entry: LibraryEntry) => void;
 }) {
@@ -38,7 +48,7 @@ export function LibraryInspector({
   return (
     <aside className="library-inspector" aria-label={t.libraryInspectorTitle}>
       {selectedEntries.length === 1 ? (
-        <SingleInspector entry={selectedEntries[0]} filter={filter} onPreview={onPreview} onHealthCheck={onHealthCheck} />
+        <SingleInspector entry={selectedEntries[0]} filter={filter} tags={tags} drive={drive} onPreview={onPreview} onHealthCheck={onHealthCheck} />
       ) : (
         <MultiInspector entries={selectedEntries} filter={filter} />
       )}
@@ -50,16 +60,23 @@ export function LibraryInspector({
 function SingleInspector({
   entry,
   filter,
+  tags,
+  drive,
   onPreview,
   onHealthCheck
 }: {
   entry: LibraryEntry;
   filter: LibraryFilterApi;
+  tags: TagsApi;
+  drive: DriveApi;
   onPreview: (entry: LibraryEntry) => void;
   onHealthCheck: (entry: LibraryEntry) => void;
 }) {
   const { t, quickExport, anyRunning, addToTrash, createSessionFromLibrary, pushToast } = useApp();
   const { name } = splitRelPath(entry.relPath);
+  const basic = drive.basicFor(entry);
+  const owner = tags.metaFor(entry)?.owner || basic?.ownerName || basic?.ownerEmail || basic?.lastEditorName || basic?.lastEditorEmail || '';
+  const historyOpen = drive.expandedInfo.has(entry.spineFile);
 
   function createSession() {
     const base = name.replace(/\.spine$/i, '');
@@ -86,7 +103,26 @@ function SingleInspector({
         <Row label={t.libraryColImages} value={`${formatBytes(entry.imageBytes)} · ${entry.imageCount}`} />
         <Row label={t.libraryColAnims} value={String(entry.animationCount)} />
         <Row label={t.librarySkins} value={String(entry.skins.length)} />
+        <Row label={t.driveColModified} value={basic?.modifiedTime ? formatDate(basic.modifiedTime) : '—'} />
+        <Row label={t.libraryColOwner} value={owner || '—'} />
       </dl>
+
+      <div className="library-inspector-history">
+        <button className="ghost-button small" onClick={() => drive.toggleDriveInfo(entry)} aria-expanded={historyOpen}>
+          <History size={14} /> {t.driveInfoTitle}
+        </button>
+        {historyOpen && (
+          <div className="library-card-drive">
+            <LibraryDriveInfoPanel
+              entry={entry}
+              info={drive.driveInfo[entry.spineFile]}
+              t={t}
+              onOpenRevision={drive.openRevisionInSpine}
+              onClose={() => drive.toggleDriveInfo(entry)}
+            />
+          </div>
+        )}
+      </div>
 
       <div className="library-inspector-actions">
         <button className="secondary-button small" onClick={() => void quickExport([entry.spineFile])} disabled={anyRunning}>
@@ -170,10 +206,9 @@ function MultiInspector({ entries, filter }: { entries: LibraryEntry[]; filter: 
         <span className="library-inspector-section-label">{t.libraryInspectorInSelection} ({total})</span>
         <ul>
           {entries.slice(0, 50).map((e) => {
-            const status = cleanStatusForEntry(e, libraryCleanState[e.spineFile]);
             return (
               <li key={e.spineFile}>
-                <StatIcon kind={status === 'clean' ? 'image' : 'anim'} size={12} />
+                <SpineFileIcon size={12} />
                 <span className="library-inspector-list-name" title={e.relPath}>{splitRelPath(e.relPath).name}</span>
                 <button className="icon-button tiny" title={t.libraryClearSelection} aria-label={t.libraryClearSelection} onClick={() => filter.toggleSelected(e.spineFile)}>
                   <X size={12} />

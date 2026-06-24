@@ -3,6 +3,8 @@ import { AlertTriangle, Folder, Plus, RotateCw, Trash2 } from 'lucide-react';
 import { useApp } from '../useAppController';
 import { useSidebarWidth, SIDEBAR_MIN, SIDEBAR_MAX, SIDEBAR_DEFAULT, clampWidth } from '../useSidebarWidth';
 import { useLibraryFilter } from '../useLibraryFilter';
+import { useLibraryTags } from '../useLibraryTags';
+import { useLibraryDrive } from '../useLibraryDrive';
 import { ModeToggle } from './ModeToggle';
 import { SidebarFooter } from './SidebarFooter';
 import { LibraryInventory } from './LibraryInventory';
@@ -143,12 +145,23 @@ export function LibraryView() {
 /** Tabbed inventory/clean content for one library. Mounted fresh per library id so its filter
  *  selection (and the open tab / modals) reset cleanly when the user switches libraries. */
 function LibraryContent({ libraryId }: { libraryId: string }) {
-  const { t } = useApp();
+  const { t, libraryDir, pushToast, driveAccount, merged, openSettings } = useApp();
   const [tab, setTab] = useState<Tab>('inventory');
   const [cleanScopeRequest, setCleanScopeRequest] = useState<CleanScopeRequest | null>(null);
   const [previewEntry, setPreviewEntry] = useState<LibraryEntry | null>(null);
   const [healthEntry, setHealthEntry] = useState<LibraryEntry | null>(null);
   const filter = useLibraryFilter(libraryId);
+  // Tags + Drive metadata live here (not in LibraryInventory) so the Inspector panel shares the same
+  // loaded data — otherwise a second hook instance would have an empty cache until reloaded.
+  const tags = useLibraryTags({ libraryDir });
+  const drive = useLibraryDrive({
+    t,
+    pushToast,
+    driveAccount,
+    libraryDir,
+    spinePath: merged.spinePath,
+    openSettings: () => openSettings(true)
+  });
 
   function prepareCleanScan(spineFiles: string[]) {
     setCleanScopeRequest({ id: Date.now(), spineFiles });
@@ -174,6 +187,8 @@ function LibraryContent({ libraryId }: { libraryId: string }) {
           <div className="library-tabpane" style={{ display: tab === 'inventory' ? 'block' : 'none' }}>
             <LibraryInventory
               filter={filter}
+              tags={tags}
+              drive={drive}
               onPrepareCleanScan={prepareCleanScan}
               onPreview={setPreviewEntry}
               onHealthCheck={setHealthEntry}
@@ -184,7 +199,9 @@ function LibraryContent({ libraryId }: { libraryId: string }) {
           </div>
         </div>
         {/* Inspector follows the Inventory selection; the Clean tab has its own scoped checkboxes. */}
-        {tab === 'inventory' && <LibraryInspector filter={filter} onPreview={setPreviewEntry} onHealthCheck={setHealthEntry} />}
+        {tab === 'inventory' && (
+          <LibraryInspector filter={filter} tags={tags} drive={drive} onPreview={setPreviewEntry} onHealthCheck={setHealthEntry} />
+        )}
       </div>
 
       {previewEntry && <LibrarySpinePreviewModal entry={previewEntry} onClose={() => setPreviewEntry(null)} />}

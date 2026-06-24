@@ -130,7 +130,16 @@ export function LibraryGrid(props: LibraryViewProps) {
                   const entryNotes = noteCount(entryKey);
                   const isSel = selected.has(entry.spineFile);
                   return (
-                    <article className={`library-card${isSel ? ' selected' : ''}${entryNotes > 0 ? ' library-has-notes' : ''}`} key={entry.spineFile}>
+                    <article
+                      className={`library-card${isSel ? ' selected' : ''}${entryNotes > 0 ? ' library-has-notes' : ''}`}
+                      key={entry.spineFile}
+                      // Click anywhere on the card toggles selection — except on the interactive
+                      // controls (checkbox, preview/menu buttons, tag/owner editors, links).
+                      onClick={(e) => {
+                        if ((e.target as HTMLElement).closest('button, input, a, label, select, textarea, [role="button"]')) return;
+                        toggleSelected(entry.spineFile);
+                      }}
+                    >
                       <div className="library-card-thumb-wrap">
                         <label className="library-card-check" title={t.librarySelectAll}>
                           <input

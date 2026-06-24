@@ -50,11 +50,15 @@ const FILTERS_KEY = 'libraryInventory.filtersCollapsed';
 /** Inventory tab host: stats, chip filters, search, view toggle — renders the table or grid view. */
 export function LibraryInventory({
   filter,
+  tags,
+  drive,
   onPrepareCleanScan,
   onPreview,
   onHealthCheck
 }: {
   filter: LibraryFilterApi;
+  tags: ReturnType<typeof useLibraryTags>;
+  drive: ReturnType<typeof useLibraryDrive>;
   onPrepareCleanScan: (spineFiles: string[]) => void;
   onPreview: (entry: LibraryEntry) => void;
   onHealthCheck: (entry: LibraryEntry) => void;
@@ -76,7 +80,6 @@ export function LibraryInventory({
     driveAccount,
     isLeader,
     libraryDir,
-    openSettings,
     sessions,
     projects,
     selectSession,
@@ -119,18 +122,11 @@ export function LibraryInventory({
     selectedCats.size + selectedVersions.size + selectedUsers.size + selectedTags.size +
     (unusedOnly ? 1 : 0) + (showResolved ? 1 : 0) + (divergingOnly ? 1 : 0) + (facet === 'status' ? 0 : selectedStatuses.size);
 
-  const { tagList, metaFor, addEntryTag, removeEntryTag, setEntryOwner } = useLibraryTags({ libraryDir });
+  const { tagList, metaFor, addEntryTag, removeEntryTag, setEntryOwner } = tags;
   const notes = useLibraryNotes({ libraryDir, authorEmail: driveAccount?.email ?? '', isLeader });
 
   const { driveInfo, expandedInfo, loadingBasics, basicsProgress, basicsLoadedAt, basicFor, toggleDriveInfo, loadDriveBasics, refreshBasicsSilently, openRevisionInSpine } =
-    useLibraryDrive({
-      t,
-      pushToast,
-      driveAccount,
-      libraryDir,
-      spinePath: merged.spinePath,
-      openSettings: () => openSettings(true)
-    });
+    drive;
 
   const thresholds: LibraryThresholds = {
     imageFolderWarnMB: appConfig.libraryImageFolderWarnMB,
