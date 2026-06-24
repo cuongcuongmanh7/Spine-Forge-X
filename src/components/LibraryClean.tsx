@@ -56,7 +56,17 @@ function Thumb({ entry, url }: { entry: ImageEntry; url: string | null | undefin
  * button re-scans via Spine CLI for a fresh atlas. Per-unit checkboxes pick what to move.
  * Scope follows the shared chip/search filter.
  */
-export function LibraryClean({ filter, scopeRequest }: { filter: LibraryFilterApi; scopeRequest: CleanScopeRequest }) {
+export function LibraryClean({
+  filter,
+  scopeRequest,
+  restrictTo
+}: {
+  filter: LibraryFilterApi;
+  scopeRequest: CleanScopeRequest;
+  /** When set (an Inventory multi-selection), limit the scan scope to exactly these `.spine` files
+   *  instead of the shared filter. */
+  restrictTo?: Set<string>;
+}) {
   const {
     t,
     activeLibrary,
@@ -93,8 +103,12 @@ export function LibraryClean({ filter, scopeRequest }: { filter: LibraryFilterAp
   const statusLabel = (key: string): string =>
     key === 'clean' ? t.libraryStatClean : key === 'warning' ? t.libraryStatNeedsReview : t.libraryStatNotScanned;
   const included = useMemo(
-    () => entries.filter((e) => entryMatchesFilter(e, { facet, selectedCats, selectedVersions, query, invert, statusOf })),
-    [entries, facet, selectedCats, selectedVersions, query, invert, libraryCleanState]
+    () =>
+      restrictTo
+        ? entries.filter((e) => restrictTo.has(e.spineFile))
+        : entries.filter((e) => entryMatchesFilter(e, { facet, selectedCats, selectedVersions, query, invert, statusOf })),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [entries, restrictTo, facet, selectedCats, selectedVersions, query, invert, libraryCleanState]
   );
   const includedKeys = useMemo(() => included.map((e) => e.spineFile).join('\n'), [included]);
   const scanGroups = useMemo(

@@ -47,17 +47,24 @@ export function LibraryReports({
   }, [scopeRequest]);
 
   const entries = libraryScan?.entries ?? [];
-  const { facet, selectedCats, selectedVersions, query, invert } = filter;
+  const { facet, selectedCats, selectedVersions, query, invert, selected } = filter;
   const thresholds: LibraryThresholds = {
     imageFolderWarnMB: appConfig.libraryImageFolderWarnMB,
     spineFileWarnMB: appConfig.librarySpineFileWarnMB
   };
   const statusOf = (e: LibraryEntry): string => cleanStatusForEntry(e, libraryCleanState[e.spineFile]);
 
-  const included = useMemo(
+  const filtered = useMemo(
     () => entries.filter((e) => entryMatchesFilter(e, { facet, selectedCats, selectedVersions, query, invert, statusOf })),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [entries, facet, selectedCats, selectedVersions, query, invert, libraryCleanState]
+  );
+  // When the Inventory has a multi-selection, every report scopes to exactly those entries; otherwise
+  // it falls back to the shared filter. (The cleanup report receives the same set via `restrictTo`.)
+  const useSelection = selected.size > 0;
+  const included = useMemo(
+    () => (useSelection ? entries.filter((e) => selected.has(e.spineFile)) : filtered),
+    [useSelection, entries, selected, filtered]
   );
 
   const mixGroups = useMemo(() => versionMixGroups(included), [included]);
@@ -65,9 +72,11 @@ export function LibraryReports({
   const oversized = useMemo(() => included.filter((e) => hasAnyWarning(e, thresholds)), [included, thresholds]);
 
   const scopeText = selectionSummary({ facet, selectedCats, selectedVersions, query });
-  const scope = scopeText
-    ? `${scopeText} — ${included.length}/${entries.length}`
-    : `${t.libraryReportScopeAll} — ${included.length}/${entries.length}`;
+  const scope = useSelection
+    ? `${t.librarySelectedCount.replace('{count}', String(selected.size))} — ${included.length}`
+    : scopeText
+      ? `${scopeText} — ${included.length}/${entries.length}`
+      : `${t.libraryReportScopeAll} — ${included.length}/${entries.length}`;
 
   const items: { key: ReportKey; label: string; icon: JSX.Element; count?: number; soon?: boolean }[] = [
     { key: 'unused', label: t.libraryReportUnused, icon: <Eraser size={15} /> },
@@ -100,7 +109,7 @@ export function LibraryReports({
 
       <div className="library-reports-content">
         {report === 'unused' ? (
-          <LibraryClean filter={filter} scopeRequest={scopeRequest} />
+          <LibraryClean filter={filter} scopeRequest={scopeRequest} restrictTo={useSelection ? selected : undefined} />
         ) : report === 'version' ? (
           <VersionReport groups={mixGroups} scope={scope} />
         ) : report === 'oversized' ? (
