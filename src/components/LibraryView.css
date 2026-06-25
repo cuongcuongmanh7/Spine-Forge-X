@@ -123,63 +123,7 @@
   place-items: center;
   padding: 24px;
 }
-.library-tabbar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  padding: 8px 14px;
-  border-bottom: 1px solid var(--border);
-}
-.library-tabs {
-  display: flex;
-  gap: 4px;
-}
-.library-tab {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  border: 0;
-  background: transparent;
-  color: var(--text-muted);
-  font: inherit;
-  /* Match .mode-toggle button (13px) so the tabbar and sidebar header are the same height and
-     their bottom borders line up — `font: inherit` otherwise pulls the 16px root size. */
-  font-size: 13px;
-  padding: 6px 12px;
-  border-radius: 8px;
-  cursor: pointer;
-}
-.library-tab:hover:not(:disabled) {
-  background: var(--sidebar-hover);
-  color: var(--text-strong);
-}
-.library-tab.active {
-  background: color-mix(in srgb, var(--primary), transparent 85%);
-  color: var(--text-strong);
-  font-weight: 600;
-}
-.library-tab:disabled {
-  opacity: 0.4;
-  cursor: default;
-}
-/* Aggregate notification badge on the Reports tab — sum of every report section's count. */
-.library-tab-badge {
-  min-width: 18px;
-  padding: 0 6px;
-  border-radius: 999px;
-  font-size: 11px;
-  font-weight: 700;
-  line-height: 18px;
-  text-align: center;
-  color: var(--warning);
-  background: color-mix(in srgb, var(--warning), transparent 84%);
-}
-.library-tabbar-actions {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
+/* Tab-bar styles live in LibraryTabs.css (imported by LibraryView.tsx). */
 .library-panel {
   flex: 1 1 auto;
   min-height: 0;

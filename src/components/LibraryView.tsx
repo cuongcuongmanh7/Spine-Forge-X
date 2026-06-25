@@ -16,6 +16,7 @@ import { LibraryHealthCheckModal } from './LibraryHealthCheckModal';
 import { LibraryScanningOverlay } from './LibraryScanningOverlay';
 import type { LibraryEntry } from '../config';
 import './LibraryView.css';
+import './LibraryTabs.css';
 
 type Tab = 'inventory' | 'reports';
 type CleanScopeRequest = { id: number; spineFiles: string[] };
