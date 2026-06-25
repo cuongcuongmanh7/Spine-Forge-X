@@ -9,6 +9,35 @@
   gap: 8px 10px;
   color: var(--text-muted);
 }
+/* Clickable warning badge-chip for the trash (lives in the search row, not the filter cluster, so
+   pending trashed entries stay visible even when Filters is collapsed). Amber to read as "needs
+   attention" without the alarm of a destructive red. */
+.library-trash-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 9px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--warning, #f59e0b) 55%, transparent);
+  background: color-mix(in srgb, var(--warning, #f59e0b) 14%, transparent);
+  color: var(--warning, #f59e0b);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.12s var(--ease), border-color 0.12s var(--ease);
+}
+.library-trash-badge:hover {
+  background: color-mix(in srgb, var(--warning, #f59e0b) 24%, transparent);
+  border-color: color-mix(in srgb, var(--warning, #f59e0b) 75%, transparent);
+}
+.library-trash-badge em {
+  font-style: normal;
+  font-weight: 700;
+  font-size: 11px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--warning, #f59e0b) 28%, transparent);
+}
 /* Wraps the search input + its inline icon so the input's left edge lines up with the cards. */
 .library-search-field {
   position: relative;
@@ -195,4 +224,12 @@
   text-overflow: ellipsis;
   white-space: nowrap;
   font-size: 12px;
+}
+/* The footer sits directly in .modal (which has no padding of its own), so without this the
+   "Restore all" button would press flush against the rounded border. */
+.library-trash-modal .modal-footer {
+  margin-top: 0;
+  padding: 14px 18px;
+  border-top: 1px solid var(--border);
+  background: color-mix(in srgb, var(--surface), var(--bg) 20%);
 }

@@ -630,11 +630,6 @@ export function LibraryInventory({
             <button className={`library-chip ${showResolved ? 'active' : ''}`} onClick={() => setShowResolved((v) => !v)} aria-pressed={showResolved}>
               <MessageSquare size={12} /> {t.notesShowResolved}
             </button>
-            {trashedEntries.length > 0 && (
-              <button className="library-chip" onClick={() => setTrashOpen(true)} title={t.libraryTrashTitle}>
-                <Trash2 size={12} /> {t.libraryTrashFilter} <em>{trashedEntries.length}</em>
-              </button>
-            )}
           </div>
         </div>
 
@@ -704,6 +699,11 @@ export function LibraryInventory({
             {loadingBasics ? <RotateCw size={14} className="spin" /> : <CloudDownload size={14} />} {t.driveLoadData}
             {loadingBasics && basicsProgress ? ` ${basicsProgress.done}/${basicsProgress.total}` : ''}
           </button>
+          {trashedEntries.length > 0 && (
+            <button className="library-trash-badge" onClick={() => setTrashOpen(true)} title={t.libraryTrashTitle}>
+              <Trash2 size={12} /> {t.libraryTrashFilter} <em>{trashedEntries.length}</em>
+            </button>
+          )}
         </div>
       </div>
 
