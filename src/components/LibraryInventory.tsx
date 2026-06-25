@@ -1,13 +1,14 @@
 import { useCallback, useMemo, useState } from 'react';
 import { usePersistentState, usePersistentSet } from '../usePersistentState';
 import { invoke } from '@tauri-apps/api/core';
-import { AlertTriangle, CheckCircle2, CloudDownload, Layers, LayoutGrid, List, MessageSquare, RotateCw, Search, SearchX, Tag, Trash2, Users, X } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, CloudDownload, Layers, MessageSquare, RotateCw, Search, SearchX, Tag, Trash2, Users, X } from 'lucide-react';
 import { SpineFileIcon } from './SpineFileIcon';
 import { MenuPopover } from './MenuPopover';
 import { LibraryTrashModal } from './LibraryTrashModal';
 import { useApp } from '../useAppController';
 import { Section as CollapsibleSection } from './common';
 import { LibraryStatCards } from './LibraryStatCards';
+import { LibrarySelectBar } from './LibrarySelectBar';
 import { basename } from '../sessions';
 import { formatDate } from '../time';
 import type { LibraryEntry } from '../config';
@@ -41,7 +42,6 @@ import type { LibraryFilterApi } from '../useLibraryFilter';
 import type { LibraryViewProps, Section, SortKey, SortState } from './LibraryViewShared';
 
 const SORT_TIEBREAKER = { numeric: true, sensitivity: 'base' } as const;
-const SORT_KEYS: SortKey[] = ['entry', 'version', 'spine', 'images', 'anims', 'owner', 'modified'];
 
 // Persisted collapse state for the inventory header sections (stats / filters).
 const STATS_KEY = 'libraryInventory.statsCollapsed';
@@ -459,45 +459,6 @@ export function LibraryInventory({
     </span>
   );
 
-  // Table / grid view toggle — shared by the Filters body and its collapsed preview.
-  const viewToggle = (
-    <span className="segmented-control">
-      <button className={viewMode === 'table' ? 'active' : ''} onClick={() => updateAppConfig('libraryViewMode', 'table')}>
-        <List size={14} /> {t.libraryViewTable}
-      </button>
-      <button className={viewMode === 'grid' ? 'active' : ''} onClick={() => updateAppConfig('libraryViewMode', 'grid')}>
-        <LayoutGrid size={14} /> {t.libraryViewGrid}
-      </button>
-    </span>
-  );
-
-  // Sort (grid only) + view toggle — right-aligned cluster, shown on the selection bar row.
-  const sortAndView = (
-    <span className="library-view-controls">
-      {viewMode === 'grid' && (
-        <span className="library-sort-control">
-          <span className="library-sort-label">{t.librarySortBy}:</span>
-          <select value={sort.key} onChange={(e) => setSort((s) => ({ ...s, key: e.target.value as SortKey }))}>
-            {SORT_KEYS.map((k) => (
-              <option key={k} value={k}>
-                {sortLabels[k]}
-              </option>
-            ))}
-          </select>
-          <button
-            className="library-sort-dir"
-            onClick={() => setSort((s) => ({ ...s, direction: s.direction === 'asc' ? 'desc' : 'asc' }))}
-            title={sort.direction === 'asc' ? t.libraryCollapseAll : t.libraryExpandAll}
-            aria-label="sort direction"
-          >
-            {sort.direction === 'asc' ? '↑' : '↓'}
-          </button>
-        </span>
-      )}
-      {viewToggle}
-    </span>
-  );
-
   // Filters header accessory: a "Clear all" link beside the active-filter count badge.
   const filtersAccessory =
     activeFilterCount > 0 ? (
@@ -746,38 +707,20 @@ export function LibraryInventory({
         </div>
       </div>
 
-      {sections.length > 0 && (() => {
-        const matchedKeys = filtered.map((e) => e.spineFile);
-        const matchedCount = matchedKeys.length;
-        const selectedCount = selected.size;
-        const allMatchedSelected = matchedCount > 0 && matchedKeys.every((k) => selected.has(k));
-        const someMatchedSelected = !allMatchedSelected && matchedKeys.some((k) => selected.has(k));
-        return (
-          <div className="library-select-bar">
-            <label className="library-select-all">
-              <input
-                type="checkbox"
-                checked={allMatchedSelected}
-                ref={(el) => { if (el) el.indeterminate = someMatchedSelected; }}
-                onChange={() => setManySelected(matchedKeys, !allMatchedSelected)}
-                aria-label={t.librarySelectAll}
-              />
-              <span>{t.librarySelectAll}</span>
-            </label>
-            <span className="muted library-select-count">
-              {selectedCount > 0
-                ? t.librarySelectedCount.replace('{count}', String(selectedCount))
-                : t.libraryMatchedCount.replace('{count}', String(matchedCount))}
-            </span>
-            {selectedCount > 0 && (
-              <button type="button" className="link-button" onClick={clearSelected}>
-                {t.libraryClearSelection}
-              </button>
-            )}
-            {sortAndView}
-          </div>
-        );
-      })()}
+      {sections.length > 0 && (
+        <LibrarySelectBar
+          filtered={filtered}
+          selected={selected}
+          setManySelected={setManySelected}
+          clearSelected={clearSelected}
+          viewMode={viewMode}
+          setViewMode={(mode) => updateAppConfig('libraryViewMode', mode)}
+          sort={sort}
+          setSort={setSort}
+          sortLabels={sortLabels}
+          t={t}
+        />
+      )}
 
       <div className="library-pane-scroll">
         {sections.length === 0 ? (

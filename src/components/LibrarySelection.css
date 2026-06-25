@@ -1,0 +1,89 @@
+/* Multi-select UI for the Library Inventory: the selection toolbar above the list and the custom
+   checkboxes shared by the select-bar master, folder/group headers, and card overlays.
+   Split out of LibraryView.css to keep that file under the line-size guard. */
+
+/* Selection toolbar between the controls header and the scrolling list: select-all + matched/selected count. */
+.library-select-bar {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 7px max(18px, calc((100% - var(--lib-content-max)) / 2));
+  border-bottom: 1px solid var(--border);
+  background: color-mix(in srgb, var(--surface-soft), transparent 30%);
+  /* Reserve the same scrollbar gutter as .library-pane-scroll so the right-aligned sort/view
+     controls line up with the list below instead of overhanging it. */
+  overflow: hidden;
+  scrollbar-gutter: stable;
+}
+.library-select-all {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.library-select-count {
+  font-size: 12px;
+}
+
+/* Custom inline checkbox shared by the select-bar master ("Select") and each folder/group header,
+   so they all read the same (no native control). The card overlay checkbox mirrors this look too. */
+.library-group-check {
+  display: inline-grid;
+  place-items: center;
+  flex: 0 0 auto;
+  cursor: pointer;
+}
+.library-group-check input,
+.library-select-all input {
+  appearance: none;
+  -webkit-appearance: none;
+  position: relative;
+  flex: 0 0 auto;
+  /* Override the global input{ width:100%; min-height:36px; padding:7px 10px } — without padding:0 +
+     min:0 the border-box would widen these into rectangles. */
+  width: 17px;
+  min-width: 17px;
+  height: 17px;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  border: 1.5px solid color-mix(in srgb, var(--text-strong), transparent 55%);
+  border-radius: 5px;
+  background: var(--surface);
+  cursor: pointer;
+  transition: background 0.12s var(--ease), border-color 0.12s var(--ease);
+}
+.library-group-check input:checked,
+.library-group-check input:indeterminate,
+.library-select-all input:checked,
+.library-select-all input:indeterminate {
+  border-color: var(--primary);
+  background: var(--primary);
+}
+.library-group-check input:checked::after,
+.library-select-all input:checked::after {
+  content: '';
+  position: absolute;
+  top: 46%;
+  left: 50%;
+  width: 4px;
+  height: 8px;
+  border: solid var(--primary-text);
+  border-width: 0 2px 2px 0;
+  transform: translate(-50%, -50%) rotate(45deg);
+}
+.library-group-check input:indeterminate::after,
+.library-select-all input:indeterminate::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 9px;
+  height: 2px;
+  border-radius: 1px;
+  background: var(--primary-text);
+  transform: translate(-50%, -50%);
+}
