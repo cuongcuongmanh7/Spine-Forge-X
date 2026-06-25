@@ -32,11 +32,13 @@ type ReportKey = 'unused' | 'missing' | 'duplicate' | 'version' | 'oversized';
 export function LibraryReports({
   filter,
   scopeRequest,
-  onHealthCheck
+  onHealthCheck,
+  onReportTotal
 }: {
   filter: LibraryFilterApi;
   scopeRequest: CleanScopeRequest;
   onHealthCheck: (entry: LibraryEntry) => void;
+  onReportTotal?: (total: number) => void;
 }) {
   const { t, appConfig, libraryScan, libraryCleanState } = useApp();
   const [report, setReport] = useState<ReportKey>('unused');
@@ -71,6 +73,24 @@ export function LibraryReports({
   const divergingCount = useMemo(() => mixGroups.reduce((n, g) => n + g.entries.filter((e) => e.diverges).length, 0), [mixGroups]);
   const oversized = useMemo(() => included.filter((e) => hasAnyWarning(e, thresholds)), [included, thresholds]);
 
+  // Missing-attachments + Duplicate-atlases share one health-check batch, lifted here so its results
+  // survive switching between report sub-tabs (the child panes unmount) and feed the nav badges. The
+  // batch only resets when the in-scope set changes — it persists until the user re-runs the check.
+  const health = useHealthBatch(included);
+  const missingResults = useMemo(
+    () => health.reports?.filter((r) => !r.report.ok).sort((a, b) => a.entry.relPath.localeCompare(b.entry.relPath)) ?? null,
+    [health.reports]
+  );
+  const duplicateGroups = useMemo(() => duplicateAtlasGroups(health.reports), [health.reports]);
+  const missingCount = missingResults?.length ?? 0;
+  const duplicateCount = duplicateGroups?.reduce((n, g) => n + g.length, 0) ?? 0;
+
+  // Aggregate badge for the Reports tab title — the sum of every section's count.
+  const totalCount = divergingCount + oversized.length + missingCount + duplicateCount;
+  useEffect(() => {
+    onReportTotal?.(totalCount);
+  }, [onReportTotal, totalCount]);
+
   const scopeText = selectionSummary({ facet, selectedCats, selectedVersions, query });
   const scope = useSelection
     ? `${t.librarySelectedCount.replace('{count}', String(selected.size))} — ${included.length}`
@@ -80,8 +100,8 @@ export function LibraryReports({
 
   const items: { key: ReportKey; label: string; icon: JSX.Element; count?: number; soon?: boolean }[] = [
     { key: 'unused', label: t.libraryReportUnused, icon: <Eraser size={15} /> },
-    { key: 'missing', label: t.libraryReportMissing, icon: <FileWarning size={15} /> },
-    { key: 'duplicate', label: t.libraryReportDuplicate, icon: <Copy size={15} /> },
+    { key: 'missing', label: t.libraryReportMissing, icon: <FileWarning size={15} />, count: missingCount },
+    { key: 'duplicate', label: t.libraryReportDuplicate, icon: <Copy size={15} />, count: duplicateCount },
     { key: 'version', label: t.libraryReportVersion, icon: <GitCompare size={15} />, count: divergingCount },
     { key: 'oversized', label: t.libraryReportOversized, icon: <Weight size={15} />, count: oversized.length }
   ];
@@ -115,9 +135,25 @@ export function LibraryReports({
         ) : report === 'oversized' ? (
           <OversizedReport entries={oversized} thresholds={thresholds} scope={scope} />
         ) : report === 'missing' ? (
-          <MissingAttachmentsReport entries={included} scope={scope} onHealthCheck={onHealthCheck} />
+          <MissingAttachmentsReport
+            results={missingResults}
+            running={health.running}
+            progress={health.progress}
+            entryCount={included.length}
+            onRun={() => void health.run()}
+            scope={scope}
+            onHealthCheck={onHealthCheck}
+          />
         ) : (
-          <DuplicateAtlasesReport entries={included} scope={scope} onHealthCheck={onHealthCheck} />
+          <DuplicateAtlasesReport
+            groups={duplicateGroups}
+            running={health.running}
+            progress={health.progress}
+            entryCount={included.length}
+            onRun={() => void health.run()}
+            scope={scope}
+            onHealthCheck={onHealthCheck}
+          />
         )}
       </div>
     </div>
@@ -220,27 +256,27 @@ function RunCheckAction({
 }
 
 /** Missing-pieces report: in-scope entries whose health check reports problems (no atlas/skeleton,
- *  missing texture pages, …). Clicking a row opens the full health-check modal. */
+ *  missing texture pages, …). Clicking a row opens the full health-check modal. The health batch is
+ *  owned by the parent so results (and the nav badge) survive switching report sub-tabs. */
 function MissingAttachmentsReport({
-  entries,
+  results,
+  running,
+  progress,
+  entryCount,
+  onRun,
   scope,
   onHealthCheck
 }: {
-  entries: LibraryEntry[];
+  results: { entry: LibraryEntry; report: HealthReport }[] | null;
+  running: boolean;
+  progress: { done: number; total: number } | null;
+  entryCount: number;
+  onRun: () => void;
   scope: string;
   onHealthCheck: (entry: LibraryEntry) => void;
 }) {
   const { t } = useApp();
-  const { running, progress, reports, run } = useHealthBatch(entries);
-  const results = useMemo(
-    () =>
-      reports
-        ?.filter((r) => !r.report.ok)
-        .sort((a, b) => a.entry.relPath.localeCompare(b.entry.relPath)) ?? null,
-    [reports]
-  );
-
-  const action = <RunCheckAction running={running} progress={progress} disabled={running || entries.length === 0} onRun={() => void run()} />;
+  const action = <RunCheckAction running={running} progress={progress} disabled={running || entryCount === 0} onRun={onRun} />;
 
   return (
     <ReportPane scope={scope} action={action}>
@@ -272,37 +308,47 @@ function MissingAttachmentsReport({
   );
 }
 
+/** Groups health-check results by byte-identical atlas content; returns only the groups with more
+ *  than one entry (the actual duplicates), largest first. `null` until the batch has run. */
+function duplicateAtlasGroups(reports: { entry: LibraryEntry; report: HealthReport }[] | null) {
+  if (!reports) return null;
+  const byAtlas = new Map<string, LibraryEntry[]>();
+  for (const { entry, report } of reports) {
+    const key = report.atlasContent?.trim();
+    if (!key) continue;
+    const list = byAtlas.get(key);
+    if (list) list.push(entry);
+    else byAtlas.set(key, [entry]);
+  }
+  return [...byAtlas.values()]
+    .filter((g) => g.length > 1)
+    .map((g) => [...g].sort((a, b) => a.relPath.localeCompare(b.relPath)))
+    .sort((a, b) => b.length - a.length);
+}
+
 /** Duplicate-atlases report: groups in-scope entries that share a byte-identical atlas (the atlas
  *  content is used directly as the group key, so there are no false positives — only renamed/edited
- *  copies are missed). Clicking a row opens the health-check modal. */
+ *  copies are missed). Clicking a row opens the health-check modal. The health batch is owned by the
+ *  parent so results (and the nav badge) survive switching report sub-tabs. */
 function DuplicateAtlasesReport({
-  entries,
+  groups,
+  running,
+  progress,
+  entryCount,
+  onRun,
   scope,
   onHealthCheck
 }: {
-  entries: LibraryEntry[];
+  groups: LibraryEntry[][] | null;
+  running: boolean;
+  progress: { done: number; total: number } | null;
+  entryCount: number;
+  onRun: () => void;
   scope: string;
   onHealthCheck: (entry: LibraryEntry) => void;
 }) {
   const { t } = useApp();
-  const { running, progress, reports, run } = useHealthBatch(entries);
-  const groups = useMemo(() => {
-    if (!reports) return null;
-    const byAtlas = new Map<string, LibraryEntry[]>();
-    for (const { entry, report } of reports) {
-      const key = report.atlasContent?.trim();
-      if (!key) continue;
-      const list = byAtlas.get(key);
-      if (list) list.push(entry);
-      else byAtlas.set(key, [entry]);
-    }
-    return [...byAtlas.values()]
-      .filter((g) => g.length > 1)
-      .map((g) => [...g].sort((a, b) => a.relPath.localeCompare(b.relPath)))
-      .sort((a, b) => b.length - a.length);
-  }, [reports]);
-
-  const action = <RunCheckAction running={running} progress={progress} disabled={running || entries.length === 0} onRun={() => void run()} />;
+  const action = <RunCheckAction running={running} progress={progress} disabled={running || entryCount === 0} onRun={onRun} />;
 
   return (
     <ReportPane scope={scope} action={action}>

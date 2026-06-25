@@ -1,5 +1,10 @@
 # Changelog
 
+## v0.4.37
+- **Tab Báo cáo: giữ kết quả khi chuyển mục + badge số lượng** — "Thiếu attachment" và "Atlas trùng" không còn mất dữ liệu khi chuyển qua lại giữa các mục; kết quả quét giữ nguyên cho đến khi đổi phạm vi lọc hoặc bấm quét lại (hai mục dùng chung một lượt quét). Mỗi mục hiện badge số lượng (giống "Asset quá nặng"), và tiêu đề tab **Báo cáo** hiện badge tổng = cộng số cảnh báo của tất cả các mục.
+- **Badge cảnh báo của nhóm gộp đủ loại + hiện tổng số** — badge cảnh báo trên tiêu đề mỗi nhóm (folder/nhóm) giờ đếm tổng số file có cảnh báo: oversize (file/ảnh quá nặng), lệch version so với phần đông trong nhóm, hoặc cần review (clean scan). Bỏ icon cảnh báo thừa ở đầu tên nhóm khi đã có badge. Số lượng asset của nhóm chuyển thành chip có icon cho đồng bộ.
+- **Bố cục lại thẻ asset (chế độ Lưới)** — gom các stat .spine/ảnh/anim vào các chip; hàng version · used-by · .spine · ảnh nằm chung một hàng, anim tách hàng riêng để mở rộng cho gọn. Cụm animation/skin khi mở được bọc trong một panel riêng. Đường dẫn trải hết chiều rộng thẻ, nằm trong một chip có icon thư mục và hiện đầy đủ đường dẫn, kèm nút **copy nhanh** ở cuối.
+
 ## v0.4.36
 - **Xem trước chọn đúng skin mặc định** — panel xem trước (và thumbnail) giờ ưu tiên skin `skin_default`/`default` khi skin đó thật sự có hình, thay vì chọn skin nhiều attachment nhất. Trình đơn chọn skin của player cũng được đồng bộ theo (trước đây vẫn tick nhầm vào skin đầu danh sách dù hình đã đúng). Rig có `default` rỗng vẫn rơi về cách chọn cũ nên không bị trống.
 - **Gom thông tin chi tiết vào một thẻ + thêm icon** — cụm version/.spine/ảnh/anim/skin/sửa đổi/người sở hữu trong panel giờ nằm gọn trong một thẻ, mỗi dòng có icon; .spine/ảnh/anim/skin dùng đúng bộ icon như ngoài danh sách cho đồng bộ.

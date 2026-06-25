@@ -6,11 +6,12 @@ import {
   ChevronsDownUp,
   ChevronsUpDown,
   FolderPlus,
+  Layers,
   ListChecks,
   Users
 } from 'lucide-react';
 import { formatBytes, formatDate } from '../time';
-import { entryWarnings, matchedNames, metaKeyForEntry, metaKeyForFolder } from '../library';
+import { entryWarnings, groupWarningCount, matchedNames, metaKeyForEntry, metaKeyForFolder } from '../library';
 import { LibraryDriveInfoRow } from './LibraryDriveInfoRow';
 import { LibraryRowMenu, LibrarySectionMenu } from './LibraryRowMenu';
 import { LibraryPreviewCell } from './LibraryPreviewCell';
@@ -172,6 +173,7 @@ export function LibraryTable(props: LibraryViewProps) {
       {sections.map((section) => {
         const isCollapsed = collapsed.has(section.key);
         const secStatus = sectionCleanStatus(section.entries, cleanStatus);
+        const warnCount = groupWarningCount(section.entries, thresholds, cleanStatus);
         const folderKey = metaKeyForFolder(section.key);
         const folderNotes = noteCount(folderKey);
         return (
@@ -183,12 +185,16 @@ export function LibraryTable(props: LibraryViewProps) {
                     <GroupSelectCheckbox entries={section.entries} selected={selected} setManySelected={setManySelected} t={t} />
                     <button className="library-group-toggle" onClick={() => toggleCollapsed(section.key)} aria-expanded={!isCollapsed}>
                       {isCollapsed ? <ChevronRight size={15} /> : <ChevronDown size={15} />}
-                      {secStatus && cleanStatusIcon(secStatus, t)}
-                      {section.label} <span className="muted">({section.entries.length})</span>
+                      {/* The warning badge already covers "needs review", so skip the redundant status icon then. */}
+                      {secStatus && !(secStatus === 'warning' && warnCount > 0) && cleanStatusIcon(secStatus, t)}
+                      {section.label}
                     </button>
-                    {section.mixedVersion && (
-                      <span className="library-warn-badge" title={t.libraryWarnMixed}>
-                        <AlertTriangle size={13} /> {t.libraryWarnMixed}
+                    <span className="library-count-chip">
+                      <Layers size={12} /> {section.entries.length}
+                    </span>
+                    {warnCount > 0 && (
+                      <span className="library-warn-badge" title={t.libraryGroupWarnings.replace('{count}', String(warnCount))}>
+                        <AlertTriangle size={13} /> {warnCount}
                       </span>
                     )}
                     <NotesIndicator count={folderNotes} onOpen={() => openNotes(folderKey, section.label)} t={t} />

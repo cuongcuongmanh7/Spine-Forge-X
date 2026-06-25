@@ -40,6 +40,40 @@ export function hasAnyWarning(entry: LibraryEntry, thresholds: LibraryThresholds
   return w.heavyImages || w.heavySpine;
 }
 
+/**
+ * Total warnings to surface on a group header: entries that are oversize, diverge from the group's
+ * majority editor version, or are flagged "needs review" by the clean scan. An entry counts once
+ * even if it trips several of these. `statusOf` resolves the (host-owned) clean status.
+ */
+export function groupWarningCount(
+  entries: LibraryEntry[],
+  thresholds: LibraryThresholds,
+  statusOf: (entry: LibraryEntry) => LibraryCleanStatus
+): number {
+  // Majority editor version within the group (most frequent known minor); entries on any other
+  // known version are the version warnings. Ties break to the lexicographically smaller key.
+  const counts = new Map<string, number>();
+  for (const e of entries) {
+    const key = minorKey(e.version);
+    if (key === 'unknown') continue;
+    counts.set(key, (counts.get(key) ?? 0) + 1);
+  }
+  let majority = '';
+  let best = -1;
+  for (const [key, count] of counts) {
+    if (count > best || (count === best && key.localeCompare(majority) < 0)) {
+      majority = key;
+      best = count;
+    }
+  }
+  let warnings = 0;
+  for (const e of entries) {
+    const diverges = minorKey(e.version) !== 'unknown' && minorKey(e.version) !== majority;
+    if (hasAnyWarning(e, thresholds) || diverges || statusOf(e) === 'warning') warnings += 1;
+  }
+  return warnings;
+}
+
 export function cleanRecordForEntry(entry: LibraryEntry, cleanedAt = Date.now()): LibraryCleanRecord {
   return {
     spineFile: entry.spineFile,

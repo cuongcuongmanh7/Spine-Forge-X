@@ -163,6 +163,18 @@
   opacity: 0.4;
   cursor: default;
 }
+/* Aggregate notification badge on the Reports tab — sum of every report section's count. */
+.library-tab-badge {
+  min-width: 18px;
+  padding: 0 6px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 18px;
+  text-align: center;
+  color: var(--warning);
+  background: color-mix(in srgb, var(--warning), transparent 84%);
+}
 .library-tabbar-actions {
   display: flex;
   align-items: center;
@@ -674,6 +686,18 @@
   border-radius: 999px;
   background: color-mix(in srgb, var(--warning), transparent 85%);
   color: var(--warning);
+  font-size: 11px;
+  font-weight: 600;
+}
+/* Neutral count chip for a group's entry count — same pill shape as the warning badge. */
+.library-count-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: var(--sidebar-hover);
+  color: var(--text-muted);
   font-size: 11px;
   font-weight: 600;
 }

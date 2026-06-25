@@ -6,6 +6,15 @@ Source-of-truth tiến độ toàn dự án.
 
 ---
 
+## v0.4.37 — Báo cáo giữ kết quả + badge số lượng · badge cảnh báo nhóm gộp đủ loại · bố cục lại thẻ Lưới ✅ Done
+
+> Bump `0.4.36 → 0.4.37`; tag `v0.4.37`. (ROADMAP nhảy từ v0.4.29 — các bản 0.4.30–0.4.36 chỉ ghi ở CHANGELOG.)
+
+- [x] **Tab Báo cáo: lift health-batch lên cha** — `useHealthBatch(included)` chuyển từ trong `MissingAttachmentsReport`/`DuplicateAtlasesReport` (unmount khi đổi sub-tab → mất data) lên `LibraryReports`; một lượt quét dùng chung, chỉ reset khi `included` đổi. Badge số lượng cho Missing (`missingCount`) + Duplicate (`duplicateCount`), tổng `totalCount` đẩy lên `LibraryView` qua `onReportTotal` → badge trên tiêu đề tab. [LibraryReports.tsx](../src/components/LibraryReports.tsx), [LibraryView.tsx](../src/components/LibraryView.tsx), [LibraryView.css](../src/components/LibraryView.css).
+- [x] **Badge cảnh báo nhóm** — `groupWarningCount(entries, thresholds, statusOf)` đếm file dính oversize (`hasAnyWarning`) ∪ lệch version (majority trong nhóm, dùng `minorKey`) ∪ needs-review (`statusOf === 'warning'`), mỗi file tính một lần. Badge hiện khi `warnCount > 0`; ẩn icon clean-status `warning` thừa khi đã có badge; số lượng asset thành chip `.library-count-chip` (icon `Layers`). i18n `libraryGroupWarnings`. [library.ts](../src/library.ts), [LibraryGrid.tsx](../src/components/LibraryGrid.tsx), [LibraryTable.tsx](../src/components/LibraryTable.tsx).
+- [x] **Bố cục thẻ Lưới** — stat .spine/ảnh/anim thành chip pill; meta-row (version · used-by · .spine · ảnh) tách khỏi `.library-card-animrow` (anim riêng một hàng); cụm anim/skin mở rộng bọc trong panel `.library-card-anims`. Path thành chip (`.library-card-path-chip`) với icon `Folder` + đường dẫn đầy đủ (bỏ truncate `.../`) + nút copy (`navigator.clipboard` + toast). i18n `libraryCopyPath`/`libraryCopiedPath`. [LibraryGrid.tsx](../src/components/LibraryGrid.tsx), [LibraryGrid.css](../src/components/LibraryGrid.css).
+- [x] Verify: `tsc` xanh.
+
 ## v0.4.29 — Inventory: invert search + `path:` scope + per-library filter + chip preview + Trash (sync) ✅ Done
 
 > Bump `0.4.28 → 0.4.29`; tag `v0.4.29`. (ROADMAP nhảy từ v0.4.22 — các bản 0.4.23–0.4.28 chỉ ghi ở CHANGELOG.)

@@ -148,6 +148,7 @@ export function LibraryView() {
 function LibraryContent({ libraryId }: { libraryId: string }) {
   const { t, libraryDir, pushToast, driveAccount, merged, openSettings, isLeader } = useApp();
   const [tab, setTab] = useState<Tab>('inventory');
+  const [reportTotal, setReportTotal] = useState(0);
   const [cleanScopeRequest, setCleanScopeRequest] = useState<CleanScopeRequest | null>(null);
   const [previewEntry, setPreviewEntry] = useState<LibraryEntry | null>(null);
   const [healthEntry, setHealthEntry] = useState<LibraryEntry | null>(null);
@@ -181,6 +182,7 @@ function LibraryContent({ libraryId }: { libraryId: string }) {
           </button>
           <button className={`library-tab ${tab === 'reports' ? 'active' : ''}`} onClick={() => setTab('reports')}>
             {t.libraryTabReports}
+            {reportTotal > 0 && <span className="library-tab-badge">{reportTotal}</span>}
           </button>
         </div>
       </div>
@@ -200,7 +202,7 @@ function LibraryContent({ libraryId }: { libraryId: string }) {
             />
           </div>
           <div className="library-tabpane" style={{ display: tab === 'reports' ? 'block' : 'none' }}>
-            <LibraryReports filter={filter} scopeRequest={cleanScopeRequest} onHealthCheck={setHealthEntry} />
+            <LibraryReports filter={filter} scopeRequest={cleanScopeRequest} onHealthCheck={setHealthEntry} onReportTotal={setReportTotal} />
           </div>
         </div>
         {/* Inspector follows the Inventory selection; the Clean tab has its own scoped checkboxes. */}

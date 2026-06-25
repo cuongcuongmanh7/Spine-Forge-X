@@ -224,38 +224,141 @@
   opacity: 1;
 }
 
+/* Path cluster spans the full card width: a chip wrapping the path icon + text, and a copy button
+   pinned to the right edge of the card. */
 .library-card-dir {
+  display: flex;
+  align-items: flex-start;
+  gap: 4px;
   font-size: 11px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+}
+/* The path itself sits in a soft chip so it reads as one tidy unit, like the meta-row chips. */
+.library-card-path-chip {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: flex-start;
+  gap: 5px;
+  min-height: 24px;
+  padding: 4px 8px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--surface-soft);
+}
+.library-card-dir-icon {
+  flex: 0 0 auto;
+  margin-top: 1px;
+}
+.library-card-dir-text {
+  flex: 1 1 auto;
+  min-width: 0;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+/* Copy-path button hugs the right edge, matching the path chip's height so they sit on one line. */
+.library-card-copy {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface-soft);
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: background 0.12s var(--ease), color 0.12s var(--ease), border-color 0.12s var(--ease);
+}
+.library-card-copy:hover {
+  background: var(--sidebar-hover);
+  border-color: var(--primary);
+  color: var(--primary);
 }
 
-/* Combined meta + size row: version / used-by / spine size / image size / anim count. */
+/* Meta + size row: version / used-by / spine size / image size — every entry rendered as a pill so
+   the row reads as a consistent set of chips. The anim toggle gets the same chip look on its own row. */
 .library-card-metastats {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 4px 8px;
+  gap: 4px 6px;
   font-size: 11px;
   font-variant-numeric: tabular-nums;
 }
-.library-card-stat {
+.library-card-metastats > .library-card-stat,
+.library-card-animrow > .library-anim-toggle {
   display: inline-flex;
   align-items: center;
   gap: 3px;
+  padding: 0 7px;
+  height: 18px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--surface-soft);
+  color: var(--text-muted);
+  font-size: 11px;
+}
+/* Keep the used-by pill's own table margin out of the card row (the flex gap handles spacing). */
+.library-card-metastats > .library-usage-badge {
+  margin-left: 0;
 }
 .library-badge {
   font-size: 11px;
-  padding: 1px 7px;
+  padding: 0 7px;
+  height: 18px;
+  display: inline-flex;
+  align-items: center;
   border-radius: 999px;
+  border: 1px solid var(--border);
   background: var(--surface-soft);
   color: var(--text-muted);
 }
 
+/* Anim toggle on its own row so expanding the cluster never reflows the meta row above. */
+.library-card-animrow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 6px;
+  font-size: 11px;
+}
+.library-card-animrow > .library-anim-toggle {
+  color: var(--primary);
+  cursor: pointer;
+  font: inherit;
+  font-size: 11px;
+}
+.library-card-animrow > .library-anim-toggle:hover {
+  border-color: var(--primary);
+}
+
+/* Expanded skin/anim cluster is wrapped in a soft panel; chips wrap freely inside it. */
 .library-card-anims {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 2px;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--surface-soft), transparent 40%);
   font-size: 11px;
   line-height: 1.7;
+}
+.library-card-anims > div {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px;
+}
+.library-card-anims strong {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.library-card-anims .library-anim-chip {
+  margin: 0;
 }
 
 /* Tag "+" only appears on hover so untagged cards don't show a stray dashed circle. */

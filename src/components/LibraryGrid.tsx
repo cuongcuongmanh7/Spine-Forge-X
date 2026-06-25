@@ -1,6 +1,7 @@
-import { AlertTriangle, ChevronDown, ChevronRight, Clock, FolderPlus, ListChecks, User, Users } from 'lucide-react';
+import { AlertTriangle, ChevronDown, ChevronRight, Clock, Copy, Folder, FolderPlus, Layers, ListChecks, User, Users } from 'lucide-react';
+import { useApp } from '../useAppController';
 import { formatBytes, formatDate } from '../time';
-import { entryWarnings, matchedNames, metaKeyForEntry, metaKeyForFolder } from '../library';
+import { entryWarnings, groupWarningCount, matchedNames, metaKeyForEntry, metaKeyForFolder } from '../library';
 import { LibraryCardThumb } from './LibraryCardThumb';
 import { LibraryTagCell } from './LibraryTagCell';
 import { LibraryOwnerCell } from './LibraryOwnerCell';
@@ -63,12 +64,23 @@ export function LibraryGrid(props: LibraryViewProps) {
     toggleSelected,
     setManySelected
   } = props;
+  const { pushToast } = useApp();
+
+  async function copyPath(spineFile: string) {
+    try {
+      await navigator.clipboard.writeText(spineFile);
+      pushToast(t.libraryCopiedPath, 'success');
+    } catch {
+      /* clipboard can be unavailable (e.g. no focus) — silently ignore */
+    }
+  }
 
   return (
     <div className="library-grid-groups">
       {sections.map((section) => {
         const isCollapsed = collapsed.has(section.key);
         const secStatus = sectionCleanStatus(section.entries, cleanStatus);
+        const warnCount = groupWarningCount(section.entries, thresholds, cleanStatus);
         const folderKey = metaKeyForFolder(section.key);
         const folderNotes = noteCount(folderKey);
         return (
@@ -78,12 +90,16 @@ export function LibraryGrid(props: LibraryViewProps) {
                 <GroupSelectCheckbox entries={section.entries} selected={selected} setManySelected={setManySelected} t={t} />
                 <button className="library-group-toggle" onClick={() => toggleCollapsed(section.key)} aria-expanded={!isCollapsed}>
                   {isCollapsed ? <ChevronRight size={15} /> : <ChevronDown size={15} />}
-                  {secStatus && cleanStatusIcon(secStatus, t)}
-                  {section.label} <span className="muted">({section.entries.length})</span>
+                  {/* The warning badge already covers "needs review", so skip the redundant status icon then. */}
+                  {secStatus && !(secStatus === 'warning' && warnCount > 0) && cleanStatusIcon(secStatus, t)}
+                  {section.label}
                 </button>
-                {section.mixedVersion && (
-                  <span className="library-warn-badge" title={t.libraryWarnMixed}>
-                    <AlertTriangle size={13} /> {t.libraryWarnMixed}
+                <span className="library-count-chip">
+                  <Layers size={12} /> {section.entries.length}
+                </span>
+                {warnCount > 0 && (
+                  <span className="library-warn-badge" title={t.libraryGroupWarnings.replace('{count}', String(warnCount))}>
+                    <AlertTriangle size={13} /> {warnCount}
                   </span>
                 )}
                 <NotesIndicator count={folderNotes} onOpen={() => openNotes(folderKey, section.label)} t={t} />
@@ -123,7 +139,10 @@ export function LibraryGrid(props: LibraryViewProps) {
                   const basic = basicFor(entry);
                   const modifiedMs = basic?.modifiedTime ? Date.parse(basic.modifiedTime) : NaN;
                   const recent = Number.isFinite(modifiedMs) && Date.now() - modifiedMs < 7 * DAY_MS;
-                  const { dir, name } = splitRelPath(entry.relPath);
+                  const { name } = splitRelPath(entry.relPath);
+                  // Full folder path (no `.../` truncation) so the card's path chip shows the whole
+                  // location and wraps when long; falls back to the relPath for files at the root.
+                  const fullDir = entry.relPath.replace(/\\/g, '/').split('/').slice(0, -1).join('/');
                   const u = usage.get(entry.spineFile);
                   const usedCount = u?.projectIds.length ?? 0;
                   const entryKey = metaKeyForEntry(entry);
@@ -181,8 +200,27 @@ export function LibraryGrid(props: LibraryViewProps) {
                         </span>
                       </div>
 
-                      {dir && <div className="library-card-dir muted" title={entry.relPath}>{dir}</div>}
+                      <div className="library-card-dir muted" title={entry.relPath}>
+                        <span className="library-card-path-chip">
+                          <Folder size={13} className="library-card-dir-icon" />
+                          <span className="library-card-dir-text">{fullDir ? `${fullDir}/` : entry.relPath}</span>
+                        </span>
+                        <button
+                          type="button"
+                          className="library-card-copy"
+                          title={t.libraryCopyPath}
+                          aria-label={t.libraryCopyPath}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            void copyPath(entry.spineFile);
+                          }}
+                        >
+                          <Copy size={14} />
+                        </button>
+                      </div>
 
+                      {/* Meta + size chips on one wrapping row; the anim toggle lives on its own row below
+                          so expanding the cluster doesn't reflow this row. */}
                       <div className="library-card-metastats">
                         <span className="library-badge">{entry.version ?? t.libraryUnknownVersion}</span>
                         {usedCount === 0 ? (
@@ -205,6 +243,9 @@ export function LibraryGrid(props: LibraryViewProps) {
                         <span className={`library-card-stat ${w.heavyImages ? 'library-warn-cell' : ''}`} title={w.heavyImages ? t.libraryWarnHeavyImages : t.libraryColImages}>
                           {w.heavyImages ? <AlertTriangle size={12} /> : <StatIcon kind="image" size={13} />} {formatBytes(entry.imageBytes)} <span className="muted">· {entry.imageCount}</span>
                         </span>
+                      </div>
+
+                      <div className="library-card-animrow">
                         {!entry.exported ? (
                           <span className="library-badge-muted">{t.libraryNotExported}</span>
                         ) : entry.animationCount > 0 ? (
