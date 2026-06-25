@@ -342,12 +342,15 @@ export function useSpinePreview(entry: LibraryEntry | null, containerRef: React.
       const onError = (_p: unknown, msg: string) => fail(msg);
 
       try {
+        // BOTH runtimes need the PMA hint. Neither premultiplies the texture on upload (it stays as
+        // stored in the PNG), and both default `premultipliedAlpha` to true for blending — the 4.x
+        // player ignores the atlas per-page `pma` flag for blend and just uses this config field. So a
+        // straight-alpha export renders with bright/white fringes on feathered edges unless we detect
+        // and pass the real value.
+        const premultipliedAlpha = await detectPremultipliedAlpha(resolved, rawDataURIs);
+        if (cancelled) return;
         if (resolved.version === '3.8') {
           const spine = await loadSpine38();
-          if (cancelled) return;
-          // The 3.8 player assumes PMA; detect straight-alpha exports so they don't render with
-          // bright fringes. 4.x reads `pma` from its own atlas, so only 3.8 needs the hint.
-          const premultipliedAlpha = await detectPremultipliedAlpha(resolved, rawDataURIs);
           if (cancelled) return;
           const cfg: Record<string, unknown> = {
             atlasUrl: atlasName,
@@ -364,17 +367,20 @@ export function useSpinePreview(entry: LibraryEntry | null, containerRef: React.
         } else {
           const { SpinePlayer } = await loadSpine4x(resolved.version);
           if (cancelled) return;
-          playerRef.current = new SpinePlayer(container, {
+          // `premultipliedAlpha` is a real runtime config field (Player.js reads it) the 4.x .d.ts omits.
+          const cfg4x = {
             skeleton: skelName,
             atlas: atlasName,
             rawDataURIs,
+            premultipliedAlpha,
             showControls: true,
             alpha: true,
             preserveDrawingBuffer: false,
             backgroundColor: '#00000000',
             success: onSuccess,
             error: onError,
-          });
+          } as unknown as ConstructorParameters<typeof SpinePlayer>[1];
+          playerRef.current = new SpinePlayer(container, cfg4x);
         }
       } catch (e) {
         fail(String(e));

@@ -1,5 +1,8 @@
 # Changelog
 
+## v0.4.38
+- **Sửa viền trắng khi xem trước/thumbnail export Spine 4.x** — asset 4.x (vd 4.2) xuất ở dạng straight-alpha trước đây bị viền sáng/trắng quanh các bộ phận (tóc, tay) vì trình phát 4.x mặc định blend kiểu premultiplied và bỏ qua cờ `pma` trong atlas. Nay cả xem trước động lẫn thumbnail đều tự dò premultiplied-alpha của texture rồi truyền đúng cho trình phát 4.x (giống nhánh 3.8). Thumbnail cũ tự render lại.
+
 ## v0.4.37
 - **Tab Báo cáo: giữ kết quả khi chuyển mục + badge số lượng** — "Thiếu attachment" và "Atlas trùng" không còn mất dữ liệu khi chuyển qua lại giữa các mục; kết quả quét giữ nguyên cho đến khi đổi phạm vi lọc hoặc bấm quét lại (hai mục dùng chung một lượt quét). Mỗi mục hiện badge số lượng (giống "Asset quá nặng"), và tiêu đề tab **Báo cáo** hiện badge tổng = cộng số cảnh báo của tất cả các mục.
 - **Badge cảnh báo của nhóm gộp đủ loại + hiện tổng số** — badge cảnh báo trên tiêu đề mỗi nhóm (folder/nhóm) giờ đếm tổng số file có cảnh báo: oversize (file/ảnh quá nặng), lệch version so với phần đông trong nhóm, hoặc cần review (clean scan). Bỏ icon cảnh báo thừa ở đầu tên nhóm khi đã có badge. Số lượng asset của nhóm chuyển thành chip có icon cho đồng bộ.

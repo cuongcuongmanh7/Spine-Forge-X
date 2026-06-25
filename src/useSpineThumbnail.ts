@@ -38,8 +38,10 @@ const RENDER_TIMEOUT_MS = 8000;
  *  v4: pick the skin with the most attachments (skin-folder rigs left `default` near-empty → blank).
  *  v5: frame instantly + hide the loading screen so the 4.x capture isn't an unframed blank.
  *  v6: detect straight-alpha (non-PMA) 3.8 exports so they don't render with bright fringes;
- *      also fixes 3.8 binary skeletons with non-ASCII names (signed-byte UTF-8 decode in the player). */
-const THUMB_RENDER_VERSION = 6;
+ *      also fixes 3.8 binary skeletons with non-ASCII names (signed-byte UTF-8 decode in the player).
+ *  v7: pass the same straight-alpha hint to the 4.x player too — it defaults premultipliedAlpha=true
+ *      and ignores the atlas `pma` flag for blending, so 4.x straight-alpha exports had bright fringes. */
+const THUMB_RENDER_VERSION = 7;
 
 /** Filesystem-safe cache key: a stable hash of the asset's identity. Uses the library-relative
  *  path (NOT the absolute path) so the key matches across machines sharing the same Drive folder.
@@ -153,16 +155,20 @@ async function renderThumbnail(assets: ExportAssets, rawDataURIs: Record<string,
       };
 
       const mount = async () => {
+        // Match the live preview: BOTH runtimes blend with `premultipliedAlpha` (default true) and
+        // upload the texture un-premultiplied, so a straight-alpha export needs the detected hint or
+        // it renders with bright fringes. The 4.x player ignores the atlas `pma` flag for blending.
+        const premultipliedAlpha = await detectPremultipliedAlpha(assets, rawDataURIs);
         if (assets.version === '3.8') {
           const spine = await loadSpine38();
-          // Match the live preview: the 3.8 player assumes PMA, so detect straight-alpha exports.
-          const premultipliedAlpha = await detectPremultipliedAlpha(assets, rawDataURIs);
           const cfg: Record<string, unknown> = { ...common, atlasUrl: atlasName, premultipliedAlpha };
           cfg[assets.skeletonFormat === 'json' ? 'jsonUrl' : 'skelUrl'] = skelName;
           player = new spine.SpinePlayer(host, cfg);
         } else {
           const { SpinePlayer } = await loadSpine4x(assets.version);
-          player = new SpinePlayer(host, { ...common, skeleton: skelName, atlas: atlasName });
+          // `premultipliedAlpha` is a real runtime config field (Player.js reads it) the 4.x .d.ts omits.
+          const cfg4x = { ...common, skeleton: skelName, atlas: atlasName, premultipliedAlpha } as unknown;
+          player = new SpinePlayer(host, cfg4x as ConstructorParameters<typeof SpinePlayer>[1]);
         }
       };
       mount().catch((e) => settle(() => reject(e instanceof Error ? e : new Error(String(e)))));
