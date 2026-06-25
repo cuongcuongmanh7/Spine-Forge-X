@@ -5,6 +5,7 @@ import { useSidebarWidth, SIDEBAR_MIN, SIDEBAR_MAX, SIDEBAR_DEFAULT, clampWidth 
 import { useLibraryFilter } from '../useLibraryFilter';
 import { useLibraryTags } from '../useLibraryTags';
 import { useLibraryDrive } from '../useLibraryDrive';
+import { useLibraryNotes } from '../useLibraryNotes';
 import { ModeToggle } from './ModeToggle';
 import { SidebarFooter } from './SidebarFooter';
 import { LibraryInventory } from './LibraryInventory';
@@ -145,7 +146,7 @@ export function LibraryView() {
 /** Tabbed inventory/clean content for one library. Mounted fresh per library id so its filter
  *  selection (and the open tab / modals) reset cleanly when the user switches libraries. */
 function LibraryContent({ libraryId }: { libraryId: string }) {
-  const { t, libraryDir, pushToast, driveAccount, merged, openSettings } = useApp();
+  const { t, libraryDir, pushToast, driveAccount, merged, openSettings, isLeader } = useApp();
   const [tab, setTab] = useState<Tab>('inventory');
   const [cleanScopeRequest, setCleanScopeRequest] = useState<CleanScopeRequest | null>(null);
   const [previewEntry, setPreviewEntry] = useState<LibraryEntry | null>(null);
@@ -162,6 +163,9 @@ function LibraryContent({ libraryId }: { libraryId: string }) {
     spinePath: merged.spinePath,
     openSettings: () => openSettings(true)
   });
+  // Notes hook lives here (not in LibraryInventory) so the Inspector panel shares the same loaded
+  // notes — otherwise a second instance would have an empty cache until the sidecar reloads.
+  const notes = useLibraryNotes({ libraryDir, authorEmail: driveAccount?.email ?? '', isLeader });
 
   function prepareCleanScan(spineFiles: string[]) {
     setCleanScopeRequest({ id: Date.now(), spineFiles });
@@ -189,6 +193,7 @@ function LibraryContent({ libraryId }: { libraryId: string }) {
               filter={filter}
               tags={tags}
               drive={drive}
+              notes={notes}
               onPrepareCleanScan={prepareCleanScan}
               onPreview={setPreviewEntry}
               onHealthCheck={setHealthEntry}
@@ -200,7 +205,7 @@ function LibraryContent({ libraryId }: { libraryId: string }) {
         </div>
         {/* Inspector follows the Inventory selection; the Clean tab has its own scoped checkboxes. */}
         {tab === 'inventory' && (
-          <LibraryInspector filter={filter} tags={tags} drive={drive} onPreview={setPreviewEntry} onHealthCheck={setHealthEntry} />
+          <LibraryInspector filter={filter} tags={tags} drive={drive} notes={notes} onPreview={setPreviewEntry} onHealthCheck={setHealthEntry} />
         )}
       </div>
 

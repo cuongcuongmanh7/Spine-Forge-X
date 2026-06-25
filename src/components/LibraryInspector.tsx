@@ -1,17 +1,21 @@
-import { useMemo } from 'react';
-import { FolderPlus, History, Stethoscope, Trash2, X, Zap } from 'lucide-react';
+import { useMemo, useState, type ReactNode } from 'react';
+import { CheckCircle2, Clock, FolderPlus, Hash, History, MessageSquare, Stethoscope, Trash2, User, X, Zap } from 'lucide-react';
 import { useApp } from '../useAppController';
-import { cleanStatusForEntry } from '../library';
+import { cleanStatusForEntry, metaKeyForEntry } from '../library';
 import { formatBytes, formatDate } from '../time';
 import { SpinePreviewView } from './SpinePreviewView';
 import { SpineFileIcon } from './SpineFileIcon';
+import { StatIcon } from './StatIcon';
 import { LibraryDriveInfoPanel } from './LibraryDriveInfoRow';
+import { NotesModal } from './NotesModal';
 import { splitRelPath } from './LibraryViewShared';
 import type { LibraryFilterApi } from '../useLibraryFilter';
 import type { useLibraryTags } from '../useLibraryTags';
 import type { useLibraryDrive } from '../useLibraryDrive';
+import type { LibraryNotesApi } from '../useLibraryNotes';
 import type { LibraryEntry } from '../config';
 import './LibraryInspector.css';
+import './NotesModal.css';
 
 type TagsApi = ReturnType<typeof useLibraryTags>;
 type DriveApi = ReturnType<typeof useLibraryDrive>;
@@ -27,12 +31,14 @@ export function LibraryInspector({
   filter,
   tags,
   drive,
+  notes,
   onPreview,
   onHealthCheck
 }: {
   filter: LibraryFilterApi;
   tags: TagsApi;
   drive: DriveApi;
+  notes: LibraryNotesApi;
   onPreview: (entry: LibraryEntry) => void;
   onHealthCheck: (entry: LibraryEntry) => void;
 }) {
@@ -48,7 +54,7 @@ export function LibraryInspector({
   return (
     <aside className="library-inspector" aria-label={t.libraryInspectorTitle}>
       {selectedEntries.length === 1 ? (
-        <SingleInspector entry={selectedEntries[0]} filter={filter} tags={tags} drive={drive} onPreview={onPreview} onHealthCheck={onHealthCheck} />
+        <SingleInspector entry={selectedEntries[0]} filter={filter} tags={tags} drive={drive} notes={notes} onPreview={onPreview} onHealthCheck={onHealthCheck} />
       ) : (
         <MultiInspector entries={selectedEntries} filter={filter} />
       )}
@@ -62,6 +68,7 @@ function SingleInspector({
   filter,
   tags,
   drive,
+  notes,
   onPreview,
   onHealthCheck
 }: {
@@ -69,6 +76,7 @@ function SingleInspector({
   filter: LibraryFilterApi;
   tags: TagsApi;
   drive: DriveApi;
+  notes: LibraryNotesApi;
   onPreview: (entry: LibraryEntry) => void;
   onHealthCheck: (entry: LibraryEntry) => void;
 }) {
@@ -77,6 +85,12 @@ function SingleInspector({
   const basic = drive.basicFor(entry);
   const owner = tags.metaFor(entry)?.owner || basic?.ownerName || basic?.ownerEmail || basic?.lastEditorName || basic?.lastEditorEmail || '';
   const historyOpen = drive.expandedInfo.has(entry.spineFile);
+
+  // Notes for this asset (read-only here; the full add/resolve flow opens in the shared NotesModal).
+  const noteKey = metaKeyForEntry(entry);
+  const noteList = notes.notesForKey(noteKey);
+  const [notesOpen, setNotesOpen] = useState(false);
+  const [showResolved, setShowResolved] = useState(true);
 
   function createSession() {
     const base = name.replace(/\.spine$/i, '');
@@ -97,15 +111,44 @@ function SingleInspector({
         <SpinePreviewView key={entry.spineFile} entry={entry} compact onExpand={() => onPreview(entry)} />
       </div>
 
-      <dl className="library-inspector-meta">
-        <Row label={t.libraryColVersion} value={entry.version ?? t.libraryUnknownVersion} />
-        <Row label={t.libraryColSpine} value={formatBytes(entry.spineBytes)} />
-        <Row label={t.libraryColImages} value={`${formatBytes(entry.imageBytes)} · ${entry.imageCount}`} />
-        <Row label={t.libraryColAnims} value={String(entry.animationCount)} />
-        <Row label={t.librarySkins} value={String(entry.skins.length)} />
-        <Row label={t.driveColModified} value={basic?.modifiedTime ? formatDate(basic.modifiedTime) : '—'} />
-        <Row label={t.libraryColOwner} value={owner || '—'} />
+      <dl className="library-inspector-meta library-inspector-card">
+        <Row icon={<Hash size={13} />} label={t.libraryColVersion} value={entry.version ?? t.libraryUnknownVersion} />
+        <Row icon={<SpineFileIcon size={13} />} label={t.libraryColSpine} value={formatBytes(entry.spineBytes)} />
+        <Row icon={<StatIcon kind="image" size={13} />} label={t.libraryColImages} value={`${formatBytes(entry.imageBytes)} · ${entry.imageCount}`} />
+        <Row icon={<StatIcon kind="anim" size={13} />} label={t.libraryColAnims} value={String(entry.animationCount)} />
+        <Row icon={<StatIcon kind="skin" size={13} />} label={t.librarySkins} value={String(entry.skins.length)} />
+        <Row icon={<Clock size={13} />} label={t.driveColModified} value={basic?.modifiedTime ? formatDate(basic.modifiedTime) : '—'} />
+        <Row icon={<User size={13} />} label={t.libraryColOwner} value={owner || '—'} />
       </dl>
+
+      <div className="library-inspector-notes library-inspector-card">
+        <div className="library-inspector-notes-head">
+          <span className="library-inspector-notes-title">
+            {t.notes}
+            {noteList.length > 0 && <span className="library-inspector-notes-count">{noteList.length}</span>}
+          </span>
+          <button className="icon-button" title={t.notesOpenIndicator} aria-label={t.notesOpenIndicator} onClick={() => setNotesOpen(true)}>
+            <MessageSquare size={14} />
+          </button>
+        </div>
+        {noteList.length === 0 ? (
+          <p className="library-inspector-notes-empty">{t.notesEmpty}</p>
+        ) : (
+          <ul className="library-inspector-notes-list">
+            {[...noteList]
+              .sort((a, b) => b.createdAt - a.createdAt)
+              .map((note) => (
+                <li key={note.id} className={note.resolved ? 'is-resolved' : undefined}>
+                  <p className="library-inspector-note-text">{note.text}</p>
+                  <span className="library-inspector-note-meta">
+                    {note.resolved && <CheckCircle2 size={11} className="library-inspector-note-check" />}
+                    {t.notesBy.replace('{author}', note.authorEmail)} · {formatDate(note.createdAt)}
+                  </span>
+                </li>
+              ))}
+          </ul>
+        )}
+      </div>
 
       <div className="library-inspector-history">
         <button className="ghost-button small" onClick={() => drive.toggleDriveInfo(entry)} aria-expanded={historyOpen}>
@@ -138,6 +181,21 @@ function SingleInspector({
           <Trash2 size={14} /> {t.libraryMoveToTrash}
         </button>
       </div>
+
+      {notesOpen && (
+        <NotesModal
+          t={t}
+          targetLabel={name}
+          notes={noteList}
+          showResolved={showResolved}
+          onToggleShowResolved={() => setShowResolved((v) => !v)}
+          onAdd={(text) => notes.addNoteByKey(noteKey, text)}
+          onToggleResolved={(id) => notes.toggleResolved(noteKey, id)}
+          onDelete={(id) => notes.deleteNote(noteKey, id)}
+          canDelete={notes.canDelete}
+          onClose={() => setNotesOpen(false)}
+        />
+      )}
     </div>
   );
 }
@@ -229,10 +287,13 @@ function MultiInspector({ entries, filter }: { entries: LibraryEntry[]; filter: 
   );
 }
 
-function Row({ label, value }: { label: string; value: string }) {
+function Row({ icon, label, value }: { icon: ReactNode; label: string; value: string }) {
   return (
     <div className="library-inspector-row">
-      <dt>{label}</dt>
+      <dt>
+        <span className="library-inspector-row-icon" aria-hidden="true">{icon}</span>
+        {label}
+      </dt>
       <dd>{value}</dd>
     </div>
   );

@@ -81,6 +81,11 @@ export type PreferredSetupPlayer = {
   } | null;
   animationState?: { setAnimation?: (track: number, name: string, loop: boolean) => unknown } | null;
   setAnimation?: (name: string, loop?: boolean) => unknown;
+  // Player UI skin state, so the skins dropdown reflects the skin we apply. 4.x tracks the
+  // selected skins in `pinnedSkins` + `applyCombinedSkin()`; 3.8 just reads `config.skin` (string).
+  config?: { skin?: string | string[] } | null;
+  pinnedSkins?: Set<string>;
+  applyCombinedSkin?: () => void;
 };
 
 /** How many attachments a skin defines, across both runtimes (`attachments` is a per-slot array
@@ -97,15 +102,24 @@ function skinAttachmentCount(skin: SkinLike): number {
 }
 
 /**
- * Pick the skin most likely to actually show the rig's art: the one with the most attachments.
- * Plain name priority (`skin_default` → `default` → first) is wrong for two common patterns — an
- * EMPTY `default` skin with the art under `skin_default`, and "skin-folder" rigs (`A/Body_0`, …)
- * where `default` holds almost nothing and each costume part is its own skin. Counting attachments
- * covers both; we fall back to name priority only when no skin reports any (no count info).
+ * Pick the skin most likely to actually show the rig's art.
+ * Priority: a NON-EMPTY `skin_default` → non-empty `default` (the rig's intended default look) wins
+ * outright. Only when neither exists or both are empty do we fall back to the attachment-count
+ * heuristic — which covers two patterns the plain name priority gets wrong: an EMPTY `default` with
+ * the art under another skin, and "skin-folder" rigs (`A/Body_0`, …) where `default` holds almost
+ * nothing. Last resort (no skin reports any attachments): plain name priority.
  */
 function pickPreferredSkin(skins: SkinLike[]): string | undefined {
   if (skins.length === 0) return undefined;
   const names = skins.map((s) => s.name);
+
+  // Prefer the rig's intended default skin when it actually carries art.
+  for (const preferred of ['skin_default', 'default']) {
+    const s = skins.find((sk) => sk.name === preferred);
+    if (s && skinAttachmentCount(s) > 0) return preferred;
+  }
+
+  // Otherwise the skin with the most attachments (handles empty-default + skin-folder rigs).
   const byName = names.includes('skin_default') ? 'skin_default' : names.includes('default') ? 'default' : names[0];
   let best = byName;
   let bestCount = 0;
@@ -121,7 +135,7 @@ function pickPreferredSkin(skins: SkinLike[]): string | undefined {
 
 /**
  * Pick the most representative skin + animation and apply them to a freshly loaded player.
- * Skin is chosen by attachment count (see {@link pickPreferredSkin}); animation priority is
+ * Skin prefers a non-empty `skin_default`/`default` (see {@link pickPreferredSkin}); animation priority is
  * `idle` → first.
  *
  * Shared by the live preview and the grid thumbnail so both frame the asset identically.
@@ -130,9 +144,21 @@ export function applyPreferredSetup(player: PreferredSetupPlayer): void {
   const data = player.skeleton?.data;
 
   const skin = pickPreferredSkin(data?.skins ?? []);
-  if (skin && player.skeleton?.setSkinByName) {
-    player.skeleton.setSkinByName(skin);
-    player.skeleton.setSlotsToSetupPose?.();
+  if (skin) {
+    // Drive the player's OWN skin mechanism (not just the skeleton) so the skins dropdown's
+    // selection matches what we render — otherwise it stays on the player's default (first skin).
+    if (player.pinnedSkins && typeof player.applyCombinedSkin === 'function') {
+      // 4.x: the dropdown checks against `pinnedSkins`; applyCombinedSkin() applies + reframes.
+      if (player.config) player.config.skin = [skin];
+      player.pinnedSkins.clear();
+      player.pinnedSkins.add(skin);
+      player.applyCombinedSkin();
+    } else {
+      // 3.8 (and any minimal player): the dropdown reads the single `config.skin` string.
+      if (player.config) player.config.skin = skin;
+      player.skeleton?.setSkinByName?.(skin);
+      player.skeleton?.setSlotsToSetupPose?.();
+    }
   }
 
   const anims = (data?.animations ?? []).map((a) => a.name);

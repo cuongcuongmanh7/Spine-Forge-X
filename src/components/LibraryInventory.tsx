@@ -16,7 +16,7 @@ import { useLibraryDrive } from '../useLibraryDrive';
 import { useDriveWatch } from '../useDriveWatch';
 import { useThumbnailWarm } from '../useSpineThumbnail';
 import { useLibraryTags } from '../useLibraryTags';
-import { useLibraryNotes } from '../useLibraryNotes';
+import type { LibraryNotesApi } from '../useLibraryNotes';
 import { LibraryTable } from './LibraryTable';
 import { LibraryGrid } from './LibraryGrid';
 import { NotesModal } from './NotesModal';
@@ -52,6 +52,7 @@ export function LibraryInventory({
   filter,
   tags,
   drive,
+  notes,
   onPrepareCleanScan,
   onPreview,
   onHealthCheck
@@ -59,6 +60,7 @@ export function LibraryInventory({
   filter: LibraryFilterApi;
   tags: ReturnType<typeof useLibraryTags>;
   drive: ReturnType<typeof useLibraryDrive>;
+  notes: LibraryNotesApi;
   onPrepareCleanScan: (spineFiles: string[]) => void;
   onPreview: (entry: LibraryEntry) => void;
   onHealthCheck: (entry: LibraryEntry) => void;
@@ -78,7 +80,6 @@ export function LibraryInventory({
     setViewMode,
     pushToast,
     driveAccount,
-    isLeader,
     libraryDir,
     sessions,
     projects,
@@ -134,7 +135,6 @@ export function LibraryInventory({
   }
 
   const { tagList, metaFor, addEntryTag, removeEntryTag, setEntryOwner } = tags;
-  const notes = useLibraryNotes({ libraryDir, authorEmail: driveAccount?.email ?? '', isLeader });
 
   const { driveInfo, expandedInfo, loadingBasics, basicsProgress, basicsLoadedAt, basicFor, toggleDriveInfo, loadDriveBasics, refreshBasicsSilently, openRevisionInSpine } =
     drive;

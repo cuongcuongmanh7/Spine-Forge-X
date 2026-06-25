@@ -1,5 +1,10 @@
 # Changelog
 
+## v0.4.36
+- **Xem trước chọn đúng skin mặc định** — panel xem trước (và thumbnail) giờ ưu tiên skin `skin_default`/`default` khi skin đó thật sự có hình, thay vì chọn skin nhiều attachment nhất. Trình đơn chọn skin của player cũng được đồng bộ theo (trước đây vẫn tick nhầm vào skin đầu danh sách dù hình đã đúng). Rig có `default` rỗng vẫn rơi về cách chọn cũ nên không bị trống.
+- **Gom thông tin chi tiết vào một thẻ + thêm icon** — cụm version/.spine/ảnh/anim/skin/sửa đổi/người sở hữu trong panel giờ nằm gọn trong một thẻ, mỗi dòng có icon; .spine/ảnh/anim/skin dùng đúng bộ icon như ngoài danh sách cho đồng bộ.
+- **Hiện ghi chú ngay trong panel** — chọn asset có ghi chú thì panel hiển thị luôn nội dung (tác giả, ngày, đánh dấu đã xử lý), kèm nút mở hộp ghi chú đầy đủ để thêm/sửa/đánh dấu — không cần mở từ bảng/lưới nữa.
+
 ## v0.4.35
 - **Báo cáo "Thiếu attachment" và "Atlas trùng"** — hai mục cuối trong tab Báo cáo giờ chạy thật. Bấm **Quét kiểm tra** để rà các asset trong phạm vi đang lọc: *Thiếu attachment* liệt kê asset thiếu atlas/skeleton/trang texture (bấm vào để mở Kiểm tra export chi tiết); *Atlas trùng* gom các asset dùng atlas giống hệt nhau (byte-identical) — bắt đúng case copy-paste, không báo nhầm.
 
