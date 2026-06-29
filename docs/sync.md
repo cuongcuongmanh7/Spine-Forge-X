@@ -116,7 +116,7 @@ Nếu bất kỳ scope nào apply remote → báo toast "Đang tải workspace m
 
 **Code:** init/auth/db/storage + `subscribeLeaderEmails` `src/firebase.ts`; IO Firestore + rebase `src/sync.ts`; điều phối + role-gate `src/useSync.ts`; helper role thuần `src/roles.ts` (`computeIsLeader`); auth + role live `src/useFirebaseAuth.ts` + lệnh Rust `drive_id_token` (`src-tauri/src/drive.rs`); thumbnail 3 tầng `src/useSpineThumbnail.ts`; UI gate thêm/xoá `src/components/LibraryView.tsx`; CSP (`tauri.conf.json`); rules `firestore.rules` (gồm `config/roles`) + `storage.rules`. Test: `src/sync.firestore.test.ts`, `src/roles.test.ts`.
 
-**Còn lại (pha sau):** chuyển sidecar tag/drive-meta sang Firestore; thay `window.location.reload()` bằng `onSnapshot` real-time.
+**Còn lại (pha sau):** chuyển 3 sidecar còn trên Drive sang Firestore — `spineforge-library-meta.json` (tags + owner), `spineforge-library-notes.json` (notes), `spineforge-drive-meta.json` (cache owner/last-modified) → subcollection `envs/{env}/library/*` (giống `list`/`clean`/`trash`) để được rules bảo vệ + bớt phụ thuộc mount Drive; thay `window.location.reload()` bằng `onSnapshot` real-time. (Việc lớn, tách riêng — xem mục "Dự kiến" trong [ROADMAP.md](ROADMAP.md).)
 
 **Auto-detect thay đổi Drive (đã làm — v0.4.17).** Không còn phải bấm "Load Drive data" thủ công khi mở tab Library: một poller chạy nền dùng **Drive Changes API** (`changes.list` theo delta, ~10s/lần, chỉ khi tab Library mở + cửa sổ focus) phát hiện thay đổi ở mức Drive và tự refresh ngầm owner/last-modified các dòng bị ảnh hưởng. Phạm vi phát hiện:
 - **`.spine`**: thêm / sửa / đổi tên / xoá (xoá bắt cả trash lẫn xoá vĩnh viễn vì ID nằm trong cache).

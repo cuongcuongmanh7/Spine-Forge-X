@@ -194,7 +194,7 @@ export function useAppControllerValue() {
     selectLibrary,
     deleteLibrary,
     reloadCleanState,
-    libraryTrash, trashedEntries, addToTrash, restoreFromTrash, reloadTrash
+    libraryTrash, trashedEntries, trashedFolders, trashedFiles, addToTrash, addFolderToTrash, restoreFromTrash, restoreFolderFromTrash, reloadTrash
   } = useLibrary({ t, pushToast });
 
   // App-data sync (Tier B): Google Drive account — identifies the user AND powers owner/history
@@ -672,7 +672,7 @@ export function useAppControllerValue() {
     markLibraryEntriesScanned,
     selectLibrary,
     deleteLibrary,
-    libraryTrash, trashedEntries, addToTrash, restoreFromTrash,
+    libraryTrash, trashedEntries, trashedFolders, trashedFiles, addToTrash, addFolderToTrash, restoreFromTrash, restoreFolderFromTrash,
 
     isDragOver,
     dragPosition,

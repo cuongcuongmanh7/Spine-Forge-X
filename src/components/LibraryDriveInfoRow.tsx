@@ -52,37 +52,46 @@ export function LibraryDriveInfoPanel({ entry, info, t, onOpenRevision, onClose 
               {info.data.revisions.length === 0 ? (
                 <span className="muted"> —</span>
               ) : (
-                <ul>
-                  {info.data.revisions.slice(0, 20).map((rev) => (
-                    <li key={rev.id}>
-                      <span>{rev.modifiedTime ? formatDateTime(rev.modifiedTime) : '—'}</span>
-                      <span className="muted">{rev.editorName ?? rev.editorEmail ?? ''}</span>
-                      {rev.size ? <span className="muted">{formatBytes(Number(rev.size))}</span> : null}
-                      <button
-                        className="icon-button"
-                        title={t.driveOpenRevision}
-                        aria-label={t.driveOpenRevision}
-                        onClick={() => onOpenRevision(entry, rev)}
-                      >
-                        <FileClock size={14} />
-                      </button>
-                    </li>
-                  ))}
-                </ul>
+                <>
+                  {/* Column header — shown only in the modal (CSS-gated); aligns with the row grid. */}
+                  <div className="library-drive-rev-head" aria-hidden="true">
+                    <span>{t.driveColVersion}</span>
+                    <span>{t.driveColModified}</span>
+                    <span>{t.driveColOwner}</span>
+                    <span>{t.driveColSize}</span>
+                    <span />
+                  </div>
+                  <ul>
+                    {info.data.revisions.slice(0, 20).map((rev, idx) => {
+                      // Revisions come newest-first, so the highest version number is the latest edit.
+                      const versionNo = info.data!.revisions.length - idx;
+                      const isLatest = idx === 0;
+                      return (
+                        <li key={rev.id} className={isLatest ? 'library-drive-rev-latest' : undefined}>
+                          <span className="library-drive-rev-ver">v{versionNo}</span>
+                          <span>
+                            {rev.modifiedTime ? formatDateTime(rev.modifiedTime) : '—'}
+                            {isLatest && <em className="library-drive-rev-badge">{t.driveLatest}</em>}
+                          </span>
+                          <span className="muted">{rev.editorName ?? rev.editorEmail ?? ''}</span>
+                          <span className="muted library-drive-rev-size">{rev.size ? formatBytes(Number(rev.size)) : '—'}</span>
+                          <button
+                            className="icon-button"
+                            title={t.driveOpenRevision}
+                            aria-label={t.driveOpenRevision}
+                            onClick={() => onOpenRevision(entry, rev)}
+                          >
+                            <FileClock size={14} />
+                          </button>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </>
               )}
             </div>
           </div>
         )}
     </>
-  );
-}
-
-export function LibraryDriveInfoRow(props: Props) {
-  return (
-    <tr className="library-anim-list library-drive-row">
-      <td colSpan={11}>
-        <LibraryDriveInfoPanel {...props} />
-      </td>
-    </tr>
   );
 }

@@ -12,7 +12,6 @@ import {
 } from 'lucide-react';
 import { formatBytes, formatDate } from '../time';
 import { entryWarnings, groupWarningCount, matchedNames, metaKeyForEntry, metaKeyForFolder } from '../library';
-import { LibraryDriveInfoRow } from './LibraryDriveInfoRow';
 import { LibraryRowMenu, LibrarySectionMenu } from './LibraryRowMenu';
 import { LibraryPreviewCell } from './LibraryPreviewCell';
 import { LibraryTagCell } from './LibraryTagCell';
@@ -22,6 +21,7 @@ import { StatIcon } from './StatIcon';
 import {
   DAY_MS,
   GroupSelectCheckbox,
+  HighlightText,
   NotesIndicator,
   cleanStatusIcon,
   sectionCleanStatus,
@@ -54,11 +54,8 @@ export function LibraryTable(props: LibraryViewProps) {
     addEntryTag,
     removeEntryTag,
     setEntryOwner,
-    driveInfo,
-    expandedInfo,
     basicFor,
-    toggleDriveInfo,
-    openRevisionInSpine,
+    onDriveHistory,
     cleanStatus,
     openFolder,
     openInSpine,
@@ -72,6 +69,7 @@ export function LibraryTable(props: LibraryViewProps) {
     onQuickExport,
     quickExportBusy,
     onMoveToTrash,
+    onMoveSectionToTrash,
     selected,
     toggleSelected,
     setManySelected
@@ -216,6 +214,7 @@ export function LibraryTable(props: LibraryViewProps) {
                       onToggle={() => setMenuOpen(menuOpen === `sec:${section.key}` ? null : `sec:${section.key}`)}
                       onClose={() => setMenuOpen(null)}
                       onQuickExport={() => onQuickExport(section.entries.map((entry) => entry.spineFile))}
+                      onMoveToTrash={onMoveSectionToTrash ? () => onMoveSectionToTrash(section.key) : undefined}
                       quickExportBusy={quickExportBusy}
                       t={t}
                     />
@@ -229,8 +228,6 @@ export function LibraryTable(props: LibraryViewProps) {
                 const matches = matchedNames(entry, parsedQuery);
                 const hasChipMatch = matches.animations.size > 0 || matches.skins.size > 0;
                 const animOpen = expandedAnims.has(entry.spineFile) || hasChipMatch;
-                const infoOpen = expandedInfo.has(entry.spineFile);
-                const info = driveInfo[entry.spineFile];
                 const basic = basicFor(entry);
                 const modifiedMs = basic?.modifiedTime ? Date.parse(basic.modifiedTime) : NaN;
                 const recent = Number.isFinite(modifiedMs) && Date.now() - modifiedMs < 7 * DAY_MS;
@@ -255,8 +252,14 @@ export function LibraryTable(props: LibraryViewProps) {
                             const { dir, name } = splitRelPath(entry.relPath);
                             return (
                               <>
-                                {dir && <span className="library-path-dir">{dir}</span>}
-                                <span className="library-path-name">{name}</span>
+                                {dir && (
+                                  <span className="library-path-dir">
+                                    <HighlightText text={dir} parsedQuery={parsedQuery} />
+                                  </span>
+                                )}
+                                <span className="library-path-name">
+                                  <HighlightText text={name} parsedQuery={parsedQuery} />
+                                </span>
                               </>
                             );
                           })()}
@@ -329,7 +332,7 @@ export function LibraryTable(props: LibraryViewProps) {
                         open={menuOpen === entry.spineFile}
                         onToggle={() => setMenuOpen(menuOpen === entry.spineFile ? null : entry.spineFile)}
                         onClose={() => setMenuOpen(null)}
-                        onDriveInfo={toggleDriveInfo}
+                        onDriveInfo={onDriveHistory}
                         onCleanScan={(e) => onPrepareCleanScan([e.spineFile])}
                         onOpenFolder={(e) => openFolder(e)}
                         onOpenInSpine={(e) => openInSpine(e)}
@@ -368,15 +371,6 @@ export function LibraryTable(props: LibraryViewProps) {
                           </div>
                         </td>
                       </tr>
-                    )}
-                    {infoOpen && (
-                      <LibraryDriveInfoRow
-                        entry={entry}
-                        info={info}
-                        t={t}
-                        onOpenRevision={openRevisionInSpine}
-                        onClose={() => toggleDriveInfo(entry)}
-                      />
                     )}
                   </Fragment>
                 );

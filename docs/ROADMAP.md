@@ -6,6 +6,21 @@ Source-of-truth tiến độ toàn dự án.
 
 ---
 
+## 🔜 Dự kiến (chưa làm)
+
+- [ ] **Chuyển 3 sidecar metadata trên Drive sang Firebase** — `spineforge-library-meta.json` (tags + owner), `spineforge-library-notes.json` (notes), `spineforge-drive-meta.json` (cache owner/last-modified) hiện vẫn là file thường trong `…\spine_app_data\library`: **không** được security-rules bảo vệ (ai có quyền cũng xoá/sửa được) và **cần mount Drive** mới đọc được. Đưa lên Firestore subcollection `envs/{env}/library/*` (giống `list`/`clean`/`trash` đã làm) để được rules chống xoá/sửa bậy + point-in-time recovery + bớt phụ thuộc mount Drive (mở đường cho web/mobile sau này). **Không** migrate source `.spine`/export assets (Spine.exe cần filesystem trực tiếp). Việc lớn → tách spec/PR riêng. Bối cảnh + hiện trạng storage: [sync.md](sync.md).
+
+## v0.4.39 — Export detection chặt hơn · fix grid expand · highlight search · folder trash · Owner&history modal ✅ Done
+
+> Bump `0.4.38 → 0.4.39`; tag `v0.4.39`. (ROADMAP nhảy từ v0.4.37 — bản 0.4.38 chỉ ghi ở CHANGELOG.)
+
+- [x] **Export = chỉ skeleton** — `read_skeleton_meta` bỏ `.atlas` khỏi `is_artifact`; chỉ `.json`/`.skel`(+`.skel.bytes`) set `exported=true`. Folder export atlas-only (thiếu skeleton) → "chưa export". [src-tauri/src/library.rs](../src-tauri/src/library.rs).
+- [x] **Fix grid expand kéo cả hàng** — `.library-grid` thêm `align-items: start` (mặc định `stretch` khiến mọi card cùng row cao theo card đang expand). [LibraryGrid.css](../src/components/LibraryGrid.css).
+- [x] **Highlight keyword** — `HighlightText` (case-insensitive, bọc đoạn khớp bằng `<mark.library-hl>`) tô tên + đường dẫn khi `parsedQuery.scope` ∈ `all|path`; áp ở Grid + Table, CSS `.library-hl` ([LibraryView.css](../src/components/LibraryView.css)). Scope `anim:`/`skin:` để chip lo. [LibraryViewShared.tsx](../src/components/LibraryViewShared.tsx), [LibraryGrid.tsx](../src/components/LibraryGrid.tsx), [LibraryTable.tsx](../src/components/LibraryTable.tsx).
+- [x] **Folder trash (1 đơn vị)** — trash set chứa thêm key `dir:{topFolder}` (tương thích `string[]` sync sẵn, không đổi schema Firestore); `isEntryTrashed` ẩn entry theo `relPath` ∪ `dir:`; thêm `addFolderToTrash`/`restoreFolderFromTrash` + dẫn xuất `trashedFolders`/`trashedFiles` ([useLibrary.ts](../src/useLibrary.ts)). Section-menu action chỉ hiện ở facet `folder` (`onMoveSectionToTrash`) — [LibraryRowMenu.tsx](../src/components/LibraryRowMenu.tsx) + Grid/Table. Modal liệt kê folder (kèm số file) + file lẻ ([LibraryTrashModal.tsx](../src/components/LibraryTrashModal.tsx)). i18n `libraryMoveFolderToTrash`.
+- [x] **Owner & history → modal** — `LibraryDriveHistoryModal` mới (tái dùng `LibraryDriveInfoPanel` + chrome modal); bỏ panel inline ở Grid/Table/Inspector, thay bằng `onDriveHistory`/`loadDriveInfo` mở modal; gỡ `expandedInfo`/`toggleDriveInfo` + wrapper `LibraryDriveInfoRow` (dead). Lịch sử version dạng **bảng** (cột `v{n}` + badge "Mới nhất", canh cột, kẻ dòng) — i18n `driveColVersion`/`driveColSize`/`driveLatest`. Gom modal Inventory vào [LibraryInventoryModals.tsx](../src/components/LibraryInventoryModals.tsx) để `LibraryInventory` < 800 dòng ([[keep-files-small]]). [LibraryDriveHistoryModal.tsx](../src/components/LibraryDriveHistoryModal.tsx), [useLibraryDrive.ts](../src/useLibraryDrive.ts), [LibraryInspector.tsx](../src/components/LibraryInspector.tsx).
+- [x] Verify: `tsc` + `npm test` (120) + `cargo check` + file-size guard xanh.
+
 ## v0.4.37 — Báo cáo giữ kết quả + badge số lượng · badge cảnh báo nhóm gộp đủ loại · bố cục lại thẻ Lưới ✅ Done
 
 > Bump `0.4.36 → 0.4.37`; tag `v0.4.37`. (ROADMAP nhảy từ v0.4.29 — các bản 0.4.30–0.4.36 chỉ ghi ở CHANGELOG.)

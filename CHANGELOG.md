@@ -1,5 +1,12 @@
 # Changelog
 
+## v0.4.39
+- **"Chưa export" chính xác hơn** — folder `export`/`ex` có tồn tại nhưng chỉ chứa atlas (thiếu skeleton `.json`/`.skel`/`.skel.bytes`) giờ được xem là **chưa export**, thay vì báo nhầm là đã export.
+- **Sửa lỗi thẻ Lưới giãn theo cả hàng** — mở rộng anim/skin (hoặc owner) ở một thẻ không còn kéo các thẻ cùng hàng cao theo; mỗi thẻ tự cao theo nội dung của nó.
+- **Tô vàng từ khoá khi tìm kiếm** — gõ từ khoá thì tên + đường dẫn của các mục khớp được bôi vàng (cả chế độ Lưới lẫn Bảng); chip animation/skin vẫn highlight như trước. (Dùng `anim:`/`skin:` thì chỉ chip lo, không tô tên/đường dẫn.)
+- **Chuyển cả folder vào thùng rác** — khi nhóm theo **Folder**, menu ⋯ của nhóm có **Chuyển cả folder vào thùng rác**: ẩn cả folder như một đơn vị, file thêm vào folder đó sau này cũng tự ẩn. Thùng rác liệt kê cả folder (kèm số file) lẫn file lẻ, khôi phục riêng từng cái hoặc tất cả. Vẫn đồng bộ cho cả nhóm như trash file.
+- **Owner & lịch sử mở trong cửa sổ riêng** — thay vì bung danh sách ngay trong thẻ/hàng/panel, **Owner & history** giờ mở một cửa sổ riêng gọn gàng (đồng bộ ở cả Lưới, Bảng và panel chi tiết bên phải). Lịch sử version trình bày dạng **bảng**: cột số version (`v8`…), ngày sửa, người sửa, dung lượng — dòng **mới nhất** được tô đậm kèm badge **"Mới nhất"**.
+
 ## v0.4.38
 - **Sửa viền trắng khi xem trước/thumbnail export Spine 4.x** — asset 4.x (vd 4.2) xuất ở dạng straight-alpha trước đây bị viền sáng/trắng quanh các bộ phận (tóc, tay) vì trình phát 4.x mặc định blend kiểu premultiplied và bỏ qua cờ `pma` trong atlas. Nay cả xem trước động lẫn thumbnail đều tự dò premultiplied-alpha của texture rồi truyền đúng cho trình phát 4.x (giống nhánh 3.8). Thumbnail cũ tự render lại.
 

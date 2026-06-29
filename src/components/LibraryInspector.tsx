@@ -6,7 +6,7 @@ import { formatBytes, formatDate } from '../time';
 import { SpinePreviewView } from './SpinePreviewView';
 import { SpineFileIcon } from './SpineFileIcon';
 import { StatIcon } from './StatIcon';
-import { LibraryDriveInfoPanel } from './LibraryDriveInfoRow';
+import { LibraryDriveHistoryModal } from './LibraryDriveHistoryModal';
 import { NotesModal } from './NotesModal';
 import { splitRelPath } from './LibraryViewShared';
 import type { LibraryFilterApi } from '../useLibraryFilter';
@@ -84,7 +84,7 @@ function SingleInspector({
   const { name } = splitRelPath(entry.relPath);
   const basic = drive.basicFor(entry);
   const owner = tags.metaFor(entry)?.owner || basic?.ownerName || basic?.ownerEmail || basic?.lastEditorName || basic?.lastEditorEmail || '';
-  const historyOpen = drive.expandedInfo.has(entry.spineFile);
+  const [historyOpen, setHistoryOpen] = useState(false);
 
   // Notes for this asset (read-only here; the full add/resolve flow opens in the shared NotesModal).
   const noteKey = metaKeyForEntry(entry);
@@ -151,20 +151,15 @@ function SingleInspector({
       </div>
 
       <div className="library-inspector-history">
-        <button className="ghost-button small" onClick={() => drive.toggleDriveInfo(entry)} aria-expanded={historyOpen}>
+        <button
+          className="ghost-button small"
+          onClick={() => {
+            drive.loadDriveInfo(entry);
+            setHistoryOpen(true);
+          }}
+        >
           <History size={14} /> {t.driveInfoTitle}
         </button>
-        {historyOpen && (
-          <div className="library-card-drive">
-            <LibraryDriveInfoPanel
-              entry={entry}
-              info={drive.driveInfo[entry.spineFile]}
-              t={t}
-              onOpenRevision={drive.openRevisionInSpine}
-              onClose={() => drive.toggleDriveInfo(entry)}
-            />
-          </div>
-        )}
       </div>
 
       <div className="library-inspector-actions">
@@ -194,6 +189,16 @@ function SingleInspector({
           onDelete={(id) => notes.deleteNote(noteKey, id)}
           canDelete={notes.canDelete}
           onClose={() => setNotesOpen(false)}
+        />
+      )}
+
+      {historyOpen && (
+        <LibraryDriveHistoryModal
+          t={t}
+          entry={entry}
+          info={drive.driveInfo[entry.spineFile]}
+          onOpenRevision={drive.openRevisionInSpine}
+          onClose={() => setHistoryOpen(false)}
         />
       )}
     </div>

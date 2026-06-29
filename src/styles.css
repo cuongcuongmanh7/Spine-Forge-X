@@ -789,6 +789,10 @@ body.col-resizing {
 .library-drive-revs li > .icon-button {
   margin-left: auto;
 }
+/* Column header is only meaningful in the wide standalone modal; hidden in the narrow inline panel. */
+.library-drive-rev-head {
+  display: none;
+}
 
 /* Dashboard columns (owner / last-modified). */
 .library-owner {

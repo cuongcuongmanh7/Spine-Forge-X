@@ -282,19 +282,11 @@
   flex: 0 0 auto;
 }
 
-/* Owner / modified / revision-history cluster (single-select). */
+/* Owner & history opener (single-select) — the details now open in LibraryDriveHistoryModal. */
 .library-inspector-history {
   display: flex;
   flex-direction: column;
   gap: 8px;
-}
-.library-inspector-history .library-card-drive {
-  position: relative;
-  padding: 8px 10px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--surface-soft);
-  font-size: 12px;
 }
 
 /* Action buttons (single + multi): two equal columns per row; a lone button fills the row. */

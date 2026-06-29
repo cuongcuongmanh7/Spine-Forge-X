@@ -621,6 +621,14 @@
   color: var(--primary);
   font-weight: 600;
 }
+/* Search-term highlight inside an entry's name/path text. Inherits the surrounding text colour so it
+   stays legible on both themes; just a soft amber wash + rounding marks the matched run. */
+.library-hl {
+  background: color-mix(in srgb, var(--warning) 32%, transparent);
+  color: inherit;
+  border-radius: 3px;
+  padding: 0 1px;
+}
 .library-warn-badge {
   display: inline-flex;
   align-items: center;

@@ -119,6 +119,111 @@
   border-color: var(--primary);
   color: var(--primary);
 }
+/* In the standalone Drive-history modal the header already has a close button — hide the panel's own
+   absolute close button to avoid two X's. */
+.library-drive-modal-body .library-drive-close {
+  display: none;
+}
+.library-drive-modal-body {
+  font-size: 13px;
+}
+/* Owner/modified summary sits above a divider line, then the revision history reads as a table. */
+.library-drive-modal-body .library-drive-info {
+  gap: 0;
+}
+.library-drive-modal-body .library-drive-meta {
+  flex-direction: column;
+  gap: 6px;
+  padding-bottom: 10px;
+  margin-bottom: 10px;
+  border-bottom: 1px solid var(--border);
+}
+.library-drive-modal-body .library-drive-revs > strong {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+/* Header + every row share one grid template so the columns line up like a table. */
+.library-drive-modal-body .library-drive-rev-head,
+.library-drive-modal-body .library-drive-revs li {
+  display: grid;
+  grid-template-columns: 46px 150px 1fr 78px 34px;
+  align-items: center;
+  gap: 12px;
+}
+.library-drive-modal-body .library-drive-rev-head {
+  padding: 0 4px 6px;
+  border-bottom: 1px solid var(--border);
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--text-muted);
+}
+.library-drive-modal-body .library-drive-revs ul {
+  max-height: 280px;
+}
+.library-drive-modal-body .library-drive-revs li {
+  padding: 6px 4px;
+  border-bottom: 1px solid color-mix(in srgb, var(--border), transparent 45%);
+}
+.library-drive-modal-body .library-drive-revs li:last-child {
+  border-bottom: none;
+}
+/* The grid column drives widths now — drop the inline panel's 150px min on the first cell (the version
+   column) so it doesn't fight the grid template. */
+.library-drive-modal-body .library-drive-revs li > span:first-child {
+  min-width: 0;
+}
+/* Version column: small, tabular, muted — and primary-coloured on the latest row. */
+.library-drive-modal-body .library-drive-rev-ver {
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+/* Editor column (3rd): ellipsize long names instead of wrapping and breaking row height. */
+.library-drive-modal-body .library-drive-revs li > span:nth-child(3) {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* Right-align the size column (header 4th + cells) with tabular figures so KB values stack neatly. */
+.library-drive-modal-body .library-drive-rev-head > span:nth-child(4),
+.library-drive-modal-body .library-drive-rev-size {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.library-drive-modal-body .library-drive-revs li > .icon-button {
+  margin-left: 0;
+}
+/* Latest revision: bold row on a faint primary wash, with a "Latest" pill next to its date. */
+.library-drive-modal-body .library-drive-revs li.library-drive-rev-latest {
+  font-weight: 600;
+  background: color-mix(in srgb, var(--primary) 9%, transparent);
+  border-radius: 6px;
+  border-bottom-color: transparent;
+}
+.library-drive-modal-body .library-drive-rev-latest .muted {
+  color: var(--text);
+}
+.library-drive-modal-body .library-drive-rev-latest .library-drive-rev-ver {
+  color: var(--primary);
+}
+.library-drive-rev-badge {
+  margin-left: 8px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 700;
+  font-style: normal;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  background: var(--primary);
+  color: var(--primary-text, #fff);
+  vertical-align: middle;
+  white-space: nowrap;
+}
 /* "Last scan" + "Drive loaded" stacked at the right of the search row. */
 .library-lastscan {
   flex: 0 0 auto;

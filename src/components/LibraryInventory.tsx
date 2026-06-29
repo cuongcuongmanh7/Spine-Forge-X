@@ -3,8 +3,7 @@ import { usePersistentState, usePersistentSet } from '../usePersistentState';
 import { invoke } from '@tauri-apps/api/core';
 import { AlertTriangle, CheckCircle2, CloudDownload, Layers, MessageSquare, RotateCw, Search, SearchX, Tag, Trash2, Users, X } from 'lucide-react';
 import { SpineFileIcon } from './SpineFileIcon';
-import { MenuPopover } from './MenuPopover';
-import { LibraryTrashModal } from './LibraryTrashModal';
+import { LibraryInventoryModals } from './LibraryInventoryModals';
 import { useApp } from '../useAppController';
 import { Section as CollapsibleSection } from './common';
 import { LibraryStatCards } from './LibraryStatCards';
@@ -19,8 +18,6 @@ import { useLibraryTags } from '../useLibraryTags';
 import type { LibraryNotesApi } from '../useLibraryNotes';
 import { LibraryTable } from './LibraryTable';
 import { LibraryGrid } from './LibraryGrid';
-import { NotesModal } from './NotesModal';
-import './NotesModal.css';
 import './LibraryMeta.css';
 import './LibraryFilters.css';
 import {
@@ -88,8 +85,11 @@ export function LibraryInventory({
     quickExport,
     anyRunning,
     addToTrash,
+    addFolderToTrash,
     restoreFromTrash,
-    trashedEntries
+    restoreFolderFromTrash,
+    trashedFolders,
+    trashedFiles
   } = useApp();
 
   const { facet, selectedCats, selectedVersions, query, invert, clearFilters, selected, toggleSelected, setManySelected, clearSelected } = filter;
@@ -118,6 +118,8 @@ export function LibraryInventory({
   // Collapsed-filter chip preview: anchor for the overflow ("… +k") popover, and the trash modal.
   const [chipsOverflowAnchor, setChipsOverflowAnchor] = useState<HTMLElement | null>(null);
   const [trashOpen, setTrashOpen] = useState(false);
+  // Which entry's Drive owner/history modal is open (null = none).
+  const [driveModalEntry, setDriveModalEntry] = useState<LibraryEntry | null>(null);
   // Count of active chip filters — surfaced as a badge on the collapsible Filters section header.
   const activeFilterCount =
     selectedCats.size + selectedVersions.size + selectedUsers.size + selectedTags.size +
@@ -136,7 +138,7 @@ export function LibraryInventory({
 
   const { tagList, metaFor, addEntryTag, removeEntryTag, setEntryOwner } = tags;
 
-  const { driveInfo, expandedInfo, loadingBasics, basicsProgress, basicsLoadedAt, basicFor, toggleDriveInfo, loadDriveBasics, refreshBasicsSilently, openRevisionInSpine } =
+  const { driveInfo, loadingBasics, basicsProgress, basicsLoadedAt, basicFor, loadDriveInfo, loadDriveBasics, refreshBasicsSilently, openRevisionInSpine } =
     drive;
 
   const thresholds: LibraryThresholds = {
@@ -423,11 +425,11 @@ export function LibraryInventory({
     openNotes: (key, label) => setNotesTarget({ key, label }),
     // Badge/highlight count: open notes only, unless "show resolved" is on (then count all).
     noteCount: (key: string) => (showResolved ? notes.countForKey(key) : notes.unresolvedForKey(key)),
-    driveInfo,
-    expandedInfo,
     basicFor,
-    toggleDriveInfo,
-    openRevisionInSpine,
+    onDriveHistory: (entry: LibraryEntry) => {
+      loadDriveInfo(entry);
+      setDriveModalEntry(entry);
+    },
     cleanStatus,
     openFolder: (e) => void openFolder(e),
     openInSpine: (e) => void openInSpine(e),
@@ -439,6 +441,9 @@ export function LibraryInventory({
     onQuickExport: (spineFiles) => void quickExport(spineFiles),
     quickExportBusy: anyRunning,
     onMoveToTrash: (e: LibraryEntry) => addToTrash(e),
+    // Folder-level trash only makes sense under the folder facet (sections are top-level folders
+    // there); leave it undefined for the id/status facets so the menu action hides.
+    onMoveSectionToTrash: facet === 'folder' ? (folderName: string) => addFolderToTrash(folderName) : undefined,
     selected,
     toggleSelected,
     setManySelected
@@ -699,9 +704,9 @@ export function LibraryInventory({
             {loadingBasics ? <RotateCw size={14} className="spin" /> : <CloudDownload size={14} />} {t.driveLoadData}
             {loadingBasics && basicsProgress ? ` ${basicsProgress.done}/${basicsProgress.total}` : ''}
           </button>
-          {trashedEntries.length > 0 && (
+          {(trashedFolders.length > 0 || trashedFiles.length > 0) && (
             <button className="library-trash-badge" onClick={() => setTrashOpen(true)} title={t.libraryTrashTitle}>
-              <Trash2 size={12} /> {t.libraryTrashFilter} <em>{trashedEntries.length}</em>
+              <Trash2 size={12} /> {t.libraryTrashFilter} <em>{trashedFolders.length + trashedFiles.length}</em>
             </button>
           )}
         </div>
@@ -741,45 +746,27 @@ export function LibraryInventory({
         </button>
       </div>
 
-      {notesTarget && (
-        <NotesModal
-          t={t}
-          targetLabel={notesTarget.label}
-          notes={notes.notesForKey(notesTarget.key)}
-          showResolved={showResolved}
-          onToggleShowResolved={() => setShowResolved((v) => !v)}
-          onAdd={(text) => notes.addNoteByKey(notesTarget.key, text)}
-          onToggleResolved={(id) => notes.toggleResolved(notesTarget.key, id)}
-          onDelete={(id) => notes.deleteNote(notesTarget.key, id)}
-          canDelete={notes.canDelete}
-          onClose={() => setNotesTarget(null)}
-        />
-      )}
-
-      {/* Overflow chips from the collapsed Filters preview — each removable from here. */}
-      {chipsOverflowAnchor && (
-        <MenuPopover
-          anchor={chipsOverflowAnchor}
-          onClose={() => setChipsOverflowAnchor(null)}
-          className="session-menu library-row-menu library-row-menu--portal library-chip-overflow"
-        >
-          {overflowChips.map((c) => (
-            <button key={c.id} type="button" onClick={() => c.remove()}>
-              <X size={13} /> {c.label}
-            </button>
-          ))}
-        </MenuPopover>
-      )}
-
-      {trashOpen && (
-        <LibraryTrashModal
-          t={t}
-          entries={trashedEntries}
-          onRestore={(relPath) => restoreFromTrash(relPath)}
-          onRestoreAll={() => trashedEntries.forEach((e) => restoreFromTrash(e.relPath))}
-          onClose={() => setTrashOpen(false)}
-        />
-      )}
+      <LibraryInventoryModals
+        t={t}
+        notesTarget={notesTarget}
+        notes={notes}
+        showResolved={showResolved}
+        onToggleShowResolved={() => setShowResolved((v) => !v)}
+        onCloseNotes={() => setNotesTarget(null)}
+        overflowAnchor={chipsOverflowAnchor}
+        overflowChips={overflowChips}
+        onCloseOverflow={() => setChipsOverflowAnchor(null)}
+        trashOpen={trashOpen}
+        trashedFolders={trashedFolders}
+        trashedFiles={trashedFiles}
+        onRestoreFolder={restoreFolderFromTrash}
+        onRestore={restoreFromTrash}
+        onCloseTrash={() => setTrashOpen(false)}
+        driveModalEntry={driveModalEntry}
+        driveInfo={driveInfo}
+        onOpenRevision={openRevisionInSpine}
+        onCloseDrive={() => setDriveModalEntry(null)}
+      />
     </div>
   );
 }

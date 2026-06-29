@@ -28,6 +28,39 @@ export function splitRelPath(path: string): { dir: string; name: string } {
   return { dir: dirs.length > 0 ? `${dirs.join('/')}/` : '', name };
 }
 
+/**
+ * Render `text` with every case-insensitive occurrence of the search term wrapped in a `<mark>`.
+ * Only highlights when the term applies to the path/name facet (`scope` is `all` or `path`) — the
+ * `anim:`/`skin:` scopes are already surfaced by the highlighted chips, so we leave the name/path
+ * plain there. Returns the raw string (no markup) when there's nothing to highlight.
+ */
+export function HighlightText({
+  text,
+  parsedQuery
+}: {
+  text: string;
+  parsedQuery: ReturnType<typeof parseQuery>;
+}): ReactNode {
+  const needle = parsedQuery.term.trim().toLowerCase();
+  if (!needle || (parsedQuery.scope !== 'all' && parsedQuery.scope !== 'path')) return text;
+  const lower = text.toLowerCase();
+  if (!lower.includes(needle)) return text;
+  const parts: ReactNode[] = [];
+  let from = 0;
+  let key = 0;
+  for (let idx = lower.indexOf(needle); idx !== -1; idx = lower.indexOf(needle, from)) {
+    if (idx > from) parts.push(text.slice(from, idx));
+    parts.push(
+      <mark className="library-hl" key={key++}>
+        {text.slice(idx, idx + needle.length)}
+      </mark>
+    );
+    from = idx + needle.length;
+  }
+  if (from < text.length) parts.push(text.slice(from));
+  return <>{parts}</>;
+}
+
 /** The clean-scan status badge (clean / needs-review / never-scanned) for a row or card. */
 export function cleanStatusIcon(status: LibraryCleanStatus, t: Translations): ReactNode {
   if (status === 'clean') {
@@ -165,11 +198,9 @@ export interface LibraryViewProps {
   /** Note count for `key` driving the badge + row/section highlight: open notes only, or all notes
    *  when the "show resolved" filter is on (host decides). */
   noteCount: (key: string) => number;
-  driveInfo: DriveApi['driveInfo'];
-  expandedInfo: DriveApi['expandedInfo'];
   basicFor: DriveApi['basicFor'];
-  toggleDriveInfo: DriveApi['toggleDriveInfo'];
-  openRevisionInSpine: DriveApi['openRevisionInSpine'];
+  /** Open the standalone Drive owner/history modal for one entry (host renders the modal). */
+  onDriveHistory: (entry: LibraryEntry) => void;
   cleanStatus: (entry: LibraryEntry) => LibraryCleanStatus;
   openFolder: (entry: LibraryEntry) => void;
   openInSpine: (entry: LibraryEntry) => void;
@@ -185,6 +216,9 @@ export interface LibraryViewProps {
   quickExportBusy: boolean;
   /** Move an entry to the library trash (hidden from inventory + scans until restored). */
   onMoveToTrash: (entry: LibraryEntry) => void;
+  /** Move a whole folder group to trash. Only set under the "folder" facet (sections are folders
+   *  there); the section menu hides the action when undefined. Receives the folder name (section key). */
+  onMoveSectionToTrash?: (folderName: string) => void;
   /** Multi-select working set, keyed by `spineFile`. Drives the card/row checkbox + selected style. */
   selected: Set<string>;
   /** Toggle one entry's membership in the selection. */

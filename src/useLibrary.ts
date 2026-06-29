@@ -5,7 +5,7 @@ import type { ExportAssets, Library, LibraryCleanState, LibraryEntry, LibrarySca
 import { readSkeletonNames } from './spineRuntime';
 import type { Translations } from './i18n';
 import type { FolderScan, ToastKind } from './types';
-import { cleanRecordForEntry, scanRecordForEntry } from './library';
+import { cleanRecordForEntry, scanRecordForEntry, topFolder } from './library';
 import {
   basename,
   clearLibraryScan,
@@ -26,6 +26,17 @@ type Options = {
   t: Translations;
   pushToast: (text: string, kind?: ToastKind) => void;
 };
+
+// Trash holds two kinds of keys in one set (so it rides the existing string[] sync untouched):
+// a plain `relPath` hides a single file; a `dir:{topFolder}` key hides a whole top-level folder
+// (and any files added to it later). Notes use the same `dir:` convention for folder targets.
+const FOLDER_TRASH_PREFIX = 'dir:';
+const folderTrashKey = (folderName: string) => FOLDER_TRASH_PREFIX + folderName;
+
+/** Is this entry hidden — either trashed by its own relPath, or because its top folder is trashed? */
+function isEntryTrashed(entry: LibraryEntry, trash: Set<string>): boolean {
+  return trash.has(entry.relPath) || trash.has(folderTrashKey(topFolder(entry)));
+}
 
 /**
  * Asset Library: import a master folder, scan it (offline) into an inventory, and keep the
@@ -157,7 +168,7 @@ export function useLibrary({ t, pushToast }: Options) {
         // Light notice: how many freshly-scanned entries are auto-hidden by the trash list. Read trash
         // straight from storage so the count is right even when `library` isn't the active one yet.
         const trashed = new Set(loadLibraryTrash(library.id));
-        const hidden = result.entries.filter((e) => trashed.has(e.relPath)).length;
+        const hidden = result.entries.filter((e) => isEntryTrashed(e, trashed)).length;
         if (hidden > 0) pushToast(t.libraryTrashHidden.replace('{n}', String(hidden)), 'info');
       }
       return result;
@@ -244,15 +255,34 @@ export function useLibrary({ t, pushToast }: Options) {
     });
   }
 
-  function restoreFromTrash(relPath: string) {
+  // Exclude a whole top-level folder from the inventory. Stored as a `dir:` key so files added to the
+  // folder later are hidden too, and the folder restores as a single unit.
+  function addFolderToTrash(folderName: string) {
     if (!activeLibraryId) return;
+    const key = folderTrashKey(folderName);
     setTrash((prev) => {
-      if (!prev.has(relPath)) return prev;
+      if (prev.has(key)) return prev;
       const next = new Set(prev);
-      next.delete(relPath);
+      next.add(key);
       persistLibraryTrash(activeLibraryId, [...next]);
       return next;
     });
+  }
+
+  // Remove a key (file relPath OR `dir:` folder key) from the trash, un-hiding what it covered.
+  function restoreFromTrash(key: string) {
+    if (!activeLibraryId) return;
+    setTrash((prev) => {
+      if (!prev.has(key)) return prev;
+      const next = new Set(prev);
+      next.delete(key);
+      persistLibraryTrash(activeLibraryId, [...next]);
+      return next;
+    });
+  }
+
+  function restoreFolderFromTrash(folderName: string) {
+    restoreFromTrash(folderTrashKey(folderName));
   }
 
   // Re-read the active library's trash from localStorage (after sync adopts a teammate's newer list).
@@ -264,10 +294,27 @@ export function useLibrary({ t, pushToast }: Options) {
   // restore view and internal bookkeeping.
   const visibleScan = useMemo<LibraryScan | null>(() => {
     if (!scan || trash.size === 0) return scan;
-    return { ...scan, entries: scan.entries.filter((e) => !trash.has(e.relPath)) };
+    return { ...scan, entries: scan.entries.filter((e) => !isEntryTrashed(e, trash)) };
   }, [scan, trash]);
   const trashedEntries = useMemo(
-    () => (scan ? scan.entries.filter((e) => trash.has(e.relPath)) : []),
+    () => (scan ? scan.entries.filter((e) => isEntryTrashed(e, trash)) : []),
+    [scan, trash]
+  );
+  // Folders currently in trash, with how many scanned entries each hides — drives the folder rows in
+  // the trash modal. A `dir:` key can outlive its files (folder emptied/renamed), so count may be 0.
+  const trashedFolders = useMemo(
+    () =>
+      [...trash]
+        .filter((k) => k.startsWith(FOLDER_TRASH_PREFIX))
+        .map((k) => k.slice(FOLDER_TRASH_PREFIX.length))
+        .map((name) => ({ name, count: scan ? scan.entries.filter((e) => topFolder(e) === name).length : 0 }))
+        .sort((a, b) => a.name.localeCompare(b.name)),
+    [scan, trash]
+  );
+  // Individually-trashed files, excluding any whose folder is also trashed (those restore via the folder
+  // row instead, so we don't list them twice).
+  const trashedFiles = useMemo(
+    () => (scan ? scan.entries.filter((e) => trash.has(e.relPath) && !trash.has(folderTrashKey(topFolder(e)))) : []),
     [scan, trash]
   );
 
@@ -313,8 +360,12 @@ export function useLibrary({ t, pushToast }: Options) {
     reloadCleanState,
     libraryTrash: trash,
     trashedEntries,
+    trashedFolders,
+    trashedFiles,
     addToTrash,
+    addFolderToTrash,
     restoreFromTrash,
+    restoreFolderFromTrash,
     reloadTrash
   };
 }

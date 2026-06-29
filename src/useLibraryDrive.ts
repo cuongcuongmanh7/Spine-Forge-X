@@ -69,7 +69,6 @@ type DriveInfoState = Record<
  */
 export function useLibraryDrive({ t, pushToast, driveAccount, libraryDir, spinePath, openSettings }: Args) {
   const [driveInfo, setDriveInfo] = useState<DriveInfoState>({});
-  const [expandedInfo, setExpandedInfo] = useState<Set<string>>(new Set());
   const [driveBasics, setDriveBasics] = useState<Record<string, DriveBasic>>(loadDriveBasicsCache);
   const [loadingBasics, setLoadingBasics] = useState(false);
   const [basicsProgress, setBasicsProgress] = useState<{ done: number; total: number } | null>(null);
@@ -100,18 +99,11 @@ export function useLibraryDrive({ t, pushToast, driveAccount, libraryDir, spineP
     [driveBasics, libraryDir]
   );
 
-  // Toggle the per-row Drive panel, fetching owner/history on first open.
-  function toggleDriveInfo(entry: LibraryEntry) {
+  // Fetch owner/history for one entry into `driveInfo` — used by the Drive-history modal (Inventory +
+  // inspector). Idempotent: skips the fetch when data is cached or in flight.
+  function loadDriveInfo(entry: LibraryEntry) {
     const key = entry.spineFile;
-    const willOpen = !expandedInfo.has(key);
-    setExpandedInfo((prev) => {
-      const next = new Set(prev);
-      if (next.has(key)) next.delete(key);
-      else next.add(key);
-      return next;
-    });
-    if (!willOpen || driveInfo[key]?.data || driveInfo[key]?.loading) return;
-
+    if (driveInfo[key]?.data || driveInfo[key]?.loading) return;
     if (!driveAccount) {
       pushToast(t.driveSignInPrompt, 'warning');
       openSettings();
@@ -216,12 +208,11 @@ export function useLibraryDrive({ t, pushToast, driveAccount, libraryDir, spineP
 
   return {
     driveInfo,
-    expandedInfo,
     loadingBasics,
     basicsProgress,
     basicsLoadedAt,
     basicFor,
-    toggleDriveInfo,
+    loadDriveInfo,
     loadDriveBasics,
     refreshBasicsSilently,
     openRevisionInSpine

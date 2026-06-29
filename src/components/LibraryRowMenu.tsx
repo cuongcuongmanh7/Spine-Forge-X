@@ -100,12 +100,13 @@ export function LibraryRowMenu(props: Props) {
   );
 }
 
-/** The folder-group "⋯" menu (currently just Quick export) shown in the section header. */
+/** The folder-group "⋯" menu (Quick export + optional move-to-trash) shown in the section header. */
 export function LibrarySectionMenu({
   open,
   onToggle,
   onClose,
   onQuickExport,
+  onMoveToTrash,
   quickExportBusy,
   t
 }: {
@@ -113,6 +114,8 @@ export function LibrarySectionMenu({
   onToggle: () => void;
   onClose: () => void;
   onQuickExport: () => void;
+  /** Move the whole folder to trash. Omitted (action hidden) outside the folder facet. */
+  onMoveToTrash?: () => void;
   quickExportBusy: boolean;
   t: Translations;
 }) {
@@ -142,6 +145,17 @@ export function LibrarySectionMenu({
           >
             <Zap size={14} /> {t.libraryQuickExport}
           </button>
+          {onMoveToTrash && (
+            <button
+              className="danger"
+              onClick={() => {
+                onClose();
+                onMoveToTrash();
+              }}
+            >
+              <Trash2 size={14} /> {t.libraryMoveFolderToTrash}
+            </button>
+          )}
         </MenuPopover>
       )}
     </>

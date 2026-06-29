@@ -11,6 +11,9 @@
 .library-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+  /* Each card sizes to its own content. Without this the grid defaults to align-items:stretch,
+     so expanding one card (anim/skin list) stretches every other card on its row to match. */
+  align-items: start;
   gap: 10px;
   margin-top: 8px;
 }
@@ -400,32 +403,5 @@
   gap: 4px;
 }
 
-.library-card-drive {
-  position: relative;
-  border-top: 1px solid var(--border);
-  margin-top: 4px;
-  padding-top: 8px;
-  font-size: 12px;
-}
-/* The Drive panel is built for a full-width table row; stack its fields so it fits a narrow card
-   (no horizontal scrollbar, no 3-line wrapping). */
-.library-card-drive .library-drive-meta {
-  flex-direction: column;
-  gap: 4px;
-}
-.library-card-drive .library-drive-revs li {
-  position: relative;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 0;
-  padding-right: 22px;
-}
-.library-card-drive .library-drive-revs li > span:first-child {
-  min-width: 0;
-}
-.library-card-drive .library-drive-revs li > .icon-button {
-  position: absolute;
-  top: 0;
-  right: 0;
-  margin-left: 0;
-}
+/* Owner/history now opens in a standalone modal (LibraryDriveHistoryModal) — the old inline
+   `.library-card-drive` card panel was removed. Modal-specific tweaks live in LibraryMeta.css. */

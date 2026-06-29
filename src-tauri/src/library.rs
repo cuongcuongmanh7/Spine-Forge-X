@@ -55,10 +55,12 @@ fn read_skeleton_meta(unit_folder: &Path) -> SkeletonMeta {
             if lname.ends_with(".export.json") {
                 continue;
             }
-            // Any real skeleton/atlas artifact means this unit has been exported, even when
-            // it's binary (`.skel`/`.skel.bytes`) or a Unity `.atlas.txt`.
+            // Only a real *skeleton* artifact counts as exported — JSON (`.json`) or binary
+            // (`.skel`/`.skel.bytes`, e.g. Unity exports). An `export`/`ex` folder holding just
+            // an atlas (or any other loose file) but no skeleton is treated as NOT exported, so a
+            // half-finished export doesn't masquerade as done.
             let is_skeleton_json = lname.ends_with(".json");
-            let is_artifact = is_skeleton_json || lname.contains(".skel") || lname.contains(".atlas");
+            let is_artifact = is_skeleton_json || lname.contains(".skel");
             if !is_artifact {
                 continue;
             }

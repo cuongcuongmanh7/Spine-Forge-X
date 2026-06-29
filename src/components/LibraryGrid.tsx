@@ -7,12 +7,12 @@ import { LibraryTagCell } from './LibraryTagCell';
 import { LibraryOwnerCell } from './LibraryOwnerCell';
 import { LibraryPreviewButton } from './LibraryPreviewCell';
 import { LibraryRowMenuButton, LibrarySectionMenu } from './LibraryRowMenu';
-import { LibraryDriveInfoPanel } from './LibraryDriveInfoRow';
 import { SpineFileIcon } from './SpineFileIcon';
 import { StatIcon } from './StatIcon';
 import {
   DAY_MS,
   GroupSelectCheckbox,
+  HighlightText,
   NotesIndicator,
   cleanStatusIcon,
   sectionCleanStatus,
@@ -42,11 +42,8 @@ export function LibraryGrid(props: LibraryViewProps) {
     addEntryTag,
     removeEntryTag,
     setEntryOwner,
-    driveInfo,
-    expandedInfo,
     basicFor,
-    toggleDriveInfo,
-    openRevisionInSpine,
+    onDriveHistory,
     cleanStatus,
     openFolder,
     openInSpine,
@@ -60,6 +57,7 @@ export function LibraryGrid(props: LibraryViewProps) {
     onQuickExport,
     quickExportBusy,
     onMoveToTrash,
+    onMoveSectionToTrash,
     selected,
     toggleSelected,
     setManySelected
@@ -121,6 +119,7 @@ export function LibraryGrid(props: LibraryViewProps) {
                   onToggle={() => setMenuOpen(menuOpen === `sec:${section.key}` ? null : `sec:${section.key}`)}
                   onClose={() => setMenuOpen(null)}
                   onQuickExport={() => onQuickExport(section.entries.map((entry) => entry.spineFile))}
+                  onMoveToTrash={onMoveSectionToTrash ? () => onMoveSectionToTrash(section.key) : undefined}
                   quickExportBusy={quickExportBusy}
                   t={t}
                 />
@@ -134,8 +133,6 @@ export function LibraryGrid(props: LibraryViewProps) {
                   const matches = matchedNames(entry, parsedQuery);
                   const hasChipMatch = matches.animations.size > 0 || matches.skins.size > 0;
                   const animOpen = expandedAnims.has(entry.spineFile) || hasChipMatch;
-                  const infoOpen = expandedInfo.has(entry.spineFile);
-                  const info = driveInfo[entry.spineFile];
                   const basic = basicFor(entry);
                   const modifiedMs = basic?.modifiedTime ? Date.parse(basic.modifiedTime) : NaN;
                   const recent = Number.isFinite(modifiedMs) && Date.now() - modifiedMs < 7 * DAY_MS;
@@ -175,7 +172,7 @@ export function LibraryGrid(props: LibraryViewProps) {
                       <div className="library-card-head">
                         {cleanStatusIcon(cleanStatus(entry), t)}
                         <span className="library-card-name" title={entry.spineFile}>
-                          {name}
+                          <HighlightText text={name} parsedQuery={parsedQuery} />
                         </span>
                         <span className="library-card-actions">
                           <NotesIndicator count={entryNotes} onOpen={() => openNotes(entryKey, name)} t={t} />
@@ -185,7 +182,7 @@ export function LibraryGrid(props: LibraryViewProps) {
                               open={menuOpen === entry.spineFile}
                               onToggle={() => setMenuOpen(menuOpen === entry.spineFile ? null : entry.spineFile)}
                               onClose={() => setMenuOpen(null)}
-                              onDriveInfo={toggleDriveInfo}
+                              onDriveInfo={onDriveHistory}
                               onCleanScan={(e) => onPrepareCleanScan([e.spineFile])}
                               onOpenFolder={(e) => openFolder(e)}
                               onOpenInSpine={(e) => openInSpine(e)}
@@ -203,7 +200,9 @@ export function LibraryGrid(props: LibraryViewProps) {
                       <div className="library-card-dir muted" title={entry.relPath}>
                         <span className="library-card-path-chip">
                           <Folder size={13} className="library-card-dir-icon" />
-                          <span className="library-card-dir-text">{fullDir ? `${fullDir}/` : entry.relPath}</span>
+                          <span className="library-card-dir-text">
+                            <HighlightText text={fullDir ? `${fullDir}/` : entry.relPath} parsedQuery={parsedQuery} />
+                          </span>
                         </span>
                         <button
                           type="button"
@@ -310,17 +309,6 @@ export function LibraryGrid(props: LibraryViewProps) {
                         </span>
                       </div>
 
-                      {infoOpen && (
-                        <div className="library-card-drive">
-                          <LibraryDriveInfoPanel
-                            entry={entry}
-                            info={info}
-                            t={t}
-                            onOpenRevision={openRevisionInSpine}
-                            onClose={() => toggleDriveInfo(entry)}
-                          />
-                        </div>
-                      )}
                     </article>
                   );
                 })}
