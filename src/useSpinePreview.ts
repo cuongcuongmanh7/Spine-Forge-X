@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import type { ExportAssets, LibraryEntry } from './config';
+import { renderFramedThumbnail } from './useSpineThumbnail';
 import {
   type DisposablePlayer,
   applyPreferredSetup,
@@ -121,8 +122,37 @@ export function useSpinePreview(entry: LibraryEntry | null, containerRef: React.
   const playerRef = useRef<DisposablePlayer | null>(null);
   const statsRef = useRef<PreviewStats>({ fps: 0, time: 0, duration: 0, frame: 0 });
   const initialViewport = useRef<ViewportBox | null>(null);
+  // Assets + decoded bytes kept for the "capture thumbnail" button, which re-renders off-screen
+  // (reading the on-screen WebGL canvas back is unreliable in WebView2 — see renderFramedThumbnail).
+  const assetsRef = useRef<ExportAssets | null>(null);
+  const rawRef = useRef<Record<string, string> | null>(null);
 
   const livePlayer = () => playerRef.current as LivePlayer | null;
+
+  // Re-render the current framing (zoom/pan) AND the exact frame on screen (skin + animation + time)
+  // into a fresh thumbnail off-screen. Returns null if not ready yet.
+  const captureThumbnail = async (): Promise<string | null> => {
+    const assets = assetsRef.current;
+    const raw = rawRef.current;
+    if (!assets || !raw) return null;
+    const p = livePlayer();
+    const vp = p?.currentViewport;
+    const viewport =
+      vp && vp.width
+        ? { x: vp.x, y: vp.y, width: vp.width, height: vp.height, padLeft: vp.padLeft, padRight: vp.padRight, padTop: vp.padTop, padBottom: vp.padBottom }
+        : undefined;
+    // Match the on-screen frame exactly: current skin (from the player's config/skeleton), the active
+    // animation, and its current time so a paused/mid-motion pose is what gets captured.
+    const track = p ? currentTrack(p) : null;
+    const cfgSkin = (p as unknown as { config?: { skin?: string | string[] } } | null)?.config?.skin;
+    const skin =
+      (Array.isArray(cfgSkin) ? cfgSkin[0] : typeof cfgSkin === 'string' ? cfgSkin : undefined) ??
+      (p?.skeleton as { skin?: { name?: string } } | undefined)?.skin?.name;
+    const animation = track?.animation?.name;
+    const time = track?.getAnimationTime?.() ?? track?.trackTime ?? p?.playTime ?? 0;
+    const pose = animation ? { skin, animation, time } : undefined;
+    return renderFramedThumbnail(assets, raw, viewport, pose);
+  };
 
   // Zoom by scaling the viewport box around its centre (factor < 1 zooms in).
   const zoom = (factor: number) => {
@@ -310,6 +340,7 @@ export function useSpinePreview(entry: LibraryEntry | null, containerRef: React.
       }
       if (cancelled) return;
       setAssets(resolved);
+      assetsRef.current = resolved;
 
       let rawDataURIs: Record<string, string>;
       try {
@@ -319,6 +350,7 @@ export function useSpinePreview(entry: LibraryEntry | null, containerRef: React.
         return;
       }
       if (cancelled) return;
+      rawRef.current = rawDataURIs;
 
       const container = containerRef.current;
       if (!container) return;
@@ -397,10 +429,12 @@ export function useSpinePreview(entry: LibraryEntry | null, containerRef: React.
         /* player may not have finished initializing */
       }
       playerRef.current = null;
+      assetsRef.current = null;
+      rawRef.current = null;
       if (containerRef.current) containerRef.current.innerHTML = '';
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [entry]);
 
-  return { status, error, assets, events, animDuration, statsRef, controls: controls.current };
+  return { status, error, assets, events, animDuration, statsRef, controls: controls.current, captureThumbnail };
 }

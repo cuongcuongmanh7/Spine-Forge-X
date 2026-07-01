@@ -26,6 +26,11 @@ export function useLibraryFilter(libraryId: string | null) {
   // active library changes (the hook is remounted per library id) — unlike the filter chips, which persist.
   const [selected, setSelected] = useState<Set<string>>(new Set());
 
+  // The single "focused" card whose live preview fills the inspector panel — distinct from the
+  // multi-select set above. Clicking a card body focuses it (shows its preview) WITHOUT ticking its
+  // checkbox; only the checkbox mutates `selected` (for bulk actions). Transient like `selected`.
+  const [focused, setFocused] = useState<string | null>(null);
+
   const toggleSelected = useCallback((spineFile: string) => {
     setSelected((prev) => {
       const next = new Set(prev);
@@ -88,7 +93,9 @@ export function useLibraryFilter(libraryId: string | null) {
     selected,
     toggleSelected,
     setManySelected,
-    clearSelected
+    clearSelected,
+    focused,
+    setFocused
   };
 }
 

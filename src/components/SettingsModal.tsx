@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { AlertTriangle, LogOut, RotateCw, Search, UserCircle2, X } from 'lucide-react';
 import { Section, FieldStatus, Hint } from './common';
+import { GoogleDriveIcon } from './GoogleDriveIcon';
 import { useApp } from '../useAppController';
 import { formatDateTime } from '../time';
 import './SyncSettings.css';
@@ -148,7 +149,7 @@ export function SettingsModal() {
 
             <div className="drive-account">
               <span className="sync-field-label">
-                {t.driveAccountTitle}
+                <GoogleDriveIcon size={15} /> {t.driveAccountTitle}
                 <Hint text={t.driveAccountHelp} />
               </span>
               {driveAccount ? (

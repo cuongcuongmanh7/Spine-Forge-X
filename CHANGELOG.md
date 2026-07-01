@@ -1,5 +1,12 @@
 # Changelog
 
+## v0.4.40
+- **Chụp ảnh thu nhỏ theo ý muốn** — cửa sổ xem trước có thêm nút camera: căn khung (zoom/pan) và dừng ở đúng frame animation ưng ý rồi bấm để đặt lại thumbnail cho asset — sửa nhanh các thẻ có thumbnail xấu (quá nhỏ, quá lệch). Ảnh được render lại đúng **khung + đúng frame** đang xem, cập nhật ngay trên thẻ và chia sẻ cho cả nhóm (lần mở sau vẫn giữ).
+- **Tách "xem trước" khỏi "chọn"** — bấm vào khoảng trống của thẻ giờ chỉ **mở xem trước** ở panel bên phải (không còn tự tích chọn); muốn **chọn** để thao tác hàng loạt thì tick vào ô checkbox — ô này giờ **luôn hiển thị** cho dễ thấy, và thẻ đang xem có viền nhạt để phân biệt với thẻ đã chọn.
+- **Icon Google Drive** — các chỗ liên quan Drive dùng logo Google Drive cho dễ nhận biết: nút **Tải dữ liệu Drive**, menu **Quản lý phiên bản**, cửa sổ lịch sử, mục tài khoản trong **Cài đặt**, và chip tài khoản ở sidebar.
+- **Đổi tên "Owner & lịch sử" → "Quản lý phiên bản"** — đồng bộ ở menu ⋯, nút trong panel và tiêu đề cửa sổ. Trong cửa sổ, cột **ngày sửa** rộng hơn (không bị xuống dòng), cột **người sửa** gọn lại.
+- **Tooltip cho nút Quét lại.**
+
 ## v0.4.39
 - **"Chưa export" chính xác hơn** — folder `export`/`ex` có tồn tại nhưng chỉ chứa atlas (thiếu skeleton `.json`/`.skel`/`.skel.bytes`) giờ được xem là **chưa export**, thay vì báo nhầm là đã export.
 - **Sửa lỗi thẻ Lưới giãn theo cả hàng** — mở rộng anim/skin (hoặc owner) ở một thẻ không còn kéo các thẻ cùng hàng cao theo; mỗi thẻ tự cao theo nội dung của nó.

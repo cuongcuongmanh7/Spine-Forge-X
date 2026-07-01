@@ -1,8 +1,9 @@
 import { useRef } from 'react';
-import { FolderOpen, FolderPlus, History, ListChecks, MoreHorizontal, Stethoscope, Trash2, Zap } from 'lucide-react';
+import { FolderOpen, FolderPlus, ListChecks, MoreHorizontal, Stethoscope, Trash2, Zap } from 'lucide-react';
 import type { Translations } from '../i18n';
 import type { LibraryEntry } from '../config';
 import { SpineFileIcon } from './SpineFileIcon';
+import { GoogleDriveIcon } from './GoogleDriveIcon';
 import { MenuPopover } from './MenuPopover';
 
 /** The per-row "⋯" action menu cell (Drive history / clean scan / open / create session). Split out
@@ -63,7 +64,7 @@ export function LibraryRowMenuButton({
       {open && (
         <MenuPopover anchor={triggerRef.current} onClose={onClose}>
           <button onClick={() => act(onDriveInfo)}>
-            <History size={14} /> {t.driveInfoTitle}
+            <GoogleDriveIcon size={14} /> {t.driveInfoTitle}
           </button>
           <button onClick={() => act(onCleanScan)}>
             <ListChecks size={14} /> {t.libraryPrepareCleanScan}

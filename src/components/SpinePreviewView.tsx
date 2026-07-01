@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
-import { AlertTriangle, Expand, Maximize2, Minimize2, RotateCcw, RotateCw, ZoomIn, ZoomOut } from 'lucide-react';
+import { AlertTriangle, Camera, Expand, Maximize2, Minimize2, RotateCcw, RotateCw, ZoomIn, ZoomOut } from 'lucide-react';
 import { useApp } from '../useAppController';
 import { useSpinePreview } from '../useSpinePreview';
+import { setCapturedThumbnail } from '../useSpineThumbnail';
 import { StatIcon } from './StatIcon';
 import eventIconUrl from '../assets/stat-event.png';
 import type { LibraryEntry } from '../config';
@@ -25,13 +26,31 @@ export function SpinePreviewView({
   onExpand?: () => void;
   compact?: boolean;
 }) {
-  const { t } = useApp();
+  const { t, pushToast } = useApp();
   const rootRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const statsTextRef = useRef<HTMLSpanElement>(null);
   const eventListRef = useRef<HTMLUListElement>(null);
-  const { status, error, events, animDuration, statsRef, controls } = useSpinePreview(entry, containerRef);
+  const { status, error, events, animDuration, statsRef, controls, captureThumbnail } = useSpinePreview(entry, containerRef);
   const [fullscreen, setFullscreen] = useState(false);
+
+  // Capture the currently framed canvas as the entry's thumbnail — lets the user fix a bad
+  // auto-thumbnail (too small / off-centre) by zooming/panning to a good pose, then snapping it.
+  const onCaptureThumbnail = async () => {
+    try {
+      // Re-render the current framing off-screen (reading the live WebGL canvas back is blank in
+      // WebView2), then persist it as this entry's thumbnail.
+      const url = await captureThumbnail();
+      if (!url) {
+        pushToast(t.libraryThumbCaptureFailed, 'error');
+        return;
+      }
+      await setCapturedThumbnail(entry, url);
+      pushToast(t.libraryThumbCaptured, 'success');
+    } catch {
+      pushToast(t.libraryThumbCaptureFailed, 'error');
+    }
+  };
 
   // Native fullscreen on the view element; the player auto-refits to the larger canvas.
   const toggleFullscreen = () => {
@@ -117,6 +136,9 @@ export function SpinePreviewView({
             </button>
             <button className="spine-preview-tool" title={t.libraryPreviewResetView} aria-label={t.libraryPreviewResetView} onClick={controls.resetView}>
               <RotateCcw size={16} />
+            </button>
+            <button className="spine-preview-tool" title={t.libraryThumbCapture} aria-label={t.libraryThumbCapture} onClick={() => void onCaptureThumbnail()}>
+              <Camera size={16} />
             </button>
           </>
         )}

@@ -60,7 +60,9 @@ export function LibraryGrid(props: LibraryViewProps) {
     onMoveSectionToTrash,
     selected,
     toggleSelected,
-    setManySelected
+    setManySelected,
+    focused,
+    setFocused
   } = props;
   const { pushToast } = useApp();
 
@@ -145,15 +147,17 @@ export function LibraryGrid(props: LibraryViewProps) {
                   const entryKey = metaKeyForEntry(entry);
                   const entryNotes = noteCount(entryKey);
                   const isSel = selected.has(entry.spineFile);
+                  const isFocused = focused === entry.spineFile;
                   return (
                     <article
-                      className={`library-card${isSel ? ' selected' : ''}${entryNotes > 0 ? ' library-has-notes' : ''}`}
+                      className={`library-card${isSel ? ' selected' : ''}${isFocused ? ' focused' : ''}${entryNotes > 0 ? ' library-has-notes' : ''}`}
                       key={entry.spineFile}
-                      // Click anywhere on the card toggles selection — except on the interactive
-                      // controls (checkbox, preview/menu buttons, tag/owner editors, links).
+                      // Click anywhere on the card FOCUSES it (fills the inspector preview) — except on
+                      // the interactive controls (checkbox, preview/menu buttons, tag/owner editors,
+                      // links). Selection (bulk) is driven only by the checkbox below.
                       onClick={(e) => {
                         if ((e.target as HTMLElement).closest('button, input, a, label, select, textarea, [role="button"]')) return;
-                        toggleSelected(entry.spineFile);
+                        setFocused(entry.spineFile);
                       }}
                     >
                       <div className="library-card-thumb-wrap">

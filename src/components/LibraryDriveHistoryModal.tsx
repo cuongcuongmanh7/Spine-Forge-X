@@ -1,8 +1,9 @@
-import { History, X } from 'lucide-react';
+import { X } from 'lucide-react';
 import type { Translations } from '../i18n';
 import type { LibraryEntry } from '../config';
 import type { DriveFileInfo, DriveRevision } from '../drive';
 import { LibraryDriveInfoPanel } from './LibraryDriveInfoRow';
+import { GoogleDriveIcon } from './GoogleDriveIcon';
 import { basename } from '../sessions';
 
 type DriveInfo = { loading?: boolean; error?: string; notOnDrive?: boolean; data?: DriveFileInfo };
@@ -29,7 +30,7 @@ export function LibraryDriveHistoryModal({
       <div className="modal library-drive-modal" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
           <h2>
-            <History size={16} /> {t.driveInfoTitle} <span className="muted">· {label}</span>
+            <GoogleDriveIcon size={16} /> {t.driveInfoTitle} <span className="muted">· {label}</span>
           </h2>
           <button className="modal-close" title={t.cancel} aria-label={t.cancel} onClick={onClose}>
             <X size={18} />

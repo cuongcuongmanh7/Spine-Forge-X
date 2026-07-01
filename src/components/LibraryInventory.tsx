@@ -1,7 +1,8 @@
 import { useCallback, useMemo, useState } from 'react';
 import { usePersistentState, usePersistentSet } from '../usePersistentState';
 import { invoke } from '@tauri-apps/api/core';
-import { AlertTriangle, CheckCircle2, CloudDownload, Layers, MessageSquare, RotateCw, Search, SearchX, Tag, Trash2, Users, X } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, Layers, MessageSquare, RotateCw, Search, SearchX, Tag, Trash2, Users, X } from 'lucide-react';
+import { GoogleDriveIcon } from './GoogleDriveIcon';
 import { SpineFileIcon } from './SpineFileIcon';
 import { LibraryInventoryModals } from './LibraryInventoryModals';
 import { useApp } from '../useAppController';
@@ -92,7 +93,7 @@ export function LibraryInventory({
     trashedFiles
   } = useApp();
 
-  const { facet, selectedCats, selectedVersions, query, invert, clearFilters, selected, toggleSelected, setManySelected, clearSelected } = filter;
+  const { facet, selectedCats, selectedVersions, query, invert, clearFilters, selected, toggleSelected, setManySelected, clearSelected, focused, setFocused } = filter;
   const viewMode = appConfig.libraryViewMode;
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [expandedAnims, setExpandedAnims] = useState<Set<string>>(new Set());
@@ -446,7 +447,9 @@ export function LibraryInventory({
     onMoveSectionToTrash: facet === 'folder' ? (folderName: string) => addFolderToTrash(folderName) : undefined,
     selected,
     toggleSelected,
-    setManySelected
+    setManySelected,
+    focused,
+    setFocused
   };
 
   // Essential facet (folder / id / status) toggle — shared by the Filters body and its collapsed preview.
@@ -697,11 +700,11 @@ export function LibraryInventory({
             </span>
             {basicsLoadedAt && <span>{t.libraryLastDriveLoad}: {formatDate(basicsLoadedAt)}</span>}
           </span>
-          <button className="secondary-button small" onClick={() => void rescanLibrary()} disabled={isScanningLibrary}>
+          <button className="secondary-button small" onClick={() => void rescanLibrary()} disabled={isScanningLibrary} title={t.libraryRescanHelp} aria-label={t.libraryRescan}>
             <RotateCw size={14} className={isScanningLibrary ? 'spin' : undefined} /> {t.libraryRescan}
           </button>
           <button className="secondary-button small" onClick={() => void loadDriveBasics(filtered)} disabled={loadingBasics} title={t.driveLoadDataHelp}>
-            {loadingBasics ? <RotateCw size={14} className="spin" /> : <CloudDownload size={14} />} {t.driveLoadData}
+            {loadingBasics ? <RotateCw size={14} className="spin" /> : <GoogleDriveIcon size={14} />} {t.driveLoadData}
             {loadingBasics && basicsProgress ? ` ${basicsProgress.done}/${basicsProgress.total}` : ''}
           </button>
           {(trashedFolders.length > 0 || trashedFiles.length > 0) && (
@@ -719,7 +722,13 @@ export function LibraryInventory({
           setManySelected={setManySelected}
           clearSelected={clearSelected}
           viewMode={viewMode}
-          setViewMode={(mode) => updateAppConfig('libraryViewMode', mode)}
+          setViewMode={(mode) => {
+            // Grid focuses a card by click; the table selects via checkboxes. Clear the focused card
+            // on a view switch so a stale grid focus doesn't override a table checkbox selection in
+            // the shared inspector.
+            setFocused(null);
+            updateAppConfig('libraryViewMode', mode);
+          }}
           sort={sort}
           setSort={setSort}
           sortLabels={sortLabels}

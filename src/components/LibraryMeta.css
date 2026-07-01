@@ -148,7 +148,9 @@
 .library-drive-modal-body .library-drive-rev-head,
 .library-drive-modal-body .library-drive-revs li {
   display: grid;
-  grid-template-columns: 46px 150px 1fr 78px 34px;
+  /* version · modified · editor(1fr) · size · open. Modified is widened (dates never wrap) and the
+     editor takes the remaining 1fr, so it shrinks as modified grows. */
+  grid-template-columns: 46px 190px 1fr 78px 34px;
   align-items: center;
   gap: 12px;
 }

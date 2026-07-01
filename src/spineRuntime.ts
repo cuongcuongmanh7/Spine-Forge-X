@@ -170,6 +170,55 @@ export function applyPreferredSetup(player: PreferredSetupPlayer): void {
   }
 }
 
+/** A specific pose to reproduce off-screen: the live preview's current skin + animation + time (s). */
+export type ThumbPose = { skin?: string; animation?: string; time: number };
+
+/** Minimal surface for pinning a freshly loaded player to one animation frame (thumbnail capture). */
+type PosePlayer = {
+  skeleton?: {
+    setSkinByName?: (name: string) => void;
+    setSlotsToSetupPose?: () => void;
+    updateWorldTransform?: () => void;
+  } | null;
+  animationState?: {
+    setAnimation?: (track: number, name: string, loop: boolean) => { trackTime?: number } | null;
+    update?: (dt: number) => void;
+    apply?: (skeleton: unknown) => void;
+  } | null;
+  pause?: () => void;
+};
+
+/**
+ * Reproduce a specific live-preview pose (skin + animation + exact time) on a freshly loaded
+ * off-screen player, then freeze it so the capture grabs that frame. The skin is set straight on the
+ * skeleton (not via the player's dropdown/applyCombinedSkin, which reframes the camera) so an
+ * explicitly configured capture viewport survives; the CORE animationState.setAnimation is used for
+ * the same reason (the player-wrapper variant reframes).
+ */
+export function applyPose(player: PosePlayer, pose: ThumbPose): void {
+  if (pose.skin) {
+    player.skeleton?.setSkinByName?.(pose.skin);
+    player.skeleton?.setSlotsToSetupPose?.();
+  }
+  if (pose.animation) {
+    const entry = player.animationState?.setAnimation?.(0, pose.animation, false);
+    if (entry) entry.trackTime = Math.max(0, pose.time);
+  }
+  // Hold this frame: pause, then force the pose so the next draw shows exactly `pose.time`.
+  try {
+    player.pause?.();
+  } catch {
+    /* not every player exposes pause */
+  }
+  try {
+    player.animationState?.update?.(0);
+    if (player.skeleton) player.animationState?.apply?.(player.skeleton as unknown);
+    player.skeleton?.updateWorldTransform?.();
+  } catch {
+    /* minimal players may lack these — the render loop will still draw the applied pose */
+  }
+}
+
 /**
  * Parse a 4.x export's skeleton with the matching bundled runtime and return its animation +
  * skin names — no WebGL, no rendering. The Rust scanner can only read names from JSON or 3.8

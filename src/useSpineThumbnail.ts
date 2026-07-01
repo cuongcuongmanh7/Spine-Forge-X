@@ -5,6 +5,8 @@ import { firebaseConfigured, getThumbDownloadUrl, uploadThumb } from './firebase
 import {
   type DisposablePlayer,
   type PreferredSetupPlayer,
+  type ThumbPose,
+  applyPose,
   applyPreferredSetup,
   basename,
   buildRawDataURIs,
@@ -27,8 +29,8 @@ import {
 
 export type ThumbStatus = 'idle' | 'loading' | 'ready' | 'error';
 
-const THUMB_W = 240;
-const THUMB_H = 180;
+export const THUMB_W = 240;
+export const THUMB_H = 180;
 const RENDER_TIMEOUT_MS = 8000;
 
 /** Bumped whenever the thumbnail RENDERER changes in a way that should supersede every cached
@@ -62,6 +64,44 @@ export function thumbKey(entry: LibraryEntry): string {
   return (h2 >>> 0).toString(16).padStart(8, '0') + (h1 >>> 0).toString(16).padStart(8, '0');
 }
 
+// --- manual captures: user-picked thumbnails from the live preview --------------------
+// A user can frame a skeleton in the preview modal and "capture" it as the thumbnail. The captured
+// image is keyed by the same `thumbKey`, so it overrides the auto-render everywhere. We keep it in a
+// module map (so a card already on screen swaps instantly) AND persist it to the L1/L2 caches (so it
+// survives a reload and reaches other machines).
+const overrides = new Map<string, string>();
+const overrideSubs = new Set<(key: string) => void>();
+function notifyThumb(key: string) {
+  for (const cb of overrideSubs) cb(key);
+}
+
+/** Re-render an entry's thumbnail off-screen (the proven capture pipeline) framed to `viewport` —
+ *  used by the preview modal's "capture" button. Reading the on-screen preview canvas back is
+ *  unreliable in WebView2 (the drawing buffer isn't preserved for reads outside the render loop, so
+ *  toDataURL comes back blank); an off-screen render with the same camera box is not. */
+export async function renderFramedThumbnail(
+  assets: ExportAssets,
+  rawDataURIs: Record<string, string>,
+  viewport?: ThumbViewport,
+  pose?: ThumbPose
+): Promise<string> {
+  return enqueue(() => renderThumbnail(assets, rawDataURIs, viewport, pose));
+}
+
+/** Replace an entry's thumbnail with a user-captured image: update on-screen cards immediately, then
+ *  persist to the local disk cache (L1) and share to Cloud Storage (L2, best-effort). Rejects a
+ *  blank/transparent capture (e.g. a WebGL context that didn't preserve its drawing buffer) so we
+ *  never cache — or falsely report success for — an empty thumbnail. */
+export async function setCapturedThumbnail(entry: LibraryEntry, dataUrl: string): Promise<void> {
+  // A blank 240×180 PNG compresses to a few hundred bytes; a real capture is far larger.
+  if ((dataUrl.split(',')[1] ?? '').length < 1000) throw new Error('blank thumbnail capture');
+  const key = thumbKey(entry);
+  overrides.set(key, dataUrl);
+  notifyThumb(key);
+  await invoke('thumb_cache_put', { key, data: dataUrl });
+  if (firebaseConfigured()) void uploadThumb(key, dataUrl).catch(() => undefined);
+}
+
 // --- single-slot render queue: one live WebGL context at a time ------------------
 let chain: Promise<unknown> = Promise.resolve();
 function enqueue<T>(task: () => Promise<T>): Promise<T> {
@@ -84,8 +124,28 @@ function idle(): Promise<void> {
   });
 }
 
-/** Mount the player off-screen, capture its canvas to a PNG data URL, then tear it down. */
-async function renderThumbnail(assets: ExportAssets, rawDataURIs: Record<string, string>): Promise<string> {
+/** A camera framing box (world units) to reproduce in an off-screen render — the live preview's
+ *  `currentViewport`, so a user "capture" thumbnails exactly the pose/zoom/pan they framed. */
+export type ThumbViewport = {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  padLeft?: number;
+  padRight?: number;
+  padTop?: number;
+  padBottom?: number;
+};
+
+/** Mount the player off-screen, capture its canvas to a PNG data URL, then tear it down. When a
+ *  `viewport` is given, frame that exact box instead of auto-fitting the skeleton; when a `pose` is
+ *  given, reproduce that exact skin/animation/time instead of the default preferred setup. */
+async function renderThumbnail(
+  assets: ExportAssets,
+  rawDataURIs: Record<string, string>,
+  viewport?: ThumbViewport,
+  pose?: ThumbPose
+): Promise<string> {
   const host = document.createElement('div');
   host.style.cssText = `position:fixed;left:-99999px;top:0;width:${THUMB_W}px;height:${THUMB_H}px;pointer-events:none;opacity:0;`;
   document.body.appendChild(host);
@@ -126,11 +186,12 @@ async function renderThumbnail(assets: ExportAssets, rawDataURIs: Record<string,
         );
       const onError = (_p: unknown, msg: string) => settle(() => reject(new Error(msg || 'spine player error')));
 
-      // Choose the skin/anim that actually has art (skin_default over an often-empty `default`),
-      // matching the live preview, BEFORE capturing — otherwise many rigs thumbnail blank.
+      // Reproduce the requested pose (a user capture) if given; otherwise choose the skin/anim that
+      // actually has art (matching the live preview), BEFORE capturing — else many rigs thumbnail blank.
       const onSuccess = (player: unknown) => {
         try {
-          applyPreferredSetup(player as PreferredSetupPlayer);
+          if (pose?.animation) applyPose(player as Parameters<typeof applyPose>[0], pose);
+          else applyPreferredSetup(player as PreferredSetupPlayer);
         } catch {
           /* minimal skeletons may lack named skins/anims — keep the player's defaults */
         }
@@ -147,8 +208,9 @@ async function renderThumbnail(assets: ExportAssets, rawDataURIs: Record<string,
         preserveDrawingBuffer: true,
         // Frame the skeleton INSTANTLY. The 4.x player otherwise animates the camera to fit over
         // ~0.25s, so a capture two frames after load grabs an unframed (near-empty) canvas that the
-        // blank-capture guard then rejects — which is why 4.x thumbnails came out empty.
-        viewport: { transitionTime: 0 },
+        // blank-capture guard then rejects — which is why 4.x thumbnails came out empty. A supplied
+        // `viewport` reproduces the live preview's exact framing (a user-captured thumbnail).
+        viewport: { transitionTime: 0, ...(viewport ?? {}) },
         backgroundColor: '#00000000',
         success: onSuccess,
         error: onError,
@@ -212,6 +274,13 @@ export function useSpineThumbnail(entry: LibraryEntry | null, enabled: boolean) 
     const folder = entry.folder;
 
     (async () => {
+      // A user-captured thumbnail (this session) wins over everything — show it without any IPC.
+      const override = overrides.get(key);
+      if (override) {
+        done(override);
+        return;
+      }
+
       // L1 — per-machine LOCAL disk cache (OS app-cache dir; no Drive mount, no network). Check first.
       try {
         const cached = await invoke<string | null>('thumb_cache_get', { key });
@@ -276,6 +345,25 @@ export function useSpineThumbnail(entry: LibraryEntry | null, enabled: boolean) 
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [entry?.relPath, entry?.spineBytes, entry?.version, entry?.exported, enabled]);
+
+  // Swap to a freshly captured thumbnail the instant it's set (same-session), without re-fetching.
+  useEffect(() => {
+    if (!entry) return;
+    const key = thumbKey(entry);
+    const onUpdate = (changed: string) => {
+      if (changed !== key) return;
+      const url = overrides.get(key);
+      if (url) {
+        setDataUrl(url);
+        setStatus('ready');
+      }
+    };
+    overrideSubs.add(onUpdate);
+    return () => {
+      overrideSubs.delete(onUpdate);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [entry?.relPath, entry?.spineBytes, entry?.version]);
 
   return { status, dataUrl };
 }

@@ -225,4 +225,9 @@ export interface LibraryViewProps {
   toggleSelected: (spineFile: string) => void;
   /** Add or remove a batch of entries from the selection (drives the folder/group select-all). */
   setManySelected: (spineFiles: string[], on: boolean) => void;
+  /** The single focused entry (`spineFile`) whose preview fills the inspector — distinct from the
+   *  checkbox selection. Clicking a card body focuses it; `null` when nothing is focused. */
+  focused: string | null;
+  /** Set (or clear with `null`) the focused entry. */
+  setFocused: (spineFile: string | null) => void;
 }

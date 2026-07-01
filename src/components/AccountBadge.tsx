@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { RotateCw, UserCircle2 } from 'lucide-react';
+import { GoogleDriveIcon } from './GoogleDriveIcon';
 import { useApp } from '../useAppController';
 import { formatDateTime } from '../time';
 import './AccountBadge.css';
@@ -64,8 +65,10 @@ export function AccountBadge() {
           <img className="account-avatar" src={driveAccount!.photoLink!} alt="" onError={() => setImgFailed(true)} />
         ) : driveBusy ? (
           <RotateCw className="spin" size={18} />
+        ) : driveAccount ? (
+          <GoogleDriveIcon size={18} />
         ) : (
-          <UserCircle2 size={18} className={driveAccount ? undefined : 'muted'} />
+          <UserCircle2 size={18} className="muted" />
         )}
         <span className={`account-email ${driveAccount ? '' : 'muted'}`}>{label}</span>
         {syncEnabled && (

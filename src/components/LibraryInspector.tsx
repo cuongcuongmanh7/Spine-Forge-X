@@ -1,5 +1,5 @@
 import { useMemo, useState, type ReactNode } from 'react';
-import { CheckCircle2, Clock, FolderPlus, Hash, History, MessageSquare, Stethoscope, Trash2, User, X, Zap } from 'lucide-react';
+import { CheckCircle2, Clock, FolderPlus, Hash, MessageSquare, Stethoscope, Trash2, User, X, Zap } from 'lucide-react';
 import { useApp } from '../useAppController';
 import { cleanStatusForEntry, metaKeyForEntry } from '../library';
 import { formatBytes, formatDate } from '../time';
@@ -7,6 +7,7 @@ import { SpinePreviewView } from './SpinePreviewView';
 import { SpineFileIcon } from './SpineFileIcon';
 import { StatIcon } from './StatIcon';
 import { LibraryDriveHistoryModal } from './LibraryDriveHistoryModal';
+import { GoogleDriveIcon } from './GoogleDriveIcon';
 import { NotesModal } from './NotesModal';
 import { splitRelPath } from './LibraryViewShared';
 import type { LibraryFilterApi } from '../useLibraryFilter';
@@ -48,13 +49,22 @@ export function LibraryInspector({
     () => entries.filter((e) => filter.selected.has(e.spineFile)),
     [entries, filter.selected]
   );
+  // The card the user last clicked (preview focus) drives the single-asset panel; the checkbox
+  // selection only takes over when 2+ are ticked (bulk summary).
+  const focusedEntry = useMemo(
+    () => entries.find((e) => e.spineFile === filter.focused) ?? null,
+    [entries, filter.focused]
+  );
 
-  if (selectedEntries.length === 0) return null;
+  // Bulk selection wins when it's a real multi-select; otherwise fall back to the focused card, then
+  // to a lone checkbox selection (keeps the table's click-to-select behaviour showing a panel).
+  const single = selectedEntries.length > 1 ? null : (focusedEntry ?? selectedEntries[0] ?? null);
+  if (!single && selectedEntries.length <= 1) return null;
 
   return (
     <aside className="library-inspector" aria-label={t.libraryInspectorTitle}>
-      {selectedEntries.length === 1 ? (
-        <SingleInspector entry={selectedEntries[0]} filter={filter} tags={tags} drive={drive} notes={notes} onPreview={onPreview} onHealthCheck={onHealthCheck} />
+      {single ? (
+        <SingleInspector entry={single} filter={filter} tags={tags} drive={drive} notes={notes} onPreview={onPreview} onHealthCheck={onHealthCheck} />
       ) : (
         <MultiInspector entries={selectedEntries} filter={filter} />
       )}
@@ -158,7 +168,7 @@ function SingleInspector({
             setHistoryOpen(true);
           }}
         >
-          <History size={14} /> {t.driveInfoTitle}
+          <GoogleDriveIcon size={14} /> {t.driveInfoTitle}
         </button>
       </div>
 
