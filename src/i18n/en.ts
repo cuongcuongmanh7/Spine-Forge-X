@@ -194,7 +194,7 @@ export const en: Translations = {
   libraryScanning: 'Scanning…',
   libraryScanDone: 'Scanned {count} .spine files.',
   libraryDataPathMissing:
-    "Shared data folder not found on Drive (Shared drives\\Pamvis\\spine_app_data). Thumbnails and shared data won't sync until the Pamvis drive is mounted on this machine.",
+    'Shared data folder not found on Drive (Shared drives\\Pamvis\\spine_app_data). Workspace + library-list sync and Drive info (editor/history) pause until the Pamvis drive is mounted on this machine. Tags/notes/metadata and thumbnails still work via Firebase.',
   libraryScanFailed: 'Library scan failed',
   libraryLastScan: 'Last scan',
   libraryNeverScanned: 'Never',
@@ -297,7 +297,7 @@ export const en: Translations = {
   syncEnable: 'Enable app-data sync',
   syncEnableHelp: 'Sync your workspace (projects/sessions) and the shared library to the team Drive folder so they reopen on any machine. The folder is fixed and auto-detected — no need to pick one.',
   syncDataPath: 'Shared data folder',
-  syncDataPathHelp: 'Auto-detected on the Pamvis shared drive (Shared drives\\Pamvis\\spine_app_data). Your workspace lives in a per-user subfolder; the library is shared by the whole team.',
+  syncDataPathHelp: 'Auto-detected on the Pamvis shared drive (Shared drives\\Pamvis\\spine_app_data). Used as the anchor to rebase source .spine paths so the workspace + library list sync across machines (drive G:\\ ↔ H:\\) and to resolve Drive metadata. Tags/notes/metadata now live in Firebase — no longer stored here; thumbnails cache locally + Firebase.',
   syncWorkspaceOf: 'Syncing workspace of: {email}',
   syncNeedsSignIn: 'Sign in to Google Drive to sync your workspace (projects/sessions). The shared library still loads without sign-in.',
   syncNow: 'Sync now',

@@ -192,7 +192,7 @@ export const vi = {
   libraryScanning: 'Đang quét…',
   libraryScanDone: 'Đã quét {count} file .spine.',
   libraryDataPathMissing:
-    'Không thấy thư mục dữ liệu chung trên Drive (Shared drives\\Pamvis\\spine_app_data). Thumbnail và dữ liệu chung sẽ không đồng bộ cho đến khi máy này mount được ổ Pamvis.',
+    'Không thấy thư mục dữ liệu chung trên Drive (Shared drives\\Pamvis\\spine_app_data). Đồng bộ workspace + danh sách thư viện và thông tin Drive (người sửa/lịch sử) sẽ tạm dừng cho đến khi máy này mount được ổ Pamvis. Tags/ghi chú/metadata và thumbnail vẫn chạy qua Firebase.',
   libraryScanFailed: 'Quét thư viện thất bại',
   libraryLastScan: 'Quét lần cuối',
   libraryNeverScanned: 'Chưa quét',
@@ -295,7 +295,7 @@ export const vi = {
   syncEnable: 'Bật đồng bộ dữ liệu app',
   syncEnableHelp: 'Đồng bộ workspace (project/session) của bạn và thư viện chung lên folder Drive của nhóm để mở lại ở mọi máy. Thư mục cố định, tự dò — không cần chọn.',
   syncDataPath: 'Thư mục dữ liệu chung',
-  syncDataPathHelp: 'Tự dò trên ổ Pamvis (Shared drives\\Pamvis\\spine_app_data). Workspace của bạn nằm ở folder con riêng; thư viện thì cả nhóm dùng chung.',
+  syncDataPathHelp: 'Tự dò trên ổ Pamvis (Shared drives\\Pamvis\\spine_app_data). Dùng làm mốc quy đổi đường dẫn source .spine để đồng bộ workspace + danh sách thư viện giữa các máy (ổ G:\\ ↔ H:\\) và để tra thông tin Drive. Tags/ghi chú/metadata giờ lưu trên Firebase — không còn ở folder này; thumbnail cache cục bộ + Firebase.',
   syncWorkspaceOf: 'Đang đồng bộ workspace của: {email}',
   syncNeedsSignIn: 'Đăng nhập Google Drive để đồng bộ workspace (project/session). Thư viện chung vẫn tải được khi chưa đăng nhập.',
   syncNow: 'Đồng bộ ngay',
