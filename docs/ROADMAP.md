@@ -8,7 +8,7 @@ Source-of-truth tiến độ toàn dự án.
 
 ## 🔜 Dự kiến (chưa làm)
 
-- [ ] **Realtime cho library metadata** — thay pull-once-on-mount của tags/notes/drive-meta bằng `onSnapshot` (giống `library/clean|trash` đã có `subscribe*`) để nhiều máy thấy thay đổi ngay, khỏi mở lại tab. Xem [library-sidecar-firestore.md](library-sidecar-firestore.md) §7. *(Code đọc file sidecar cũ đã dọn — post-v0.4.41.)*
+_Chưa có mục nào chờ. Migration 3 sidecar Thư viện sang Firestore đã xong (v0.4.41); post-v0.4.41 đã dọn code file cũ + thêm realtime `onSnapshot` cho tags/notes/drive-meta — sẽ đi kèm release kế tiếp._
 
 ## v0.4.41 — 3 sidecar Thư viện (tags/owner · notes · drive-meta) lên Firestore ✅ Done
 

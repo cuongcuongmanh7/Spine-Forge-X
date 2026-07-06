@@ -9,7 +9,7 @@ import {
   type EntryMeta,
   type LibraryMeta
 } from './library';
-import { readLibraryTagsRemote, writeLibraryTagsEntry } from './libraryMetaSync';
+import { subscribeLibraryTagsRemote, writeLibraryTagsEntry } from './libraryMetaSync';
 
 // Tags + manual owner per asset. Storage lives in Firestore (`envs/{env}/library/tags`, namespaced
 // by libraryId) — see docs/library-sidecar-firestore.md. A machine-local localStorage mirror fronts
@@ -51,22 +51,17 @@ type Args = { libraryId: string; userUid: string | null };
 export function useLibraryTags({ libraryId, userUid }: Args) {
   const [meta, setMeta] = useState<LibraryMeta>(() => loadLocalMeta(libraryId));
 
-  // Pull the shared snapshot on open / when identity (library or signed-in user) changes.
+  // Subscribe to the shared doc so a teammate's tag/owner edit (add, remove, or reassign) shows live
+  // without reopening the tab. The doc's `byLibrary[libraryId]` is the full authoritative map, so we
+  // replace state with it (deletes propagate too); the localStorage mirror only fronts the first
+  // paint before the snapshot arrives. Our own edits round-trip through the same snapshot (Firestore
+  // latency-compensates pending writes, so no flicker).
   useEffect(() => {
     if (!userUid) return; // signed out → local mirror only
-    let cancelled = false;
-    void (async () => {
-      const remote = await readLibraryTagsRemote(libraryId).catch(() => ({}) as LibraryMeta);
-      if (cancelled || Object.keys(remote).length === 0) return;
-      setMeta((prev) => {
-        const next = { ...prev, ...remote }; // remote wins per key (shared source of truth)
-        persistLocalMeta(libraryId, next);
-        return next;
-      });
-    })();
-    return () => {
-      cancelled = true;
-    };
+    return subscribeLibraryTagsRemote(libraryId, (remote) => {
+      setMeta(remote);
+      persistLocalMeta(libraryId, remote);
+    });
   }, [libraryId, userUid]);
 
   // Apply a pure edit, persist the local mirror, then push just the touched key to Firestore.

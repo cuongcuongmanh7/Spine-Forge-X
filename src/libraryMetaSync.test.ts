@@ -31,6 +31,16 @@ vi.mock('./firebase', () => ({
   envDoc: (...segments: string[]) => ({ key: segments.join('/') })
 }));
 
+type Snap = { exists: () => boolean; data: () => Record<string, unknown> | undefined; get: (k: string) => unknown };
+
+function snapFor(key: string): Snap {
+  const data = store.get(key);
+  return { exists: () => data !== undefined, data: () => data, get: (k: string) => data?.[k] };
+}
+
+// Realtime listeners keyed by doc, so a setDoc notifies any active onSnapshot for that doc.
+const listeners = new Map<string, Set<(snap: Snap) => void>>();
+
 vi.mock('firebase/firestore', () => {
   class Timestamp {
     constructor(public ms: number) {}
@@ -51,14 +61,15 @@ vi.mock('firebase/firestore', () => {
       } else {
         store.set(ref.key, resolved);
       }
+      for (const cb of listeners.get(ref.key) ?? []) cb(snapFor(ref.key));
     },
-    getDoc: async (ref: { key: string }) => {
-      const data = store.get(ref.key);
-      return {
-        exists: () => data !== undefined,
-        data: () => data,
-        get: (k: string) => data?.[k]
-      };
+    getDoc: async (ref: { key: string }) => snapFor(ref.key),
+    onSnapshot: (ref: { key: string }, onNext: (snap: Snap) => void) => {
+      const set = listeners.get(ref.key) ?? new Set();
+      set.add(onNext);
+      listeners.set(ref.key, set);
+      onNext(snapFor(ref.key)); // fire immediately with the current value, like the real SDK
+      return () => set.delete(onNext);
     }
   };
 });
@@ -67,13 +78,19 @@ import {
   readLibraryDriveRemote,
   readLibraryNotesRemote,
   readLibraryTagsRemote,
+  subscribeLibraryDriveRemote,
+  subscribeLibraryTagsRemote,
   writeLibraryDriveEntries,
   writeLibraryNotesEntry,
   writeLibraryTagsEntry
 } from './libraryMetaSync';
-import type { LibraryNote } from './library';
+import type { EntryMeta, LibraryMeta, LibraryNote } from './library';
+import type { DriveBasic } from './drive';
 
-beforeEach(() => store.clear());
+beforeEach(() => {
+  store.clear();
+  listeners.clear();
+});
 
 describe('tags: merge isolation across keys and libraries', () => {
   it('a relPath containing "." and "/" round-trips as a literal key, not a flattened field path', async () => {
@@ -132,6 +149,55 @@ describe('notes: per-key patch (union happens in the caller)', () => {
     await writeLibraryNotesEntry('l1', 'a.spine', [note('n1')]);
     await writeLibraryNotesEntry('l1', 'a.spine', []);
     expect((await readLibraryNotesRemote('l1'))['a.spine']).toBeUndefined();
+  });
+});
+
+describe('realtime subscriptions', () => {
+  const last = <T,>(a: T[]): T | undefined => a[a.length - 1];
+
+  it('tags: fires with current value, then again live on a later write (authoritative — delete propagates)', async () => {
+    await writeLibraryTagsEntry('l1', 'a.spine', { tags: ['a'] });
+    const seen: LibraryMeta[] = [];
+    const unsub = subscribeLibraryTagsRemote('l1', (m) => seen.push(m));
+    expect(last(seen)).toEqual({ 'a.spine': { tags: ['a'] } }); // immediate
+
+    await writeLibraryTagsEntry('l1', 'b.spine', { tags: ['b'] } as EntryMeta);
+    expect(last(seen)).toEqual({ 'a.spine': { tags: ['a'] }, 'b.spine': { tags: ['b'] } }); // live add
+
+    await writeLibraryTagsEntry('l1', 'a.spine', undefined);
+    expect(last(seen)?.['a.spine']).toBeUndefined(); // live delete
+    unsub();
+  });
+
+  it("tags: l1's slice stays isolated when l2 writes (shared doc wakes the sub, but never leaks l2's keys)", async () => {
+    await writeLibraryTagsEntry('l1', 'own.spine', { tags: ['mine'] });
+    const seen: LibraryMeta[] = [];
+    const unsub = subscribeLibraryTagsRemote('l1', (m) => seen.push(m));
+    // tags/notes share one `byLibrary` doc, so an l2 write does wake l1's subscription — but the
+    // callback still only ever sees l1's slice (drive-meta avoids even the wake via per-library docs).
+    await writeLibraryTagsEntry('l2', 'x.spine', { tags: ['x'] });
+    expect(last(seen)).toEqual({ 'own.spine': { tags: ['mine'] } });
+    expect(last(seen)?.['x.spine']).toBeUndefined();
+    unsub();
+  });
+
+  it('drive: subscription reflects a later batch write on the per-library doc', async () => {
+    const seen: Record<string, DriveBasic>[] = [];
+    const unsub = subscribeLibraryDriveRemote('l1', (m) => seen.push(m));
+    await writeLibraryDriveEntries('l1', {
+      'a.spine': { relPath: 'a.spine', ownerEmail: 'x@ondigames.com', ownerName: null, lastEditorEmail: null, lastEditorName: null, modifiedTime: null, error: null }
+    });
+    expect(last(seen)?.['a.spine']?.ownerEmail).toBe('x@ondigames.com');
+    unsub();
+  });
+
+  it('unsubscribe stops further callbacks', async () => {
+    const seen: LibraryMeta[] = [];
+    const unsub = subscribeLibraryTagsRemote('l1', (m) => seen.push(m));
+    unsub();
+    const after = seen.length;
+    await writeLibraryTagsEntry('l1', 'a.spine', { tags: ['a'] });
+    expect(seen.length).toBe(after);
   });
 });
 

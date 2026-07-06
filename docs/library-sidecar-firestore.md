@@ -148,11 +148,26 @@ Làm tuần tự, mỗi PR verify độc lập (`tsc` + `npm test` + `npm run bu
   đã ổn định transport mới.
 - Không di trú lịch sử/audit trail — chỉ có state hiện tại (giống cách `list`/`clean`/`trash` seed).
 
-## 7. Câu hỏi cần chốt
+## 7. Realtime (`onSnapshot`) — ĐÃ LÀM (post-cleanup)
 
-- **Doc-per-library cho drive-meta (đề xuất, §3)** — hay giữ 1 doc `byLibrary` map chung cho gọn code,
-  chấp nhận rủi ro chạm trần 1MiB khi thư viện rất lớn (dễ vá sau nếu cần, không breaking vì key đã
-  namespace theo `libraryId`)?
-- **Thời điểm PR5 (dọn code cũ)** — chờ bao lâu sau PR2-4 để chắc mọi máy đã lên bản mới? (đề xuất: 1-2
-  release, giống cách rollout `list`/`clean`/`trash` trước đây không có mốc thời gian cứng, chỉ dọn khi
-  chắc chắn.)
+Thay pull-once-on-mount bằng `onSnapshot` để thay đổi của máy khác hiện ngay, không cần mở lại tab
+(giống `subscribeLibraryCleanProfile`/`subscribeLibraryTrashProfile`). Trong [libraryMetaSync.ts](../src/libraryMetaSync.ts):
+`subscribeLibraryTagsRemote` / `subscribeLibraryNotesRemote` (chung doc `byLibrary`) + `subscribeLibraryDriveRemote`
+(doc-per-library). Ngữ nghĩa apply:
+- **tags/notes** — remote là **authoritative** cho slice của library → **replace** state (xoá cũng propagate
+  live); localStorage mirror chỉ lo lần paint đầu; edit của chính mình round-trip qua cùng snapshot
+  (Firestore latency-compensate pending write nên không nháy).
+- **drive-meta** — cache **cộng dồn** → **merge** remote vào state, **bỏ qua snapshot rỗng** để không xoá cache.
+
+Đánh đổi đã biết: tags/notes chung 1 doc nên **mọi write tag/note của bất kỳ library nào cũng đánh thức
+subscription của library đang mở** (callback fire lại với slice không đổi — idempotent, chỉ thừa một render;
+callback không bao giờ lẫn key của library khác). drive-meta doc-per-library nên không bị. Test realtime:
+[libraryMetaSync.test.ts](../src/libraryMetaSync.test.ts) (fire-immediate, live add/delete, cross-library
+isolation, unsubscribe).
+
+## 8. Quyết định đã chốt
+
+- **Doc-per-library cho drive-meta** (§3) — đã chọn (`drive_<libraryId>`), bound kích thước doc + tránh
+  tranh doc giữa các library.
+- **PR5 (dọn code cũ)** — đã làm ngay post-v0.4.41 vì hiện chỉ 1 người dùng (không cần chờ team). File
+  `.json` cũ để nguyên trên Drive.

@@ -13,7 +13,7 @@ import {
   type DriveFileInfo,
   type DriveRevision
 } from './drive';
-import { readLibraryDriveRemote, writeLibraryDriveEntries } from './libraryMetaSync';
+import { subscribeLibraryDriveRemote, writeLibraryDriveEntries } from './libraryMetaSync';
 
 // Machine-local cache of the dashboard's Drive columns (owner/last-modified), keyed by the
 // machine-independent Drive relPath so it survives restarts AND works across machines. The shared
@@ -78,22 +78,19 @@ export function useLibraryDrive({ t, pushToast, driveAccount, libraryId, userUid
   const [basicsProgress, setBasicsProgress] = useState<{ done: number; total: number } | null>(null);
   const [basicsLoadedAt, setBasicsLoadedAt] = useState<number | null>(loadBasicsLoadedAt);
 
-  // Pull the cross-machine cache from Firestore on open / when identity changes.
+  // Subscribe to this library's Drive cache doc so another machine's "Load Drive data" (or the
+  // background watcher refresh) shows live. This cache is additive — merge remote into the local map
+  // (rather than replace) and ignore an empty snapshot so we never wipe cached rows.
   useEffect(() => {
     if (!userUid) return; // signed out → local cache only
-    let cancelled = false;
-    void (async () => {
-      const remote = await readLibraryDriveRemote(libraryId).catch(() => ({}) as Record<string, DriveBasic>);
-      if (cancelled || Object.keys(remote).length === 0) return;
+    return subscribeLibraryDriveRemote(libraryId, (remote) => {
+      if (Object.keys(remote).length === 0) return;
       setDriveBasics((prev) => {
         const next = { ...prev, ...remote };
         persistBasics(next);
         return next;
       });
-    })();
-    return () => {
-      cancelled = true;
-    };
+    });
   }, [libraryId, userUid]);
 
   const basicFor = useCallback(

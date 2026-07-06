@@ -20,7 +20,7 @@
 // library) also fixes a known bug: two libraries that happen to share a relPath used to collide on
 // the same tag/note/drive-cache entry (see spine-hub-tier-c.md §4).
 
-import { deleteField, getDoc, serverTimestamp, setDoc } from 'firebase/firestore';
+import { deleteField, getDoc, onSnapshot, serverTimestamp, setDoc } from 'firebase/firestore';
 import { envDoc } from './firebase';
 import { tsToMillis } from './sync';
 import type { DriveBasic } from './drive';
@@ -30,14 +30,32 @@ const SCHEMA = 1;
 
 // ---- shared primitives -------------------------------------------------------------------------
 
+/** Extracts one library's map from a shared `byLibrary`-keyed doc snapshot (`{}` when absent). */
+function libraryMapFromSnap<T>(byLibrary: unknown, libraryId: string): Record<string, T> {
+  if (!byLibrary || typeof byLibrary !== 'object') return {};
+  const mine = (byLibrary as Record<string, unknown>)[libraryId];
+  return mine && typeof mine === 'object' ? (mine as Record<string, T>) : {};
+}
+
 /** One library's map out of a shared `byLibrary`-keyed doc (`{}` if the doc or library is absent). */
 async function readByLibraryMap<T>(docName: string, libraryId: string): Promise<Record<string, T>> {
   const snap = await getDoc(envDoc('library', docName));
   if (!snap.exists()) return {};
-  const byLibrary = snap.get('byLibrary');
-  if (!byLibrary || typeof byLibrary !== 'object') return {};
-  const mine = (byLibrary as Record<string, unknown>)[libraryId];
-  return mine && typeof mine === 'object' ? (mine as Record<string, T>) : {};
+  return libraryMapFromSnap<T>(snap.get('byLibrary'), libraryId);
+}
+
+/**
+ * Realtime subscription to one library's slice of a shared `byLibrary` doc. Fires immediately with
+ * the current value (from cache, then server) and again on every change — so a teammate's edit shows
+ * without reopening the tab. Errors (e.g. transient permission blips) are ignored to avoid wiping the
+ * displayed state. Returns an unsubscribe fn; call only after sign-in.
+ */
+function subscribeByLibraryMap<T>(docName: string, libraryId: string, cb: (map: Record<string, T>) => void): () => void {
+  return onSnapshot(
+    envDoc('library', docName),
+    (snap) => cb(libraryMapFromSnap<T>(snap.get('byLibrary'), libraryId)),
+    () => undefined
+  );
 }
 
 /**
@@ -61,6 +79,11 @@ export function readLibraryTagsRemote(libraryId: string): Promise<LibraryMeta> {
   return readByLibraryMap<EntryMeta>('tags', libraryId);
 }
 
+/** Realtime subscription to one library's tag/owner map. */
+export function subscribeLibraryTagsRemote(libraryId: string, cb: (map: LibraryMeta) => void): () => void {
+  return subscribeByLibraryMap<EntryMeta>('tags', libraryId, cb);
+}
+
 /** Upserts (or, when `value` is undefined, deletes) one asset's tag/owner entry. */
 export function writeLibraryTagsEntry(libraryId: string, key: string, value: EntryMeta | undefined): Promise<number> {
   return writeByLibraryPatch<EntryMeta>('tags', libraryId, { [key]: value });
@@ -71,6 +94,11 @@ export function writeLibraryTagsEntry(libraryId: string, key: string, value: Ent
 /** Reads one library's notes map (`spineforge-library-notes.json` successor). */
 export function readLibraryNotesRemote(libraryId: string): Promise<LibraryNotes> {
   return readByLibraryMap<LibraryNote[]>('notes', libraryId);
+}
+
+/** Realtime subscription to one library's notes map. */
+export function subscribeLibraryNotesRemote(libraryId: string, cb: (map: LibraryNotes) => void): () => void {
+  return subscribeByLibraryMap<LibraryNote[]>('notes', libraryId, cb);
 }
 
 /**
@@ -93,6 +121,18 @@ export async function readLibraryDriveRemote(libraryId: string): Promise<Record<
   if (!snap.exists()) return {};
   const entries = snap.get('entries');
   return entries && typeof entries === 'object' ? (entries as Record<string, DriveBasic>) : {};
+}
+
+/** Realtime subscription to one library's Drive cache doc (`entries` map). */
+export function subscribeLibraryDriveRemote(libraryId: string, cb: (map: Record<string, DriveBasic>) => void): () => void {
+  return onSnapshot(
+    envDoc('library', `drive_${libraryId}`),
+    (snap) => {
+      const entries = snap.get('entries');
+      cb(entries && typeof entries === 'object' ? (entries as Record<string, DriveBasic>) : {});
+    },
+    () => undefined
+  );
 }
 
 /** Merges a batch of freshly-fetched `{relPath: DriveBasic}` entries into the library's cache doc. */

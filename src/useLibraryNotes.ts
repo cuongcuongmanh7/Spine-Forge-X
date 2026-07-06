@@ -10,7 +10,7 @@ import {
   type LibraryNote,
   type LibraryNotes
 } from './library';
-import { readLibraryNotesRemote, writeLibraryNotesEntry } from './libraryMetaSync';
+import { readLibraryNotesRemote, subscribeLibraryNotesRemote, writeLibraryNotesEntry } from './libraryMetaSync';
 
 // Notes/comments on Library files & folders. Same shape as useLibraryTags: storage lives in
 // Firestore (`envs/{env}/library/notes`, namespaced by libraryId — see
@@ -52,24 +52,17 @@ type Args = { libraryId: string; userUid: string | null; authorEmail: string; is
 export function useLibraryNotes({ libraryId, userUid, authorEmail, isLeader }: Args) {
   const [notes, setNotes] = useState<LibraryNotes>(() => loadLocalNotes(libraryId));
 
-  // Pull the shared snapshot on open / when identity changes; union per key so we don't drop a
-  // teammate's note for a key we also hold locally.
+  // Subscribe to the shared doc so a teammate's note (add, delete, resolve) shows live without
+  // reopening the tab. `byLibrary[libraryId]` is the full authoritative notes map — replace state
+  // with it; the localStorage mirror only fronts the first paint. Our own edits round-trip through
+  // the same snapshot (latency-compensated), and the commit path unions by id before writing so a
+  // concurrent writer isn't clobbered.
   useEffect(() => {
     if (!userUid) return; // signed out → local mirror only
-    let cancelled = false;
-    void (async () => {
-      const remote = await readLibraryNotesRemote(libraryId).catch(() => ({}) as LibraryNotes);
-      if (cancelled || Object.keys(remote).length === 0) return;
-      setNotes((prev) => {
-        const next: LibraryNotes = { ...prev };
-        for (const [key, list] of Object.entries(remote)) next[key] = mergeNoteArrays(prev[key], list);
-        persistLocalNotes(libraryId, next);
-        return next;
-      });
-    })();
-    return () => {
-      cancelled = true;
-    };
+    return subscribeLibraryNotesRemote(libraryId, (remote) => {
+      setNotes(remote);
+      persistLocalNotes(libraryId, remote);
+    });
   }, [libraryId, userUid]);
 
   // Apply a pure edit, persist the mirror, then push just the touched key to Firestore — unioning
