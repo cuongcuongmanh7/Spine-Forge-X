@@ -147,7 +147,7 @@ export function LibraryView() {
 /** Tabbed inventory/clean content for one library. Mounted fresh per library id so its filter
  *  selection (and the open tab / modals) reset cleanly when the user switches libraries. */
 function LibraryContent({ libraryId }: { libraryId: string }) {
-  const { t, libraryDir, pushToast, driveAccount, merged, openSettings, isLeader } = useApp();
+  const { t, libraryDir, pushToast, driveAccount, merged, openSettings, isLeader, firebaseUid } = useApp();
   const [tab, setTab] = useState<Tab>('inventory');
   const [reportTotal, setReportTotal] = useState(0);
   const [cleanScopeRequest, setCleanScopeRequest] = useState<CleanScopeRequest | null>(null);
@@ -156,7 +156,7 @@ function LibraryContent({ libraryId }: { libraryId: string }) {
   const filter = useLibraryFilter(libraryId);
   // Tags + Drive metadata live here (not in LibraryInventory) so the Inspector panel shares the same
   // loaded data — otherwise a second hook instance would have an empty cache until reloaded.
-  const tags = useLibraryTags({ libraryDir });
+  const tags = useLibraryTags({ libraryId, libraryDir, userUid: firebaseUid });
   const drive = useLibraryDrive({
     t,
     pushToast,

@@ -67,6 +67,12 @@ export function writeLibraryTagsEntry(libraryId: string, key: string, value: Ent
   return writeByLibraryPatch<EntryMeta>('tags', libraryId, { [key]: value });
 }
 
+/** One-shot bulk seed of a whole tag/owner map (used to migrate the old file sidecar into Firestore
+ *  the first time a signed-in machine finds the doc empty). Idempotent under `merge:true`. */
+export function seedLibraryTags(libraryId: string, map: LibraryMeta): Promise<number> {
+  return writeByLibraryPatch<EntryMeta>('tags', libraryId, map);
+}
+
 // ---- notes (`envs/{env}/library/notes`) --------------------------------------------------------
 
 /** Reads one library's notes map (`spineforge-library-notes.json` successor). */
@@ -81,6 +87,14 @@ export function readLibraryNotesRemote(libraryId: string): Promise<LibraryNotes>
  */
 export function writeLibraryNotesEntry(libraryId: string, key: string, value: LibraryNote[] | undefined): Promise<number> {
   return writeByLibraryPatch<LibraryNote[]>('notes', libraryId, { [key]: value && value.length > 0 ? value : undefined });
+}
+
+/** One-shot bulk seed of a whole notes map (migrates the old file sidecar into Firestore the first
+ *  time a signed-in machine finds the doc empty). Empty arrays are dropped. */
+export function seedLibraryNotes(libraryId: string, map: LibraryNotes): Promise<number> {
+  const patch: Record<string, LibraryNote[] | undefined> = {};
+  for (const [key, list] of Object.entries(map)) if (list && list.length > 0) patch[key] = list;
+  return writeByLibraryPatch<LibraryNote[]>('notes', libraryId, patch);
 }
 
 // ---- drive-meta cache (`envs/{env}/library/drive_<libraryId>`) ---------------------------------

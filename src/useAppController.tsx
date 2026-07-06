@@ -643,6 +643,7 @@ export function useAppControllerValue() {
     driveSignOut,
     /** Library leader (may add/remove libraries); members get a read-only list. */
     isLeader,
+    firebaseUid, // signed-in Firebase uid (null when signed out); gates library metadata sync
 
     // Realtime Drive-change notifications (top-bar bell)
     notifications,
