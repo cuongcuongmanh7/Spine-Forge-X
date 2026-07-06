@@ -156,7 +156,7 @@ function LibraryContent({ libraryId }: { libraryId: string }) {
   const filter = useLibraryFilter(libraryId);
   // Tags + Drive metadata live here (not in LibraryInventory) so the Inspector panel shares the same
   // loaded data — otherwise a second hook instance would have an empty cache until reloaded.
-  const tags = useLibraryTags({ libraryId, libraryDir, userUid: firebaseUid });
+  const tags = useLibraryTags({ libraryId, userUid: firebaseUid });
   const drive = useLibraryDrive({
     t,
     pushToast,
@@ -168,8 +168,8 @@ function LibraryContent({ libraryId }: { libraryId: string }) {
     openSettings: () => openSettings(true)
   });
   // Notes hook lives here (not in LibraryInventory) so the Inspector panel shares the same loaded
-  // notes — otherwise a second instance would have an empty cache until the sidecar reloads.
-  const notes = useLibraryNotes({ libraryId, libraryDir, userUid: firebaseUid, authorEmail: driveAccount?.email ?? '', isLeader });
+  // notes — otherwise a second instance would have an empty cache until Firestore reloads.
+  const notes = useLibraryNotes({ libraryId, userUid: firebaseUid, authorEmail: driveAccount?.email ?? '', isLeader });
 
   function prepareCleanScan(spineFiles: string[]) {
     setCleanScopeRequest({ id: Date.now(), spineFiles });

@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useState } from 'react';
-import { invoke } from '@tauri-apps/api/core';
 import type { LibraryEntry } from './config';
 import {
   addTag,
@@ -10,21 +9,16 @@ import {
   type EntryMeta,
   type LibraryMeta
 } from './library';
-import { readLibraryTagsRemote, seedLibraryTags, writeLibraryTagsEntry } from './libraryMetaSync';
+import { readLibraryTagsRemote, writeLibraryTagsEntry } from './libraryMetaSync';
 
-// Tags + manual owner per asset. Storage moved from a plain-file sidecar on the Shared Drive to
-// Firestore (`envs/{env}/library/tags`, namespaced by libraryId) — see
-// docs/library-sidecar-firestore.md. A machine-local localStorage mirror still fronts it (instant
-// paint, survives restart, readable offline). On open we pull the library's map from Firestore;
-// each edit writes just the touched key back with a server-side merge, so a teammate's concurrent
-// edit to a different asset is preserved without a read-before-write race.
+// Tags + manual owner per asset. Storage lives in Firestore (`envs/{env}/library/tags`, namespaced
+// by libraryId) — see docs/library-sidecar-firestore.md. A machine-local localStorage mirror fronts
+// it (instant paint, survives restart, readable offline). On open we pull the library's map from
+// Firestore; each edit writes just the touched key back with a server-side merge, so a teammate's
+// concurrent edit to a different asset is preserved without a read-before-write race.
 //
 // Signed out (or Firebase unconfigured): tags fall back to the local mirror only — like the shared
-// library list, cross-machine tag sync now requires sign-in. The one time a signed-in machine finds
-// the Firestore doc empty but the legacy file sidecar still on the mounted Drive, we seed it once so
-// existing tags migrate with no manual step (the old file is left in place; PR5 removes it).
-
-const LEGACY_META_FILE = 'spineforge-library-meta.json';
+// library list, cross-machine tag sync requires sign-in.
 
 function mirrorKey(libraryId: string): string {
   return `spineforge.library.meta.${libraryId}`;
@@ -47,30 +41,14 @@ function persistLocalMeta(libraryId: string, meta: LibraryMeta) {
   }
 }
 
-/** Read the legacy file sidecar (only for the one-time migration seed while it still exists). */
-async function readLegacySidecar(folder: string): Promise<LibraryMeta> {
-  if (!folder) return {};
-  const win = folder.includes('\\') || /^[a-zA-Z]:/.test(folder);
-  const path = folder.replace(/[\\/]+$/, '') + (win ? '\\' : '/') + LEGACY_META_FILE;
-  const content = await invoke<string | null>('read_text_file', { path }).catch(() => null);
-  if (!content) return {};
-  try {
-    const parsed = JSON.parse(content) as LibraryMeta;
-    return parsed && typeof parsed === 'object' ? parsed : {};
-  } catch {
-    return {};
-  }
-}
-
-type Args = { libraryId: string; libraryDir: string; userUid: string | null };
+type Args = { libraryId: string; userUid: string | null };
 
 /**
  * Library ▸ tags/ownership state. Kept out of LibraryInventory so that component stays thin.
  * `libraryId` namespaces the Firestore doc (and the local mirror); `userUid` gates Firestore access
- * (null → local-only); `libraryDir` is only used to locate the legacy file sidecar for the one-time
- * migration seed.
+ * (null → local-only).
  */
-export function useLibraryTags({ libraryId, libraryDir, userUid }: Args) {
+export function useLibraryTags({ libraryId, userUid }: Args) {
   const [meta, setMeta] = useState<LibraryMeta>(() => loadLocalMeta(libraryId));
 
   // Pull the shared snapshot on open / when identity (library or signed-in user) changes.
@@ -78,15 +56,7 @@ export function useLibraryTags({ libraryId, libraryDir, userUid }: Args) {
     if (!userUid) return; // signed out → local mirror only
     let cancelled = false;
     void (async () => {
-      let remote = await readLibraryTagsRemote(libraryId).catch(() => ({}) as LibraryMeta);
-      // First signed-in machine after the migration: seed Firestore from the legacy file sidecar.
-      if (Object.keys(remote).length === 0 && libraryDir) {
-        const legacy = await readLegacySidecar(libraryDir);
-        if (Object.keys(legacy).length > 0) {
-          await seedLibraryTags(libraryId, legacy).catch(() => undefined);
-          remote = legacy;
-        }
-      }
+      const remote = await readLibraryTagsRemote(libraryId).catch(() => ({}) as LibraryMeta);
       if (cancelled || Object.keys(remote).length === 0) return;
       setMeta((prev) => {
         const next = { ...prev, ...remote }; // remote wins per key (shared source of truth)
@@ -97,7 +67,7 @@ export function useLibraryTags({ libraryId, libraryDir, userUid }: Args) {
     return () => {
       cancelled = true;
     };
-  }, [libraryId, libraryDir, userUid]);
+  }, [libraryId, userUid]);
 
   // Apply a pure edit, persist the local mirror, then push just the touched key to Firestore.
   function commit(key: string, next: LibraryMeta) {

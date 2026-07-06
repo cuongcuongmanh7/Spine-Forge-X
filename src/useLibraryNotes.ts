@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useState } from 'react';
-import { invoke } from '@tauri-apps/api/core';
 import {
   addNote,
   mergeNoteArrays,
@@ -11,17 +10,15 @@ import {
   type LibraryNote,
   type LibraryNotes
 } from './library';
-import { readLibraryNotesRemote, seedLibraryNotes, writeLibraryNotesEntry } from './libraryMetaSync';
+import { readLibraryNotesRemote, writeLibraryNotesEntry } from './libraryMetaSync';
 
-// Notes/comments on Library files & folders. Same shape as useLibraryTags: storage moved from the
-// `spineforge-library-notes.json` file sidecar to Firestore (`envs/{env}/library/notes`, namespaced
-// by libraryId — see docs/library-sidecar-firestore.md), fronted by a local mirror. Difference vs
-// tags: notes are arrays, so on push we *union by note id* (mergeNoteArrays) with the latest remote
-// for that one key instead of overwriting — two leaders annotating the same target don't clobber.
-// Firestore can't union array contents itself, so we read the key's current array first, then write
-// the merged result back (a read-before-write scoped to one key, not the whole file).
-
-const LEGACY_NOTES_FILE = 'spineforge-library-notes.json';
+// Notes/comments on Library files & folders. Same shape as useLibraryTags: storage lives in
+// Firestore (`envs/{env}/library/notes`, namespaced by libraryId — see
+// docs/library-sidecar-firestore.md), fronted by a local mirror. Difference vs tags: notes are
+// arrays, so on push we *union by note id* (mergeNoteArrays) with the latest remote for that one key
+// instead of overwriting — two leaders annotating the same target don't clobber. Firestore can't
+// union array contents itself, so we read the key's current array first, then write the merged
+// result back (a read-before-write scoped to one key).
 
 function mirrorKey(libraryId: string): string {
   return `spineforge.library.notes.${libraryId}`;
@@ -44,30 +41,15 @@ function persistLocalNotes(libraryId: string, notes: LibraryNotes) {
   }
 }
 
-/** Read the legacy file sidecar (only for the one-time migration seed while it still exists). */
-async function readLegacySidecar(folder: string): Promise<LibraryNotes> {
-  if (!folder) return {};
-  const win = folder.includes('\\') || /^[a-zA-Z]:/.test(folder);
-  const path = folder.replace(/[\\/]+$/, '') + (win ? '\\' : '/') + LEGACY_NOTES_FILE;
-  const content = await invoke<string | null>('read_text_file', { path }).catch(() => null);
-  if (!content) return {};
-  try {
-    const parsed = JSON.parse(content) as LibraryNotes;
-    return parsed && typeof parsed === 'object' ? parsed : {};
-  } catch {
-    return {};
-  }
-}
-
-type Args = { libraryId: string; libraryDir: string; userUid: string | null; authorEmail: string; isLeader: boolean };
+type Args = { libraryId: string; userUid: string | null; authorEmail: string; isLeader: boolean };
 
 /**
  * Library ▸ file/folder notes state. Kept out of LibraryInventory so that component stays thin.
- * `libraryId` namespaces the Firestore doc + mirror; `userUid` gates Firestore (null → local-only);
- * `libraryDir` locates the legacy file sidecar for the one-time migration seed. `authorEmail`/
- * `isLeader` decide authorship and who may delete a note (UI gate only — rules don't enforce it).
+ * `libraryId` namespaces the Firestore doc + mirror; `userUid` gates Firestore (null → local-only).
+ * `authorEmail`/`isLeader` decide authorship and who may delete a note (UI gate only — rules don't
+ * enforce it).
  */
-export function useLibraryNotes({ libraryId, libraryDir, userUid, authorEmail, isLeader }: Args) {
+export function useLibraryNotes({ libraryId, userUid, authorEmail, isLeader }: Args) {
   const [notes, setNotes] = useState<LibraryNotes>(() => loadLocalNotes(libraryId));
 
   // Pull the shared snapshot on open / when identity changes; union per key so we don't drop a
@@ -76,14 +58,7 @@ export function useLibraryNotes({ libraryId, libraryDir, userUid, authorEmail, i
     if (!userUid) return; // signed out → local mirror only
     let cancelled = false;
     void (async () => {
-      let remote = await readLibraryNotesRemote(libraryId).catch(() => ({}) as LibraryNotes);
-      if (Object.keys(remote).length === 0 && libraryDir) {
-        const legacy = await readLegacySidecar(libraryDir);
-        if (Object.keys(legacy).length > 0) {
-          await seedLibraryNotes(libraryId, legacy).catch(() => undefined);
-          remote = legacy;
-        }
-      }
+      const remote = await readLibraryNotesRemote(libraryId).catch(() => ({}) as LibraryNotes);
       if (cancelled || Object.keys(remote).length === 0) return;
       setNotes((prev) => {
         const next: LibraryNotes = { ...prev };
@@ -95,7 +70,7 @@ export function useLibraryNotes({ libraryId, libraryDir, userUid, authorEmail, i
     return () => {
       cancelled = true;
     };
-  }, [libraryId, libraryDir, userUid]);
+  }, [libraryId, userUid]);
 
   // Apply a pure edit, persist the mirror, then push just the touched key to Firestore — unioning
   // our array with the latest remote (by id) so concurrent edits survive. An emptied key is deleted.

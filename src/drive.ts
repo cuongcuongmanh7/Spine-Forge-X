@@ -82,32 +82,3 @@ export function fetchDriveBasics(relPaths: string[]): Promise<DriveBasic[]> {
 export function downloadDriveRevision(relPath: string, revisionId: string): Promise<string> {
   return invoke<string>('drive_open_revision', { relPath, revisionId });
 }
-
-// ---- cross-machine dashboard cache (sidecar in the synced Drive folder) -----
-// Stored next to the Tier-A profile, keyed by machine-independent Drive relPath, so the
-// owner/last-modified you loaded at the office shows up at home (Google Drive syncs the file).
-
-const DRIVE_META_FILE = 'spineforge-drive-meta.json';
-
-function metaFilePath(folder: string): string {
-  const win = folder.includes('\\') || /^[a-zA-Z]:/.test(folder);
-  const sep = win ? '\\' : '/';
-  return folder.replace(/[\\/]+$/, '') + sep + DRIVE_META_FILE;
-}
-
-export async function readDriveMetaSidecar(folder: string): Promise<Record<string, DriveBasic>> {
-  if (!folder) return {};
-  const content = await invoke<string | null>('read_text_file', { path: metaFilePath(folder) }).catch(() => null);
-  if (!content) return {};
-  try {
-    const parsed = JSON.parse(content) as Record<string, DriveBasic>;
-    return parsed && typeof parsed === 'object' ? parsed : {};
-  } catch {
-    return {};
-  }
-}
-
-export async function writeDriveMetaSidecar(folder: string, map: Record<string, DriveBasic>): Promise<void> {
-  if (!folder) return;
-  await invoke('write_text_file', { path: metaFilePath(folder), content: JSON.stringify(map) });
-}

@@ -1,9 +1,8 @@
-// Firestore transport for the 3 remaining Library sidecars that still live as plain files on the
-// Shared Drive: `spineforge-library-meta.json` (tags/owner), `spineforge-library-notes.json`
-// (notes), `spineforge-drive-meta.json` (Drive owner/modified cache). Design:
-// docs/library-sidecar-firestore.md. This is PR1 of that spec — infrastructure only; the hooks
-// (useLibraryTags.ts / useLibraryNotes.ts / drive.ts + useLibraryDrive.ts) still read/write the old
-// file sidecars until PR2-4 swap their transport to the functions below.
+// Firestore transport for the 3 Library metadata scopes: tags/owner, notes, and the Drive
+// owner/modified cache. These used to be plain-file sidecars on the Shared Drive
+// (`spineforge-library-{meta,notes,drive-meta}.json`); they now live in Firestore. Design:
+// docs/library-sidecar-firestore.md. The hooks (useLibraryTags.ts / useLibraryNotes.ts /
+// useLibraryDrive.ts) read/write through the functions below.
 //
 // Unlike the leader-curated `library/list|clean|trash` docs in sync.ts, every signed-in org member
 // may write here (their own tag/note/drive-cache edit) — see firestore.rules.
@@ -67,12 +66,6 @@ export function writeLibraryTagsEntry(libraryId: string, key: string, value: Ent
   return writeByLibraryPatch<EntryMeta>('tags', libraryId, { [key]: value });
 }
 
-/** One-shot bulk seed of a whole tag/owner map (used to migrate the old file sidecar into Firestore
- *  the first time a signed-in machine finds the doc empty). Idempotent under `merge:true`. */
-export function seedLibraryTags(libraryId: string, map: LibraryMeta): Promise<number> {
-  return writeByLibraryPatch<EntryMeta>('tags', libraryId, map);
-}
-
 // ---- notes (`envs/{env}/library/notes`) --------------------------------------------------------
 
 /** Reads one library's notes map (`spineforge-library-notes.json` successor). */
@@ -87,14 +80,6 @@ export function readLibraryNotesRemote(libraryId: string): Promise<LibraryNotes>
  */
 export function writeLibraryNotesEntry(libraryId: string, key: string, value: LibraryNote[] | undefined): Promise<number> {
   return writeByLibraryPatch<LibraryNote[]>('notes', libraryId, { [key]: value && value.length > 0 ? value : undefined });
-}
-
-/** One-shot bulk seed of a whole notes map (migrates the old file sidecar into Firestore the first
- *  time a signed-in machine finds the doc empty). Empty arrays are dropped. */
-export function seedLibraryNotes(libraryId: string, map: LibraryNotes): Promise<number> {
-  const patch: Record<string, LibraryNote[] | undefined> = {};
-  for (const [key, list] of Object.entries(map)) if (list && list.length > 0) patch[key] = list;
-  return writeByLibraryPatch<LibraryNote[]>('notes', libraryId, patch);
 }
 
 // ---- drive-meta cache (`envs/{env}/library/drive_<libraryId>`) ---------------------------------

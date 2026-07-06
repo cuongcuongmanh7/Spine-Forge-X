@@ -4,9 +4,10 @@ Hoàn tất phần **"Còn lại (pha sau)"** đã ghi ở [sync.md](sync.md) §
 JSON cuối cùng còn nằm trên Shared Drive sang Firestore, theo đúng pattern `library/list` /
 `library/clean` / `library/trash` đã ship. Việc lớn → tách PR riêng theo mục "Chia PR" bên dưới.
 
-> **Trạng thái:** PR1–PR4 **đã ship ở v0.4.41** (transport đổi sang Firestore). **PR5 (dọn code file
-> sidecar cũ) + deploy rules còn lại** — chờ cả team lên ≥ v0.4.41 rồi xoá (seed migration còn đọc file
-> cũ). Xem §5 + §7.
+> **Trạng thái:** PR1–PR4 **đã ship ở v0.4.41** (transport đổi sang Firestore), rules **đã deploy**.
+> **PR5 (dọn code file sidecar cũ + seed) đã làm post-v0.4.41** — vì hiện chỉ 1 người dùng nên không
+> cần chờ team; file sidecar cũ vẫn để nguyên trên Drive (chỉ bỏ code đọc). Còn lại: **realtime
+> `onSnapshot`** (§7).
 
 ## 1. Bối cảnh
 
@@ -132,11 +133,12 @@ Làm tuần tự, mỗi PR verify độc lập (`tsc` + `npm test` + `npm run bu
    lồng thay vì cả file.
 4. **PR4 — Drive-meta.** Đổi `drive.ts`/`useLibraryDrive.ts`; quyết định doc-per-library (§3) nếu chưa
    chốt lại ở lúc code.
-5. **PR5 — dọn.** Sau khi xác nhận không còn máy nào phụ thuộc sidecar file cũ (một thời gian đủ để
-   toàn team lên bản mới): xoá code đọc/ghi 3 file cũ + `read_text_file`/`write_text_file` liên quan
-   nếu không còn dùng chỗ nào khác; cập nhật [sync.md](sync.md) §Bảo vệ dữ liệu (bỏ dòng "Còn lại (pha
-   sau)"), [spine-hub-tier-c.md](spine-hub-tier-c.md) §4, [firebase-setup.md](firebase-setup.md) (thêm
-   layout `library/tags|notes|drive_*`).
+5. **PR5 — dọn (đã làm post-v0.4.41).** Vì hiện chỉ 1 người dùng, không cần chờ team lên bản mới. Đã xoá:
+   code đọc file sidecar cũ trong 3 hook (`readLegacySidecar` ở tags/notes + seed block; `readDriveMetaSidecar`
+   ở drive), `readDriveMetaSidecar`/`writeDriveMetaSidecar`/`DRIVE_META_FILE` trong [drive.ts](../src/drive.ts),
+   `seedLibraryTags`/`seedLibraryNotes` trong [libraryMetaSync.ts](../src/libraryMetaSync.ts), và `libraryDir`
+   khỏi Args của tags/notes (drive vẫn giữ cho `toDriveRelPath`). **Không** xoá file `.json` cũ trên Drive (để
+   nguyên, vô hại). `read_text_file`/`write_text_file` vẫn dùng ở chỗ khác nên giữ.
 
 ## 6. Việc KHÔNG làm trong scope này
 

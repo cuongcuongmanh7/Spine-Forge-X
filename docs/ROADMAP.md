@@ -8,7 +8,7 @@ Source-of-truth tiến độ toàn dự án.
 
 ## 🔜 Dự kiến (chưa làm)
 
-- [ ] **Dọn code sidecar file cũ (pha cuối của migration Firestore)** — sau khi cả team đã lên ≥ v0.4.41 một thời gian (seed migration không còn máy nào cần đọc file cũ), xoá code đọc `spineforge-library-meta/notes/drive-meta.json` (3 hàm `readLegacySidecar`/`readDriveMetaSidecar` + `writeDriveMetaSidecar` mồ côi) và cân nhắc thay pull-once-on-mount bằng `onSnapshot` realtime. Xem [library-sidecar-firestore.md](library-sidecar-firestore.md) §5 (PR5) + §7.
+- [ ] **Realtime cho library metadata** — thay pull-once-on-mount của tags/notes/drive-meta bằng `onSnapshot` (giống `library/clean|trash` đã có `subscribe*`) để nhiều máy thấy thay đổi ngay, khỏi mở lại tab. Xem [library-sidecar-firestore.md](library-sidecar-firestore.md) §7. *(Code đọc file sidecar cũ đã dọn — post-v0.4.41.)*
 
 ## v0.4.41 — 3 sidecar Thư viện (tags/owner · notes · drive-meta) lên Firestore ✅ Done
 
