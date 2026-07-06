@@ -333,8 +333,9 @@ export function sameLibraryTrashBody(a: LibraryTrashProfile, b: LibraryTrashProf
 // return it so the caller stamps the exact same value it'll later compare against (no drift →
 // no spurious reload). Documents are never deleted — protection is via security rules + PITR.
 
-/** Firestore `Timestamp` (or a legacy numeric) → epoch millis; null if neither. */
-function tsToMillis(value: unknown): number | null {
+/** Firestore `Timestamp` (or a legacy numeric) → epoch millis; null if neither. Exported for reuse
+ *  by libraryMetaSync.ts (tags/notes/drive-meta docs, which resolve `updatedAt` the same way). */
+export function tsToMillis(value: unknown): number | null {
   if (value instanceof Timestamp) return value.toMillis();
   if (typeof value === 'number' && Number.isFinite(value)) return value;
   return null;

@@ -43,10 +43,13 @@ service cloud.firestore {
       allow delete: if false;
     }
 
-    // Shared library list is leader-curated: org reads, only a leader writes (add/remove projects).
+    // Shared library list/clean/trash are leader-curated: org reads, only a leader writes.
+    // tags/notes/drive-cache are per-teammate contributions instead (own tags, own notes, own Drive
+    // refresh) — any signed-in org member may create/update those specific docs. `drive_<libraryId>`
+    // is one doc per library (see docs/library-sidecar-firestore.md), matched by prefix.
     match /envs/{env}/library/{doc} {
       allow read: if org();
-      allow create, update: if isLeader();
+      allow create, update: if isLeader() || (org() && (doc == 'tags' || doc == 'notes' || doc.matches('drive_.*')));
       allow delete: if false;
     }
 
