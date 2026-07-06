@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.4.42
+- **Tag / ghi chú / thông tin Drive của Thư viện cập nhật realtime giữa các máy** — trước đây phải mở lại tab Thư viện mới thấy thay đổi của máy/người khác; nay tag, người phụ trách, ghi chú (thêm/xoá/đánh dấu đã xử lý) và cache người-sửa/sửa-cuối tự hiện **ngay** khi có thay đổi, không cần thao tác gì. (Nối tiếp việc chuyển các dữ liệu này lên Firebase ở v0.4.41.)
+- **Mô tả mục "Shared data folder" trong Cài đặt** phản ánh đúng vai trò mới: giờ chỉ dùng làm mốc quy đổi đường dẫn để đồng bộ workspace/thư viện + tra thông tin Drive; tag/ghi chú/metadata đã nằm trên Firebase (chạy được cả khi chưa mount Drive).
+
 ## v0.4.41
 - **Tag/người phụ trách, ghi chú và cache Người-sửa/Sửa-cuối của Thư viện giờ lưu trên Firebase** — trước đây ba thứ này là các file phụ (`spineforge-library-meta.json`, `spineforge-library-notes.json`, `spineforge-drive-meta.json`) nằm trong thư mục Drive chung: ai có quyền cũng lỡ tay xoá/sửa được, và phải mount được Drive mới đọc ra. Nay chúng nằm trên Firestore cùng chỗ với danh sách thư viện / trạng thái clean / thùng rác, được **security-rules bảo vệ** (không ai xoá được ở tầng client, khôi phục được trong 7 ngày) và **không còn phụ thuộc mount Drive** — mở đường cho web/mobile sau này. Hai người sửa tag/ghi chú của hai asset khác nhau cùng lúc không còn đè nhau. Dữ liệu cũ **tự chuyển lên** lần đầu mở app (không cần thao tác tay). **Cần đăng nhập** để đồng bộ xuyên máy (chưa đăng nhập vẫn xem được bản đã lưu cục bộ). Tiện thể vá lỗi hai thư viện có file trùng đường dẫn tương đối bị lẫn tag/ghi chú của nhau.
 

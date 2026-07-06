@@ -8,7 +8,16 @@ Source-of-truth tiến độ toàn dự án.
 
 ## 🔜 Dự kiến (chưa làm)
 
-_Chưa có mục nào chờ. Migration 3 sidecar Thư viện sang Firestore đã xong (v0.4.41); post-v0.4.41 đã dọn code file cũ + thêm realtime `onSnapshot` cho tags/notes/drive-meta — sẽ đi kèm release kế tiếp._
+_Không có mục nào đang chờ (chỉ còn backlog dài hạn rải rác bên dưới: multi-root mapping, per-project settings 4.3.x, Unity, macOS)._
+
+## v0.4.42 — Library metadata realtime + dọn code sidecar + help-text ✅ Done
+
+> Bump `0.4.41 → 0.4.42`; tag `v0.4.42`. Gom 3 việc post-v0.4.41. Spec: [library-sidecar-firestore.md](library-sidecar-firestore.md).
+
+- [x] **Realtime `onSnapshot`** cho tags/notes/drive-meta — thay pull-once-on-mount, thay đổi từ máy khác hiện ngay không cần mở lại tab. tags/notes replace theo doc authoritative (xoá cũng propagate); drive-meta merge (cache cộng dồn). `subscribeLibraryTagsRemote`/`NotesRemote`/`DriveRemote` trong [libraryMetaSync.ts](../src/libraryMetaSync.ts) + wire vào 3 hook. §7 spec. +4 test realtime.
+- [x] **Dọn code file sidecar cũ** — xoá `readLegacySidecar`/seed (tags/notes), `readDriveMetaSidecar`/`writeDriveMetaSidecar`/`DRIVE_META_FILE` ([drive.ts](../src/drive.ts)), `seedLibraryTags/Notes`; bỏ `libraryDir` khỏi Args tags/notes. File `.json` cũ để nguyên trên Drive. (Không cần chờ team vì hiện 1 người dùng.)
+- [x] **Help-text mục "Shared data folder"** (Settings) phản ánh vai trò mới sau migration (mốc rebase + tra Drive; metadata đã lên Firebase). i18n vi + en.
+- [x] Verify: `tsc` + `npm test` (134) + file-size guard xanh. (Rules không đổi — subscribe chỉ cần `read` đã có.)
 
 ## v0.4.41 — 3 sidecar Thư viện (tags/owner · notes · drive-meta) lên Firestore ✅ Done
 
@@ -196,7 +205,7 @@ _Chưa có mục nào chờ. Migration 3 sidecar Thư viện sang Firestore đã
 - [x] **Fix Library header bị dòng cuộn đè** (`border-collapse: separate`); group-row sticky tầng dưới header.
 - [x] Verify: `tsc` + `npm test` (47) + `cargo check` + `npm run build` xanh.
 - [x] **Tier B — Google Drive API** → đã làm, xem **v0.4.0** ở trên.
-- [~] **Tier C — Spine Hub roadmap** → plan: **[spine-hub-tier-c.md](spine-hub-tier-c.md)**. #1 search anim/skin + #2 version-mix panel **xong ở v0.4.3**; #3 used-by-projects + #4 tags/ownership **xong ở v0.4.4**; còn lại #5 preview thumbnail.
+- [x] **Tier C — Spine Hub roadmap** → plan: **[spine-hub-tier-c.md](spine-hub-tier-c.md)**. #1 search anim/skin + #2 version-mix panel **xong ở v0.4.3**; #3 used-by-projects + #4 tags/ownership **xong ở v0.4.4**; #5 preview skeleton thật **xong ở v0.4.5** → Tier C hoàn tất.
 - [ ] (Tạm hoãn) **Multi-root mapping** — khi source trải nhiều mount khác hẳn nhau; hiện dùng cha chung `G:\Shared drives` là đủ.
 
 ## v0.3.6 — Chuyển CI/CD GitLab → GitHub Actions ✅ Done
@@ -229,7 +238,7 @@ _Chưa có mục nào chờ. Migration 3 sidecar Thư viện sang Firestore đã
 - [x] **Bật CSP** (`src-tauri/tauri.conf.json` `app.security.csp`): `default-src 'self'` + mở đúng nhu cầu (data/blob/asset cho thumbnail, unsafe-inline + Google Fonts cho font, ipc/asset.localhost cho IPC). Defense-in-depth cho các lệnh ghi/xoá file trên path tuỳ ý.
 - [x] **LICENSE (MIT)** + `license` field trong `package.json` & `Cargo.toml`.
 - [x] **SECURITY.md**: hướng dẫn báo lỗ hổng riêng qua email, supported versions, scope (loại trừ lỗi của Spine editor).
-- [ ] **Việc thủ công còn lại trước khi public**: thêm GitHub Actions secrets (`TAURI_SIGNING_PRIVATE_KEY`, `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`); smoke-test bản cài (thumbnail `data:` + auto-updater) để chắc CSP không vỡ. (Repo đã chuyển GitLab → GitHub, CI/CD chạy qua `tauri-action` trên `windows-latest`.)
+- [x] **Việc thủ công còn lại trước khi public**: GitHub Actions secrets (`TAURI_SIGNING_PRIVATE_KEY`, `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`) **đã thêm** (các release v0.4.x build/ký qua `tauri-action` trên `windows-latest` chạy tốt → CSP + auto-updater đã xác nhận).
 
 ## v0.2.27 — Fix excluded-file overlap + icon trùng per-file trong Input ✅ Done
 
@@ -487,7 +496,7 @@ Shipped ở commit `c133cac`.
 - [x] `sessions.test.ts`: persistence migration round-trip A/B/C/D, `sanitizeConfig`/`pickKnown`, ẩn timestamp→sourceFolder (P2)
 
 ### Chuyển sang v0.2.8
-- [ ] Hook-level tests (React Testing Library): session isolation (P3/P4), log routing khi switch session (P14) — cần render `useAppController`
+- [x] Hook-level tests (React Testing Library): session isolation (P3/P4), log routing khi switch session (P14) — [useAppController.test.tsx](../src/useAppController.test.tsx)
 
 ---
 
