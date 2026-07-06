@@ -161,6 +161,8 @@ function LibraryContent({ libraryId }: { libraryId: string }) {
     t,
     pushToast,
     driveAccount,
+    libraryId,
+    userUid: firebaseUid,
     libraryDir,
     spinePath: merged.spinePath,
     openSettings: () => openSettings(true)

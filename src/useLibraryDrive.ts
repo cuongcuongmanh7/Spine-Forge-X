@@ -10,15 +10,17 @@ import {
   fetchDriveFileMetadata,
   readDriveMetaSidecar,
   toDriveRelPath,
-  writeDriveMetaSidecar,
   type DriveBasic,
   type DriveFileInfo,
   type DriveRevision
 } from './drive';
+import { readLibraryDriveRemote, writeLibraryDriveEntries } from './libraryMetaSync';
 
 // Machine-local cache of the dashboard's Drive columns (owner/last-modified), keyed by the
-// machine-independent Drive relPath so it survives restarts AND works across machines (the synced
-// sidecar file in the Drive folder carries it between office/home).
+// machine-independent Drive relPath so it survives restarts AND works across machines. The shared
+// copy moved from a `spineforge-drive-meta.json` file sidecar to Firestore (one doc per library,
+// `envs/{env}/library/drive_<libraryId>` — see docs/library-sidecar-firestore.md); this localStorage
+// map still fronts it as an offline cache.
 const DRIVE_BASICS_KEY = 'spineforge.library.driveBasics';
 // When the user last pressed "Load Drive data" on this machine (shown under "Last scan").
 const DRIVE_BASICS_AT_KEY = 'spineforge.library.driveBasicsLoadedAt';
@@ -50,8 +52,13 @@ type Args = {
   t: Translations;
   pushToast: (text: string, kind?: ToastKind) => void;
   driveAccount: unknown | null;
-  /** Shared `…\spine_app_data\library` folder — holds the drive-meta sidecar AND anchors the Drive
-   *  relPath (deriveAnchor walks up to the Shared drives mount). Empty when the drive isn't mounted. */
+  /** Namespaces the Firestore drive-meta doc (`drive_<libraryId>`). */
+  libraryId: string;
+  /** Gates Firestore access (null → local cache only). */
+  userUid: string | null;
+  /** Shared `…\spine_app_data\library` folder — anchors the Drive relPath (deriveAnchor walks up to
+   *  the Shared drives mount) AND locates the legacy sidecar for the one-time migration seed. Empty
+   *  when the drive isn't mounted. */
   libraryDir: string;
   spinePath: string;
   openSettings: () => void;
@@ -67,29 +74,38 @@ type DriveInfoState = Record<
  * (owner/last-modified, cached locally + synced via a sidecar in the Drive folder), and opening a
  * past revision in Spine. Kept out of LibraryInventory to keep that component thin.
  */
-export function useLibraryDrive({ t, pushToast, driveAccount, libraryDir, spinePath, openSettings }: Args) {
+export function useLibraryDrive({ t, pushToast, driveAccount, libraryId, userUid, libraryDir, spinePath, openSettings }: Args) {
   const [driveInfo, setDriveInfo] = useState<DriveInfoState>({});
   const [driveBasics, setDriveBasics] = useState<Record<string, DriveBasic>>(loadDriveBasicsCache);
   const [loadingBasics, setLoadingBasics] = useState(false);
   const [basicsProgress, setBasicsProgress] = useState<{ done: number; total: number } | null>(null);
   const [basicsLoadedAt, setBasicsLoadedAt] = useState<number | null>(loadBasicsLoadedAt);
 
-  // Merge the cross-machine snapshot from the Drive sidecar on open / when the folder changes.
+  // Pull the cross-machine cache from Firestore on open / when identity changes. Seed once from the
+  // legacy file sidecar the first time a signed-in machine finds the doc empty (file left in place).
   useEffect(() => {
-    if (!libraryDir) return;
+    if (!userUid) return; // signed out → local cache only
     let cancelled = false;
-    void readDriveMetaSidecar(libraryDir).then((remote) => {
+    void (async () => {
+      let remote = await readLibraryDriveRemote(libraryId).catch(() => ({}) as Record<string, DriveBasic>);
+      if (Object.keys(remote).length === 0 && libraryDir) {
+        const legacy = await readDriveMetaSidecar(libraryDir).catch(() => ({}) as Record<string, DriveBasic>);
+        if (Object.keys(legacy).length > 0) {
+          await writeLibraryDriveEntries(libraryId, legacy).catch(() => undefined);
+          remote = legacy;
+        }
+      }
       if (cancelled || Object.keys(remote).length === 0) return;
       setDriveBasics((prev) => {
         const next = { ...prev, ...remote };
         persistBasics(next);
         return next;
       });
-    });
+    })();
     return () => {
       cancelled = true;
     };
-  }, [libraryDir]);
+  }, [libraryId, libraryDir, userUid]);
 
   const basicFor = useCallback(
     (entry: LibraryEntry): DriveBasic | undefined => {
@@ -149,12 +165,9 @@ export function useLibraryDrive({ t, pushToast, driveAccount, libraryDir, spineP
         persistBasics(next);
         return next;
       });
-      // Sync to the shared sidecar. Re-read + merge so a concurrent writer's entries aren't dropped
-      // (our just-fetched values win for the files we refreshed).
-      if (libraryDir) {
-        const remote = await readDriveMetaSidecar(libraryDir).catch(() => ({}) as Record<string, DriveBasic>);
-        await writeDriveMetaSidecar(libraryDir, { ...remote, ...fresh }).catch(() => undefined);
-      }
+      // Sync to Firestore. setDoc merge:true merges our just-fetched entries server-side, so a
+      // concurrent writer's entries for other files aren't dropped (no read-before-write needed).
+      if (userUid) await writeLibraryDriveEntries(libraryId, fresh).catch(() => undefined);
       const now = Date.now();
       setBasicsLoadedAt(now);
       localStorage.setItem(DRIVE_BASICS_AT_KEY, String(now));
@@ -185,10 +198,7 @@ export function useLibraryDrive({ t, pushToast, driveAccount, libraryDir, spineP
         persistBasics(next);
         return next;
       });
-      if (libraryDir) {
-        const remote = await readDriveMetaSidecar(libraryDir).catch(() => ({}) as Record<string, DriveBasic>);
-        await writeDriveMetaSidecar(libraryDir, { ...remote, ...fresh }).catch(() => undefined);
-      }
+      if (userUid) await writeLibraryDriveEntries(libraryId, fresh).catch(() => undefined);
     } catch {
       /* background refresh — stay silent on failure, the manual button remains as fallback */
     }
