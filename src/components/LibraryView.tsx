@@ -167,7 +167,7 @@ function LibraryContent({ libraryId }: { libraryId: string }) {
   });
   // Notes hook lives here (not in LibraryInventory) so the Inspector panel shares the same loaded
   // notes — otherwise a second instance would have an empty cache until the sidecar reloads.
-  const notes = useLibraryNotes({ libraryDir, authorEmail: driveAccount?.email ?? '', isLeader });
+  const notes = useLibraryNotes({ libraryId, libraryDir, userUid: firebaseUid, authorEmail: driveAccount?.email ?? '', isLeader });
 
   function prepareCleanScan(spineFiles: string[]) {
     setCleanScopeRequest({ id: Date.now(), spineFiles });
