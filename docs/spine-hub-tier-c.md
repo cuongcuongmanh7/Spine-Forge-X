@@ -62,7 +62,11 @@ trong sync root, **merge-before-write** (đúng pattern Drive-meta v0.4.2) → k
 không cần migrate) và tránh clobber khi nhiều người sửa đồng thời. Key = `relPath` (machine-independent) nên
 team-shared. Helper thuần trong `src/library.ts` (`addTag/removeTag/setOwner/allTags/entryMatchesTags`), state +
 IO trong `src/useLibraryTags.ts`; UI tách `LibraryTagCell.tsx` + `LibraryOwnerCell.tsx` (owner thủ công gộp owner
-Drive Tier B). Lưu ý hạn chế: 2 library khác nhau có relPath trùng sẽ chia sẻ tag (hiếm).
+Drive Tier B).
+
+**Cập nhật v0.4.41:** sidecar file `spineforge-library-meta.json` đã chuyển sang **Firestore**
+`envs/{env}/library/tags` (namespace theo `libraryId`) — được rules bảo vệ, bớt phụ thuộc mount Drive, và
+**vá luôn** hạn chế cũ "2 library trùng relPath chia sẻ tag". Chi tiết: [library-sidecar-firestore.md](library-sidecar-firestore.md).
 
 ## 5. Preview skeleton thật  ✅ Done
 **Mục tiêu:** xem nhanh asset trông thế nào ngay trong Library.

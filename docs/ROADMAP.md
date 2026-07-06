@@ -8,7 +8,19 @@ Source-of-truth tiến độ toàn dự án.
 
 ## 🔜 Dự kiến (chưa làm)
 
-- [~] **Chuyển 3 sidecar metadata trên Drive sang Firebase** (PR1/5 xong: hạ tầng `src/libraryMetaSync.ts` + rules — xem spec) — `spineforge-library-meta.json` (tags + owner), `spineforge-library-notes.json` (notes), `spineforge-drive-meta.json` (cache owner/last-modified) hiện vẫn là file thường trong `…\spine_app_data\library`: **không** được security-rules bảo vệ (ai có quyền cũng xoá/sửa được) và **cần mount Drive** mới đọc được. Đưa lên Firestore doc `envs/{env}/library/tags|notes|drive_*` (giống `list`/`clean`/`trash` đã làm) để được rules chống xoá/sửa bậy + point-in-time recovery + bớt phụ thuộc mount Drive (mở đường cho web/mobile sau này). **Không** migrate source `.spine`/export assets (Spine.exe cần filesystem trực tiếp). Spec chi tiết + chia PR: [library-sidecar-firestore.md](library-sidecar-firestore.md). Bối cảnh + hiện trạng storage: [sync.md](sync.md).
+- [ ] **Dọn code sidecar file cũ (pha cuối của migration Firestore)** — sau khi cả team đã lên ≥ v0.4.41 một thời gian (seed migration không còn máy nào cần đọc file cũ), xoá code đọc `spineforge-library-meta/notes/drive-meta.json` (3 hàm `readLegacySidecar`/`readDriveMetaSidecar` + `writeDriveMetaSidecar` mồ côi) và cân nhắc thay pull-once-on-mount bằng `onSnapshot` realtime. Xem [library-sidecar-firestore.md](library-sidecar-firestore.md) §5 (PR5) + §7.
+
+## v0.4.41 — 3 sidecar Thư viện (tags/owner · notes · drive-meta) lên Firestore ✅ Done
+
+> Bump `0.4.40 → 0.4.41`; tag `v0.4.41`. Spec + chia PR: [library-sidecar-firestore.md](library-sidecar-firestore.md).
+
+- [x] **PR1 — hạ tầng** [libraryMetaSync.ts](../src/libraryMetaSync.ts): read/write `envs/{env}/library/tags|notes|drive_<libId>` qua `setDoc(...,{merge:true})` deep-merge object lồng thật (không phải field-path phẳng → relPath chứa `.`/`/` không bị hiểu nhầm), namespace theo `libraryId`, `deleteField()` xoá đúng key lồng, drive-meta 1 doc/library. Export `tsToMillis` từ [sync.ts](../src/sync.ts). Test [libraryMetaSync.test.ts](../src/libraryMetaSync.test.ts) pin hành vi deep-merge (isolation theo key/library, xoá key, server timestamp).
+- [x] **Rules** [firestore.rules](../firestore.rules): gộp điều kiện cho `tags`/`notes`/`drive_*` được mọi member `org()` ghi (khác `list`/`clean`/`trash` leader-only) — cùng 1 `match` block vì Firestore không tách path theo tên doc; `delete` vẫn `false`.
+- [x] **PR2 — tags/owner** [useLibraryTags.ts](../src/useLibraryTags.ts): pull map theo library khi mở, ghi 1 key/lần (server-side merge, bỏ read-before-write race), localStorage mirror namespace theo `libraryId` (vá bug 2 library trùng relPath), seed một lần từ file sidecar cũ khi doc trống. Expose `firebaseUid` ra context ([useAppController.tsx](../src/useAppController.tsx)) để hook gate.
+- [x] **PR3 — notes** [useLibraryNotes.ts](../src/useLibraryNotes.ts): tương tự, union theo note id (`mergeNoteArrays`) đọc mảng của đúng 1 key trước khi ghi; key rỗng → xoá key (giữ semantics sidecar cũ).
+- [x] **PR4 — drive-meta** [useLibraryDrive.ts](../src/useLibraryDrive.ts): doc-per-library `drive_<libId>`, batch write `writeLibraryDriveEntries` (merge server-side), seed từ file cũ.
+- [x] Migration không cần thao tác tay (seed lần đầu); chưa đăng nhập → chỉ mirror/cache cục bộ. **Chưa** xoá code file sidecar cũ (còn dùng cho seed) + **chưa** deploy rules — xem mục Dự kiến.
+- [x] Verify: `tsc` + `npm test` (130) + file-size guard xanh.
 
 ## v0.4.40 — Capture thumbnail (off-screen, đúng frame + khung) · tách focus/select · icon Google Drive ✅ Done
 

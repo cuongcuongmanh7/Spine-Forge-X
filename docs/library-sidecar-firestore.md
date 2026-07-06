@@ -4,6 +4,10 @@ Hoàn tất phần **"Còn lại (pha sau)"** đã ghi ở [sync.md](sync.md) §
 JSON cuối cùng còn nằm trên Shared Drive sang Firestore, theo đúng pattern `library/list` /
 `library/clean` / `library/trash` đã ship. Việc lớn → tách PR riêng theo mục "Chia PR" bên dưới.
 
+> **Trạng thái:** PR1–PR4 **đã ship ở v0.4.41** (transport đổi sang Firestore). **PR5 (dọn code file
+> sidecar cũ) + deploy rules còn lại** — chờ cả team lên ≥ v0.4.41 rồi xoá (seed migration còn đọc file
+> cũ). Xem §5 + §7.
+
 ## 1. Bối cảnh
 
 3 sidecar hiện là file thường trong `…\spine_app_data\library\`:

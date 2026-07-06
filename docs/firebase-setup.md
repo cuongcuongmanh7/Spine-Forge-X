@@ -60,6 +60,15 @@ firebase login               # đăng nhập tài khoản có quyền trên proj
 firebase deploy --only firestore:rules,storage
 ```
 
+> ⚠️ **v0.4.41 đổi `firestore.rules`** (thêm quyền ghi cho `envs/{env}/library/tags|notes|drive_*` —
+> mọi member `org()`, không chỉ leader). **Phải deploy lại rules** trước/cùng lúc release v0.4.41, nếu
+> không ghi tag/notes/drive-meta sẽ bị `permission-denied`. Layout doc mới (đặt cạnh `list`/`clean`/`trash`):
+> - `envs/{env}/library/tags` — tags + owner mỗi asset (`byLibrary[libId][relPath]`).
+> - `envs/{env}/library/notes` — ghi chú file/folder (`byLibrary[libId][relPath|dir:key]`).
+> - `envs/{env}/library/drive_<libId>` — cache Drive owner/last-modified (1 doc/library, `entries[relPath]`).
+>
+> Chi tiết: [docs/library-sidecar-firestore.md](library-sidecar-firestore.md).
+
 ## 6. Chạy thử
 
 ```bash

@@ -1,5 +1,8 @@
 # Changelog
 
+## v0.4.41
+- **Tag/người phụ trách, ghi chú và cache Người-sửa/Sửa-cuối của Thư viện giờ lưu trên Firebase** — trước đây ba thứ này là các file phụ (`spineforge-library-meta.json`, `spineforge-library-notes.json`, `spineforge-drive-meta.json`) nằm trong thư mục Drive chung: ai có quyền cũng lỡ tay xoá/sửa được, và phải mount được Drive mới đọc ra. Nay chúng nằm trên Firestore cùng chỗ với danh sách thư viện / trạng thái clean / thùng rác, được **security-rules bảo vệ** (không ai xoá được ở tầng client, khôi phục được trong 7 ngày) và **không còn phụ thuộc mount Drive** — mở đường cho web/mobile sau này. Hai người sửa tag/ghi chú của hai asset khác nhau cùng lúc không còn đè nhau. Dữ liệu cũ **tự chuyển lên** lần đầu mở app (không cần thao tác tay). **Cần đăng nhập** để đồng bộ xuyên máy (chưa đăng nhập vẫn xem được bản đã lưu cục bộ). Tiện thể vá lỗi hai thư viện có file trùng đường dẫn tương đối bị lẫn tag/ghi chú của nhau.
+
 ## v0.4.40
 - **Chụp ảnh thu nhỏ theo ý muốn** — cửa sổ xem trước có thêm nút camera: căn khung (zoom/pan) và dừng ở đúng frame animation ưng ý rồi bấm để đặt lại thumbnail cho asset — sửa nhanh các thẻ có thumbnail xấu (quá nhỏ, quá lệch). Ảnh được render lại đúng **khung + đúng frame** đang xem, cập nhật ngay trên thẻ và chia sẻ cho cả nhóm (lần mở sau vẫn giữ).
 - **Tách "xem trước" khỏi "chọn"** — bấm vào khoảng trống của thẻ giờ chỉ **mở xem trước** ở panel bên phải (không còn tự tích chọn); muốn **chọn** để thao tác hàng loạt thì tick vào ô checkbox — ô này giờ **luôn hiển thị** cho dễ thấy, và thẻ đang xem có viền nhạt để phân biệt với thẻ đã chọn.
