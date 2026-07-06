@@ -10,6 +10,12 @@ Source-of-truth tiến độ toàn dự án.
 
 _Không có mục nào đang chờ (chỉ còn backlog dài hạn rải rác bên dưới: multi-root mapping, per-project settings 4.3.x, Unity, macOS)._
 
+## v0.4.43 — FS watcher tự rescan khi export xong ✅ Done
+
+> Bump `0.4.42 → 0.4.43`; tag `v0.4.43`.
+
+- [x] **`is_structural_event` nhận artifact export** ([library.rs](../src-tauri/src/library.rs)) — thêm `is_export_artifact`: skeleton/atlas (`.json`/`.skel*`/`.atlas*`) xuất hiện trong thư mục `export`/`ex` giờ trigger `library-fs-changed` → tự quét lại. Bỏ qua `.export.json` (sidecar cấu hình) + `.png` (không flip cờ `exported`). Vá case export xong nhưng card kẹt "chưa export" + không thumbnail vì bản quét cache cũ (watcher trước chỉ bắt thay đổi `.spine`/folder). +1 test.
+
 ## v0.4.42 — Library metadata realtime + dọn code sidecar + help-text ✅ Done
 
 > Bump `0.4.41 → 0.4.42`; tag `v0.4.42`. Gom 3 việc post-v0.4.41. Spec: [library-sidecar-firestore.md](library-sidecar-firestore.md).

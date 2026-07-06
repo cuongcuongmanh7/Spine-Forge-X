@@ -1,5 +1,8 @@
 # Changelog
 
+## v0.4.43
+- **Thẻ Thư viện tự cập nhật sau khi export** — trước đây export xong (ghi skeleton/atlas vào thư mục `export`/`ex`) mà không thấy card đổi: vẫn báo **"chưa export"** và không có thumbnail, dù xem trước lại chạy bình thường — vì bản quét bị cache còn cũ, và bộ theo dõi thư mục chỉ nhận thay đổi cấu trúc `.spine`, bỏ qua các file `.skel.bytes`/`.atlas.txt`/`.json` mới trong `export/`. Nay khi có skeleton/atlas xuất hiện trong `export`/`ex`, thư viện **tự quét lại** → card đổi sang "đã export" và render thumbnail ngay, không cần bấm Quét lại tay. (Bỏ qua file cấu hình `.export.json` và ảnh `.png` để tránh quét thừa.)
+
 ## v0.4.42
 - **Tag / ghi chú / thông tin Drive của Thư viện cập nhật realtime giữa các máy** — trước đây phải mở lại tab Thư viện mới thấy thay đổi của máy/người khác; nay tag, người phụ trách, ghi chú (thêm/xoá/đánh dấu đã xử lý) và cache người-sửa/sửa-cuối tự hiện **ngay** khi có thay đổi, không cần thao tác gì. (Nối tiếp việc chuyển các dữ liệu này lên Firebase ở v0.4.41.)
 - **Mô tả mục "Shared data folder" trong Cài đặt** phản ánh đúng vai trò mới: giờ chỉ dùng làm mốc quy đổi đường dẫn để đồng bộ workspace/thư viện + tra thông tin Drive; tag/ghi chú/metadata đã nằm trên Firebase (chạy được cả khi chưa mount Drive).

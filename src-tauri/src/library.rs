@@ -483,9 +483,30 @@ pub(crate) fn list_export_assets(folder: String) -> Result<ExportAssets, String>
 /// single rescan signal once things go quiet for this long.
 const FS_DEBOUNCE: Duration = Duration::from_secs(2);
 
+/// Does `path` name an export artifact (skeleton/atlas) sitting directly inside a unit's
+/// `export`/`ex` subfolder? A fresh export flips a unit's `exported` flag and changes its
+/// thumbnail, but its extension (`.skel.bytes` / `.atlas.txt` / `.json`) means the plain
+/// `.spine`-or-folder test below misses it — so a re-export never triggered a rescan and the
+/// card stayed "not exported" with no thumb until a manual rescan. Skip the `.export.json`
+/// settings sidecar (the cleaner/exporter's own writes, not an artifact).
+fn is_export_artifact(path: &Path) -> bool {
+    let Some(parent) = path.parent().and_then(|p| p.file_name()) else { return false };
+    let parent = parent.to_string_lossy().to_ascii_lowercase();
+    if parent != "export" && parent != "ex" {
+        return false;
+    }
+    let Some(name) = path.file_name() else { return false };
+    let name = name.to_string_lossy().to_ascii_lowercase();
+    if name.ends_with(".export.json") {
+        return false; // export-settings sidecar, not a skeleton/atlas
+    }
+    name.ends_with(".json") || name.contains(".skel") || name.contains(".atlas")
+}
+
 /// Is this event one that could change the library *inventory* (a `.spine` added/removed/renamed,
-/// or a folder created/removed)? We ignore pure content edits and our own sidecar JSON churn so the
-/// watcher doesn't fire a rescan on every save or metadata write.
+/// a folder created/removed, or an export artifact appearing in an `export`/`ex` folder)? We ignore
+/// pure content edits and our own sidecar JSON churn so the watcher doesn't fire a rescan on every
+/// save or metadata write.
 fn is_structural_event(event: &notify::Event) -> bool {
     let kind_matters = matches!(
         event.kind,
@@ -502,8 +523,9 @@ fn is_structural_event(event: &notify::Event) -> bool {
         if s.contains("_unused_backup") {
             return false; // our own clean-backup folder churn — moving images here isn't an inventory change
         }
-        // A `.spine` file, or a path with no extension (a folder add/remove that may carry units).
-        s.ends_with(".spine") || p.extension().is_none()
+        // A `.spine` file, a path with no extension (a folder add/remove that may carry units), or a
+        // skeleton/atlas landing in an `export`/`ex` folder (a re-export that flips `exported`).
+        s.ends_with(".spine") || p.extension().is_none() || is_export_artifact(p)
     })
 }
 
@@ -711,5 +733,22 @@ mod tests {
         let unit = temp_dir("exassets-none");
         assert!(list_export_assets(unit.to_string_lossy().to_string()).is_err());
         let _ = std::fs::remove_dir_all(&unit);
+    }
+
+    #[test]
+    fn is_export_artifact_matches_skeleton_and_atlas_in_export_folders() {
+        // A binary export landing in `export/` (the 2001 case) must count — its extension
+        // (`.skel.bytes` / `.atlas.txt`) would otherwise slip past the `.spine`-or-folder filter.
+        assert!(is_export_artifact(Path::new("/lib/2001/export/Splash_2001.skel.bytes")));
+        assert!(is_export_artifact(Path::new("/lib/2001/export/Splash_2001.atlas.txt")));
+        // JSON skeleton in an `ex/` folder, case-insensitive folder name.
+        assert!(is_export_artifact(Path::new("/lib/hero/EX/hero.json")));
+        // The export-settings sidecar is our own write, not an artifact.
+        assert!(!is_export_artifact(Path::new("/lib/hero/export/hero.export.json")));
+        // A skeleton/atlas NOT inside an export folder doesn't count (avoids false rescans on the
+        // source `.json` that sits next to the `.spine`).
+        assert!(!is_export_artifact(Path::new("/lib/2001/2001.json")));
+        // A loose image in the export folder isn't what flips `exported` — don't rescan on it.
+        assert!(!is_export_artifact(Path::new("/lib/2001/export/Splash_2001.png")));
     }
 }
