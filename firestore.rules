@@ -64,6 +64,17 @@ service cloud.firestore {
       allow delete: if false;
     }
 
+    // Thumbnail capture registry: one shared doc mapping thumbKey → captureId, telling every machine
+    // which asset thumbnails carry a user capture (so it re-pulls the capture from Cloud Storage
+    // instead of staying pinned to its cached auto-render). Recreatable pointer data — any org member
+    // may create/update (they capture as they browse); never deletable (a new capture supersedes by
+    // overwriting the field). The PNG bytes themselves live in Cloud Storage (see storage.rules).
+    match /envs/{env}/thumbCaptures/{doc} {
+      allow read: if org();
+      allow create, update: if org();
+      allow delete: if false;
+    }
+
     // Everything else is denied by default.
     match /{document=**} {
       allow read, write: if false;

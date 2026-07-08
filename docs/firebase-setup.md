@@ -69,6 +69,12 @@ firebase deploy --only firestore:rules,storage
 >
 > Chi tiết: [docs/library-sidecar-firestore.md](library-sidecar-firestore.md).
 
+> ⚠️ **Bản này đổi `firestore.rules`** (thêm collection `envs/{env}/thumbCaptures/{doc}` — mọi member
+> `org()` được ghi). **Phải deploy lại rules** cùng lúc release, nếu không thumbnail chụp tay (capture)
+> sẽ không sync sang máy khác (client báo `permission-denied` khi ghi registry).
+> - `envs/{env}/thumbCaptures/registry` — map `thumbKey → captureId` cho mọi thumbnail người dùng tự chụp;
+>   máy khác dựa vào đây để kéo lại ảnh capture từ Cloud Storage thay vì giữ bản auto-render đã cache.
+
 ## 6. Chạy thử
 
 ```bash

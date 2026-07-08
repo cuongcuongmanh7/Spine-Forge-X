@@ -25,6 +25,8 @@ import {
   onSnapshot,
   persistentLocalCache,
   persistentSingleTabManager,
+  setDoc,
+  type DocumentData,
   type DocumentReference,
   type Firestore
 } from 'firebase/firestore';
@@ -143,4 +145,38 @@ export async function getThumbDownloadUrl(key: string): Promise<string | null> {
 /** Upload a freshly rendered thumbnail (a `data:image/png;base64,…` URL). Best-effort. */
 export async function uploadThumb(key: string, dataUrl: string): Promise<void> {
   await uploadString(thumbStorageRef(key), dataUrl, 'data_url');
+}
+
+// ---- Firestore: shared thumbnail capture registry --------------------------
+// A user "capture" (manually framed thumbnail) reuses the asset's content-addressed `thumbKey`, so a
+// machine that already cached the auto-render under that key would stay pinned to it — the L1 disk hit
+// short-circuits before ever consulting L2. This registry maps `thumbKey → captureId`; a client
+// re-pulls the capture PNG from L2 (overwriting its stale L1) whenever the registry names a captureId
+// it hasn't synced yet. One shared doc (org-writable, like the notifications feed), read live so a
+// capture propagates to already-open Libraries without a restart. See useSpineThumbnail.ts.
+//   envs/{env}/thumbCaptures/registry  — { [thumbKey]: captureId }
+
+function captureRegistryDoc(): DocumentReference {
+  return envDoc('thumbCaptures', 'registry');
+}
+
+/** Announce that `key` now has a user capture identified by `captureId`. Best-effort (requires
+ *  sign-in); merges the single field so concurrent announcements for different keys don't clobber. */
+export async function publishThumbCapture(key: string, captureId: string): Promise<void> {
+  await setDoc(captureRegistryDoc(), { [key]: captureId }, { merge: true });
+}
+
+/** Live map of `thumbKey → captureId` for every user-captured thumbnail. Emits `{}` until signed in
+ *  (rules require org auth) or on error. Returns an unsubscribe fn. */
+export function subscribeThumbCaptures(cb: (map: Record<string, string>) => void): () => void {
+  return onSnapshot(
+    captureRegistryDoc(),
+    (snap) => {
+      const data = snap.exists() ? (snap.data() as DocumentData) : {};
+      const out: Record<string, string> = {};
+      for (const [k, v] of Object.entries(data)) if (typeof v === 'string') out[k] = v;
+      cb(out);
+    },
+    () => cb({})
+  );
 }

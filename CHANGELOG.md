@@ -1,5 +1,8 @@
 # Changelog
 
+## v0.4.46
+- **Thumbnail chụp tay giờ đồng bộ sang mọi máy** — trước đây ảnh tự chụp (nút camera trong xem trước) chỉ hiện trên máy đã chụp; nay ai chụp lại thumbnail là các máy khác tự cập nhật theo, kể cả khi đang mở sẵn Thư viện.
+
 ## v0.4.45
 - **Chọn nhiều asset để thao tác hàng loạt** — tick nhiều thẻ rồi làm cùng lúc (dọn export, xuất…), thay vì làm từng cái.
 - **Dọn export đúng mục đã chọn** — chỉ dọn file thừa của những asset bạn chỉ định, không đụng phần còn lại.
