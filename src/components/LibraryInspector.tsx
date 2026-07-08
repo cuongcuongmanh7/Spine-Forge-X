@@ -10,6 +10,7 @@ import { LibraryDriveHistoryModal } from './LibraryDriveHistoryModal';
 import { GoogleDriveIcon } from './GoogleDriveIcon';
 import { NotesModal } from './NotesModal';
 import { splitRelPath } from './LibraryViewShared';
+import { commonParentPath } from '../paths';
 import type { LibraryFilterApi } from '../useLibraryFilter';
 import type { useLibraryTags } from '../useLibraryTags';
 import type { useLibraryDrive } from '../useLibraryDrive';
@@ -217,7 +218,7 @@ function SingleInspector({
 
 /** Multiple assets selected: aggregate overview + status breakdown + bulk actions. */
 function MultiInspector({ entries, filter }: { entries: LibraryEntry[]; filter: LibraryFilterApi }) {
-  const { t, libraryCleanState, quickExport, anyRunning } = useApp();
+  const { t, libraryCleanState, quickExport, anyRunning, addManyToTrash, createSessionFromLibrary, pushToast } = useApp();
 
   const stats = useMemo(() => {
     let bytes = 0;
@@ -240,6 +241,23 @@ function MultiInspector({ entries, filter }: { entries: LibraryEntry[]; filter: 
 
   function exportSelected() {
     void quickExport(entries.map((e) => e.spineFile));
+  }
+
+  // Bundle the whole selection into one export session (input = their common parent folder, named
+  // after it). Files may span folders — inputFiles keeps them explicit so the session exports all.
+  function createSession() {
+    const spineFiles = entries.map((e) => e.spineFile);
+    const root = commonParentPath(spineFiles);
+    const folderName = root ? root.split(/[\\/]/).pop() ?? '' : '';
+    const name = folderName || t.librarySelectedCount.replace('{count}', String(total));
+    createSessionFromLibrary(name, spineFiles, root || entries[0]?.folder || '');
+    pushToast(t.librarySessionCreated.replace('{name}', name), 'success');
+  }
+
+  function moveToTrash() {
+    addManyToTrash(entries);
+    filter.clearSelected();
+    pushToast(t.libraryInspectorMovedToTrash.replace('{count}', String(total)), 'success');
   }
 
   return (
@@ -296,6 +314,12 @@ function MultiInspector({ entries, filter }: { entries: LibraryEntry[]; filter: 
       <div className="library-inspector-actions">
         <button className="secondary-button small" onClick={exportSelected} disabled={anyRunning}>
           <Zap size={14} /> {t.libraryInspectorExportSelected}
+        </button>
+        <button className="secondary-button small" onClick={createSession}>
+          <FolderPlus size={14} /> {t.libraryCreateSession}
+        </button>
+        <button className="secondary-button small danger" onClick={moveToTrash}>
+          <Trash2 size={14} /> {t.libraryMoveToTrash}
         </button>
       </div>
     </div>

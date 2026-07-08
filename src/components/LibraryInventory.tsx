@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useMemo, useState, type CSSProperties } from 'react';
 import { usePersistentState, usePersistentSet } from '../usePersistentState';
 import { invoke } from '@tauri-apps/api/core';
 import { AlertTriangle, CheckCircle2, Layers, MessageSquare, RotateCw, Search, SearchX, Tag, Trash2, Users, X } from 'lucide-react';
@@ -9,6 +9,7 @@ import { useApp } from '../useAppController';
 import { Section as CollapsibleSection } from './common';
 import { LibraryStatCards } from './LibraryStatCards';
 import { LibrarySelectBar } from './LibrarySelectBar';
+import { chipColor } from './chipColor';
 import { basename } from '../sessions';
 import { formatDate } from '../time';
 import type { LibraryEntry } from '../config';
@@ -567,10 +568,13 @@ export function LibraryInventory({
         <div className="library-chip-row">
           <span className="library-chip-label">{t.libraryFilterCategory}</span>
           <div className="library-chip-set">
+            {/* Under the status facet these chips ARE the status buckets → semantic color; otherwise a
+                hashed hue per type. Mixed-version chips keep their amber warning look (no tint). */}
             {catChips.map((c) => (
               <button
                 key={c.key}
-                className={`library-chip ${selectedCats.has(c.key) ? 'active' : ''} ${c.mixedVersion ? 'mixed' : ''}`}
+                className={`library-chip ${selectedCats.has(c.key) ? 'active' : ''} ${c.mixedVersion ? 'mixed' : 'tinted'}`}
+                style={c.mixedVersion ? undefined : ({ '--chip-c': chipColor(c.key, facet === 'status' ? c.key : undefined) } as CSSProperties)}
                 onClick={() => filter.toggleCat(c.key)}
                 title={c.mixedVersion ? t.libraryWarnMixed : undefined}
               >
@@ -589,7 +593,8 @@ export function LibraryInventory({
               return (
                 <button
                   key={key || 'unknown'}
-                  className={`library-chip ${selectedVersions.has(key) ? 'active' : ''}`}
+                  className={`library-chip ${selectedVersions.has(key) ? 'active' : ''} tinted`}
+                  style={{ '--chip-c': chipColor(key || 'unknown') } as CSSProperties}
                   onClick={() => filter.toggleVersion(key)}
                 >
                   {v.version ?? t.libraryUnknownVersion} <em>{v.count}</em>
@@ -618,7 +623,8 @@ export function LibraryInventory({
             {statusChips.map((s) => (
               <button
                 key={s.key}
-                className={`library-chip ${selectedStatuses.has(s.key) ? 'active' : ''}`}
+                className={`library-chip ${selectedStatuses.has(s.key) ? 'active' : ''} tinted`}
+                style={{ '--chip-c': chipColor(s.key, s.key) } as CSSProperties}
                 onClick={() => toggleSet(setSelectedStatuses, s.key)}
                 aria-pressed={selectedStatuses.has(s.key)}
               >
@@ -648,7 +654,8 @@ export function LibraryInventory({
               {userChips.map(([name, count]) => (
                 <button
                   key={name}
-                  className={`library-chip ${selectedUsers.has(name) ? 'active' : ''}`}
+                  className={`library-chip ${selectedUsers.has(name) ? 'active' : ''} tinted`}
+                  style={{ '--chip-c': chipColor(name) } as CSSProperties}
                   onClick={() => toggleSet(setSelectedUsers, name)}
                   aria-pressed={selectedUsers.has(name)}
                 >
@@ -664,7 +671,7 @@ export function LibraryInventory({
             <span className="library-chip-label">{t.libraryFilterTag}</span>
             <div className="library-chip-set">
               {tagList.map((tag) => (
-                <button key={tag} className={`library-chip ${selectedTags.has(tag) ? 'active' : ''}`} onClick={() => toggleSet(setSelectedTags, tag)}>
+                <button key={tag} className={`library-chip ${selectedTags.has(tag) ? 'active' : ''} tinted`} style={{ '--chip-c': chipColor(tag) } as CSSProperties} onClick={() => toggleSet(setSelectedTags, tag)}>
                   <Tag size={11} /> {tag}
                 </button>
               ))}

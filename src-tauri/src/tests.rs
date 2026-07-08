@@ -9,11 +9,12 @@ use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use proptest::prelude::*;
 
 use crate::{
-    clean_source_folder_name, copy_dir_recursive, create_last_export_settings,
-    find_existing_id_folder, has_output_files, make_export_folder_name, may_start_next,
-    normalize_pack_source, parse_spine_version, path_to_string, resolve_export_arg,
-    resolve_output_dir, sanitize_folder_part, scan_spine_files, validate_settings,
-    BatchExportRequest, ExportMode, FallbackMode, OutputPolicy,
+    clean_matching_outputs, clean_source_folder_name, copy_dir_recursive,
+    create_last_export_settings, find_existing_id_folder, has_output_files,
+    make_export_folder_name, may_start_next, name_matches_base, normalize_pack_source,
+    parse_spine_version, path_to_string, resolve_export_arg, resolve_output_dir,
+    sanitize_folder_part, scan_spine_files, validate_settings, BatchExportRequest, ExportMode,
+    FallbackMode, OutputPolicy,
 };
 
 /// Create a unique empty temp directory for a test and return its path.
@@ -469,6 +470,55 @@ fn resolve_output_dir_export_subfolder_uses_sibling_folder() {
         PathBuf::from(&resolved),
         PathBuf::from("D:/Project/4001_Fighter/export")
     );
+}
+
+/// name_matches_base: matches a unit's own artifacts (base + ext, base + page-index + ext) and
+/// nothing else — so a shared export folder's pre-clean never touches a sibling unit's files.
+#[test]
+fn name_matches_base_matches_only_own_artifacts() {
+    // Skeleton + atlas + page-0 image + higher atlas pages, all lowercased like the caller passes.
+    assert!(name_matches_base("foo.json", "foo"));
+    assert!(name_matches_base("foo.skel.bytes", "foo"));
+    assert!(name_matches_base("foo.atlas.txt", "foo"));
+    assert!(name_matches_base("foo.png", "foo"));
+    assert!(name_matches_base("foo2.png", "foo"));
+    assert!(name_matches_base("foo10.png", "foo"));
+    // Unrelated names: no prefix, or a prefix whose remainder isn't digits-then-dot.
+    assert!(!name_matches_base("bar.png", "foo"));
+    assert!(!name_matches_base("foobar.png", "foo"));
+    assert!(!name_matches_base("foo_extra.png", "foo"));
+    assert!(!name_matches_base("foo", "foo")); // no extension → skip (safety)
+}
+
+/// clean_matching_outputs removes exactly the target unit's stale files from a shared folder and
+/// leaves a sibling unit's export + our own settings sidecar in place. (tasks.md — targeted clean)
+#[test]
+fn clean_matching_outputs_keeps_unrelated_files() {
+    let dir = test_dir("clean-match");
+    fs::create_dir_all(&dir).unwrap();
+    for name in [
+        "Foo.json",
+        "Foo.atlas",
+        "Foo.png",
+        "Foo2.png",   // target's stale second atlas page
+        "Bar.json",   // a sibling unit sharing the folder
+        "Bar.png",
+        "Foo.export.json", // our own settings sidecar — must survive
+    ] {
+        fs::write(dir.join(name), b"x").unwrap();
+    }
+
+    let removed = clean_matching_outputs(&dir, "Foo");
+    assert_eq!(removed, 4, "Foo.json/.atlas/.png/2.png should be removed");
+
+    assert!(!dir.join("Foo.json").exists());
+    assert!(!dir.join("Foo.atlas").exists());
+    assert!(!dir.join("Foo.png").exists());
+    assert!(!dir.join("Foo2.png").exists());
+    // Sibling + sidecar untouched.
+    assert!(dir.join("Bar.json").exists());
+    assert!(dir.join("Bar.png").exists());
+    assert!(dir.join("Foo.export.json").exists());
 }
 
 /// Property 12 (FS-backed, example-based): when no `.export.json` sits next

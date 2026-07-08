@@ -255,6 +255,19 @@ export function useLibrary({ t, pushToast }: Options) {
     });
   }
 
+  // Exclude several entries at once (bulk "move to trash" from the multi-select inspector). One state
+  // update + one persist for the whole batch, so it stays atomic even for large selections.
+  function addManyToTrash(entries: LibraryEntry[]) {
+    if (!activeLibraryId || entries.length === 0) return;
+    setTrash((prev) => {
+      const next = new Set(prev);
+      for (const e of entries) next.add(e.relPath);
+      if (next.size === prev.size) return prev;
+      persistLibraryTrash(activeLibraryId, [...next]);
+      return next;
+    });
+  }
+
   // Exclude a whole top-level folder from the inventory. Stored as a `dir:` key so files added to the
   // folder later are hidden too, and the folder restores as a single unit.
   function addFolderToTrash(folderName: string) {
@@ -363,6 +376,7 @@ export function useLibrary({ t, pushToast }: Options) {
     trashedFolders,
     trashedFiles,
     addToTrash,
+    addManyToTrash,
     addFolderToTrash,
     restoreFromTrash,
     restoreFolderFromTrash,

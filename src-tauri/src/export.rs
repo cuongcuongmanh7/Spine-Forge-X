@@ -58,6 +58,22 @@ pub(crate) async fn export_one_file(
         Err(e) => return FileOutcome::Failed(e),
     };
 
+    // Pre-clean: a shared output folder (the `export`/`ex` subfolder, or a reused source-name /
+    // linked folder) accumulates old artifacts across runs, so a re-export producing fewer atlas
+    // pages leaves orphans behind. Remove only THIS unit's stale files (matched by skeleton base
+    // name) before writing — files belonging to other units in the same folder are left untouched.
+    let skeleton_base = input_file
+        .file_stem()
+        .and_then(|stem| stem.to_str())
+        .unwrap_or("");
+    let removed = clean_matching_outputs(Path::new(&output_dir), skeleton_base);
+    if removed > 0 {
+        let _ = window.emit(
+            "spine-log",
+            format!("Cleaned {removed} stale file(s) matching '{skeleton_base}' in {output_dir}"),
+        );
+    }
+
     // Unicode workaround: when enabled and the input or output path contains non-ASCII
     // characters (SpineCLI can mis-handle these on some setups), run the export against an
     // ASCII temp copy of the project, then copy the result back. The guard removes the temp
@@ -221,6 +237,51 @@ pub(crate) async fn export_one_file(
     let _ = window.emit("spine-log", format!("Completed: {file}"));
 
     FileOutcome::Completed
+}
+
+/// Remove a unit's own stale export artifacts from `output_dir` before a re-export, keeping any
+/// files that belong to *other* units sharing the folder. Only names matching `skeleton_base` are
+/// deleted — `Foo.json`, `Foo.atlas`, `Foo.atlas.txt`, `Foo.skel.bytes`, `Foo.png`, `Foo2.png` for
+/// base `Foo`. The `.export.json` settings sidecar and the source `.spine` are always preserved.
+/// Best-effort: a missing directory or a per-file error is ignored. Returns the count removed.
+pub(crate) fn clean_matching_outputs(output_dir: &Path, skeleton_base: &str) -> usize {
+    if skeleton_base.is_empty() {
+        return 0;
+    }
+    let Ok(entries) = fs::read_dir(output_dir) else {
+        return 0;
+    };
+    let base = skeleton_base.to_ascii_lowercase();
+    let mut removed = 0;
+    for entry in entries.filter_map(Result::ok) {
+        if !entry.file_type().map(|t| t.is_file()).unwrap_or(false) {
+            continue;
+        }
+        let name = entry.file_name().to_string_lossy().to_ascii_lowercase();
+        if name.ends_with(".export.json") || name.ends_with(".spine") {
+            continue;
+        }
+        if name_matches_base(&name, &base) && fs::remove_file(entry.path()).is_ok() {
+            removed += 1;
+        }
+    }
+    removed
+}
+
+/// Is `file_name` (already lowercased) an export artifact of `base` (already lowercased)? True for
+/// the base followed by an extension (`base.ext`, e.g. `foo.json`, `foo.atlas.txt`) or an atlas-page
+/// index then an extension (`base<digits>.ext`, e.g. `foo2.png`). Unrelated names never match:
+/// `bar.png` (no prefix), `foobar.png` (prefix but the remainder isn't digits-then-dot).
+pub(crate) fn name_matches_base(file_name: &str, base: &str) -> bool {
+    let Some(rest) = file_name.strip_prefix(base) else {
+        return false;
+    };
+    // Require an extension separator; the chars before the first '.' must all be ASCII digits
+    // (empty for `base.ext`, "2"/"10"/… for atlas pages `base2.png`).
+    match rest.split_once('.') {
+        Some((head, _)) => head.chars().all(|c| c.is_ascii_digit()),
+        None => false,
+    }
 }
 
 pub(crate) fn resolve_output_dir(

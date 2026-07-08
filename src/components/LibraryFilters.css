@@ -142,6 +142,20 @@
   border-color: var(--primary);
   color: var(--primary-text);
 }
+/* Per-value accent color: status chips take a semantic color, other chips a stable hashed hue
+   (see chipColor.ts). Only chips carrying a `--chip-c` custom property opt in via `.tinted`. */
+.library-chip.tinted {
+  border-color: color-mix(in srgb, var(--chip-c), transparent 55%);
+  color: color-mix(in srgb, var(--chip-c), var(--text) 30%);
+}
+.library-chip.tinted:hover {
+  border-color: var(--chip-c);
+}
+.library-chip.tinted.active {
+  background: var(--chip-c);
+  border-color: var(--chip-c);
+  color: #fff;
+}
 .library-chip.mixed {
   border-color: color-mix(in srgb, var(--warning), transparent 45%);
   color: var(--warning);
