@@ -76,7 +76,8 @@ pub(crate) fn read_text_file(path: String) -> Result<Option<String>, String> {
 /// extension. Size-capped (16 MB) so a stray huge file can't blow up the UI.
 /// Used to feed local skeleton/atlas/image bytes to the Spine web player, which
 /// resolves them from a `rawDataURIs` map instead of fetching over the network.
-#[tauri::command]
+// `(async)`: reads up to 16 MB off disk/Drive — off the main thread so the UI stays responsive.
+#[tauri::command(async)]
 pub(crate) fn read_file_data_url(path: String) -> Result<String, String> {
     use base64::Engine;
     let p = parse_quoted_path(&path);
@@ -107,7 +108,7 @@ pub(crate) fn read_file_data_url(path: String) -> Result<String, String> {
 
 /// Read an image file as a base64 data URL for thumbnail display (Clean Source
 /// detail view). Thin wrapper over [`read_file_data_url`].
-#[tauri::command]
+#[tauri::command(async)]
 pub(crate) fn read_image_data_url(path: String) -> Result<String, String> {
     read_file_data_url(path)
 }
@@ -268,23 +269,50 @@ const APP_DATA_SUBPATH: &str = "Pamvis/spine_app_data";
 /// Resolve the team's shared app-data folder (`<letter>:\Shared drives\Pamvis\spine_app_data`) on
 /// this machine by scanning for the Pamvis shared-drive mount. Returns `None` when the Pamvis drive
 /// isn't mounted/visible — the UI then warns the user. Windows-only; other platforms return `None`.
-#[tauri::command]
-pub(crate) fn resolve_app_data_dir() -> Option<String> {
+/// Build the `…\Shared drives\spine_app_data` path for a given drive letter (dev builds nest under
+/// `dev/` so testing never touches production data). Shared by the hint fast-path and the A..Z scan.
+#[cfg(windows)]
+fn app_data_dir_for(letter: char) -> String {
+    let mut dir = std::path::Path::new(&format!("{}:\\Shared drives", letter))
+        .join(APP_DATA_SUBPATH.replace('/', "\\"));
+    if cfg!(debug_assertions) {
+        dir = dir.join("dev");
+    }
+    path_to_string(&dir)
+}
+
+// `(async)`: this probes drive letters via `is_dir`, and a dead/disconnected network-drive letter
+// can stall several seconds per stat. Running it on the main thread froze the whole window on
+// startup (~8s measured), so force it onto a worker thread.
+#[tauri::command(async)]
+pub(crate) fn resolve_app_data_dir(hint: Option<String>) -> Option<String> {
     #[cfg(windows)]
     {
+        // Fast path: if the caller remembers a previously-resolved dir, verify just that one drive's
+        // Pamvis root (a single stat) instead of scanning A..Z — this skips the slow dead-letter
+        // timeouts entirely on the common "same machine, drive still mounted" launch.
+        if let Some(drive) = hint
+            .as_deref()
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .and_then(|h| h.chars().next())
+            .filter(|c| c.is_ascii_alphabetic())
+        {
+            let pamvis = format!("{}:\\Shared drives\\Pamvis", drive);
+            if std::path::Path::new(&pamvis).is_dir() {
+                return Some(app_data_dir_for(drive));
+            }
+        }
         for letter in b'A'..=b'Z' {
             let pamvis = format!("{}:\\Shared drives\\Pamvis", letter as char);
             if std::path::Path::new(&pamvis).is_dir() {
-                let mut dir = std::path::Path::new(&format!("{}:\\Shared drives", letter as char))
-                    .join(APP_DATA_SUBPATH.replace('/', "\\"));
-                // Dev builds (`tauri dev`) write into a `dev` subfolder so testing never touches the
-                // team's production data; release builds (`tauri build`) use the root. Same account.
-                if cfg!(debug_assertions) {
-                    dir = dir.join("dev");
-                }
-                return Some(path_to_string(&dir));
+                return Some(app_data_dir_for(letter as char));
             }
         }
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = hint;
     }
     None
 }
@@ -306,7 +334,9 @@ fn thumb_cache_dir(app: &AppHandle, dir: &Option<String>) -> Result<PathBuf, Str
 /// Return a cached skeleton thumbnail as a PNG data URL, or `None` if not generated yet.
 /// Used by the Library grid to skip the (expensive) off-screen WebGL render when a thumbnail
 /// for this asset revision already exists (locally or in the shared Drive folder).
-#[tauri::command]
+// `(async)`: called in an 8-wide burst by the thumbnail warm-up on Library open — reads + base64s a
+// PNG each time, so keep it off the main thread.
+#[tauri::command(async)]
 pub(crate) fn thumb_cache_get(app: AppHandle, key: String, dir: Option<String>) -> Result<Option<String>, String> {
     use base64::Engine;
     let key = safe_cache_key(&key)?;
@@ -320,7 +350,8 @@ pub(crate) fn thumb_cache_get(app: AppHandle, key: String, dir: Option<String>) 
 }
 
 /// Persist a generated skeleton thumbnail (a `data:image/png;base64,...` URL) to the cache dir.
-#[tauri::command]
+// `(async)`: decodes base64 + writes a PNG to disk — off the main thread.
+#[tauri::command(async)]
 pub(crate) fn thumb_cache_put(app: AppHandle, key: String, data: String, dir: Option<String>) -> Result<(), String> {
     use base64::Engine;
     let key = safe_cache_key(&key)?;

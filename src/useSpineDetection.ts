@@ -70,8 +70,13 @@ export function useSpineDetection({ spinePath, setSpinePath, setTargetVersion, t
     }
   }
 
-  // Auto-detect the Spine binary once on mount (silent — no toast if none found).
+  // Auto-detect the Spine binary once on mount — but ONLY when no path is saved yet. Re-detecting on
+  // every launch spawns `Spine.com --version` (a cold subprocess measured at ~17s on the shared
+  // drive) for no benefit when the path hasn't changed; validate_settings already flags a missing
+  // exe separately, and the user can re-detect manually from Settings. This also removes the extra
+  // session-status re-probe that a startup spinePath change used to trigger.
   useEffect(() => {
+    if (spinePath.trim()) return;
     void autoDetectSpine(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

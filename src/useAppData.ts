@@ -16,15 +16,24 @@ export type AppDataState = {
   appDataMissing: boolean;
 };
 
+// Remember the last successfully-resolved app-data dir so the next launch can verify just that one
+// drive letter instead of scanning A..Z (the slow dead-letter timeouts). Cleared when the drive is
+// no longer mounted so a stale hint can't pin us to a gone drive.
+const HINT_KEY = 'spineforge.appDataDir';
+
 export function useAppData(): AppDataState {
   const [appDataDir, setDir] = useState<string | null>(null);
   const [appDataResolved, setResolved] = useState(false);
 
   useEffect(() => {
     let active = true;
-    invoke<string | null>('resolve_app_data_dir')
+    const hint = localStorage.getItem(HINT_KEY) ?? undefined;
+    invoke<string | null>('resolve_app_data_dir', { hint })
       .then((d) => {
-        if (active) setDir(d ?? null);
+        if (!active) return;
+        setDir(d ?? null);
+        if (d) localStorage.setItem(HINT_KEY, d);
+        else localStorage.removeItem(HINT_KEY);
       })
       .catch(() => {
         if (active) setDir(null);

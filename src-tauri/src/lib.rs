@@ -46,7 +46,8 @@ fn read_spine_export_settings(path: String) -> Result<spine_project::DecodedSett
     spine_project::read_export_settings(Path::new(&path))
 }
 
-#[tauri::command]
+// `(async)`: stats several candidate paths (some on network drives) — keep it off the main thread.
+#[tauri::command(async)]
 fn auto_detect_spine() -> Result<String, String> {
     spine_candidates()
         .into_iter()
@@ -86,7 +87,9 @@ async fn detect_spine_version(window: Window, spine_path: String) -> Result<Stri
     })
 }
 
-#[tauri::command]
+// `(async)`: recursively walks the input folder (often a Google Drive mount that streams on demand)
+// — the ~16s measured startup freeze came from running this on the main thread.
+#[tauri::command(async)]
 fn scan_spine_files(input_path: String) -> Result<ScanResult, String> {
     let path = parse_quoted_path(&input_path);
     if !path.exists() {
@@ -126,7 +129,8 @@ fn scan_spine_files(input_path: String) -> Result<ScanResult, String> {
     Ok(ScanResult { files, skipped })
 }
 
-#[tauri::command]
+// `(async)`: stats the Spine exe + output paths (may be on network drives) — off the main thread.
+#[tauri::command(async)]
 fn validate_settings(
     spine_path: String,
     output_path: String,

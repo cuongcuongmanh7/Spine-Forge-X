@@ -410,7 +410,9 @@ pub(crate) fn folder_stem_of(unit_folder: &Path) -> String {
 /// skeleton: skeleton (json/skel) + atlas + texture pages, plus the runtime version
 /// detected from the skeleton itself. Scans the unit's `export`/`ex` subfolder and returns
 /// the first complete skeleton+atlas pair (JSON preferred over binary). Offline — no Spine CLI.
-#[tauri::command]
+// `(async)`: reads the export folder + skeleton bytes (often over the Drive mount); called in bursts
+// by the thumbnail warm-up and 4.x name enrichment, so keep it off the main thread.
+#[tauri::command(async)]
 pub(crate) fn list_export_assets(folder: String) -> Result<ExportAssets, String> {
     let unit_folder = parse_quoted_path(&folder);
     if !unit_folder.exists() {
