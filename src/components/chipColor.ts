@@ -3,10 +3,12 @@
 // version, user, tag) gets a stable hashed hue, so the same value always draws the same color across
 // sessions without us storing anything.
 
+// Muted mid-tones, not vivid primaries: the chip UI paints these as a pale tint + colored text
+// (Figma/Trello style), so the base color only needs to carry enough saturation to stay identifiable.
 const STATUS_COLORS: Record<string, string> = {
-  clean: 'hsl(146 55% 42%)',
-  warning: 'hsl(38 88% 45%)',
-  'not-exported': 'hsl(2 68% 53%)',
+  clean: 'hsl(146 42% 45%)',
+  warning: 'hsl(38 70% 48%)',
+  'not-exported': 'hsl(2 58% 56%)',
   unknown: 'hsl(220 9% 55%)'
 };
 
@@ -24,5 +26,5 @@ function hashHue(label: string): number {
  *  clean/export status; otherwise the color is hashed from `label` for a stable pseudo-random hue. */
 export function chipColor(label: string, statusKey?: string): string {
   if (statusKey && STATUS_COLORS[statusKey]) return STATUS_COLORS[statusKey];
-  return `hsl(${hashHue(label)} 62% 52%)`;
+  return `hsl(${hashHue(label)} 48% 52%)`;
 }

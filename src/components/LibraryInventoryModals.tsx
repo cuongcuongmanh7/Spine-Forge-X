@@ -42,7 +42,7 @@ export function LibraryInventoryModals({
   onToggleShowResolved: () => void;
   onCloseNotes: () => void;
   overflowAnchor: HTMLElement | null;
-  overflowChips: { id: string; label: string; remove: () => void }[];
+  overflowChips: { id: string; label: string; color?: string; remove: () => void }[];
   onCloseOverflow: () => void;
   trashOpen: boolean;
   trashedFolders: { name: string; count: number }[];
@@ -81,6 +81,7 @@ export function LibraryInventoryModals({
         >
           {overflowChips.map((c) => (
             <button key={c.id} type="button" onClick={() => c.remove()}>
+              {c.color && <span className="library-chip-dot" style={{ background: c.color }} />}
               <X size={13} /> {c.label}
             </button>
           ))}

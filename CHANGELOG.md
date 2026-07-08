@@ -1,5 +1,10 @@
 # Changelog
 
+## v0.4.45
+- **Chọn nhiều asset để thao tác hàng loạt** — tick nhiều thẻ rồi làm cùng lúc (dọn export, xuất…), thay vì làm từng cái.
+- **Dọn export đúng mục đã chọn** — chỉ dọn file thừa của những asset bạn chỉ định, không đụng phần còn lại.
+- **Chip màu ở bộ lọc gọn và hiện đại hơn** — chip chưa chọn để trung tính cho đỡ rối; khi chọn mới bật màu để nổi rõ; màu dịu lại theo phong cách nền nhạt + chữ đậm. Màu cũng hiển thị cả khi thu gọn khu Bộ lọc.
+
 ## v0.4.44
 - **Mở app nhanh hơn hẳn, hết đơ 1–2 phút đầu** — trước đây lúc mở, app chạy một loạt lệnh đọc ổ đĩa/thư mục Drive **trên luồng chính và nối đuôi nhau** (dò ổ chứa Shared drive ~8s, quét thư mục input ~16s, gọi `Spine.com --version` ~17s…), khiến cửa sổ đơ suốt ~30s+ và các việc khác (kiểm tra cập nhật…) bị kẹt chờ theo. Nay: (1) các lệnh đọc ổ đĩa/Drive nặng chạy **nền song song**, không chặn giao diện; (2) **bỏ dò lại Spine** khi đã lưu đường dẫn (không gọi `Spine.com` mỗi lần mở); (3) không còn quét trạng thái session **lặp 2 lần**; (4) **nhớ ổ chứa Shared drive** của lần trước, chỉ kiểm 1 ổ thay vì dò A..Z. Đo thực tế: thời gian ổn định từ ~30s+ (đơ) xuống ~10s (mượt, không đơ).
 
