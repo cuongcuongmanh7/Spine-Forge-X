@@ -64,6 +64,51 @@ export function thumbKey(entry: LibraryEntry): string {
   return (h2 >>> 0).toString(16).padStart(8, '0') + (h1 >>> 0).toString(16).padStart(8, '0');
 }
 
+// --- L2 presence memo + legacy backfill ------------------------------------------------
+// Which thumb keys THIS machine already knows live on shared Cloud Storage (L2). The backfill below
+// checks L2 for every locally-cached thumbnail so images captured BEFORE cross-machine sync existed
+// (they live only in each machine's L1) get pushed up and shared. Without this memo that existence
+// check would be a network round-trip on every card view forever; we persist the confirmed set so
+// each key is reconciled at most once per machine (uploaded, downloaded, or verified present).
+const L2_PRESENT_KEY = 'spineforge.thumbL2Present';
+const l2Present: Set<string> = (() => {
+  try {
+    const raw = localStorage.getItem(L2_PRESENT_KEY);
+    return new Set<string>(raw ? (JSON.parse(raw) as string[]) : []);
+  } catch {
+    return new Set<string>();
+  }
+})();
+function markL2Present(key: string) {
+  if (l2Present.has(key)) return;
+  l2Present.add(key);
+  try {
+    localStorage.setItem(L2_PRESENT_KEY, JSON.stringify([...l2Present]));
+  } catch {
+    /* quota / private mode — the memo is a best-effort optimisation, safe to skip persisting */
+  }
+}
+
+/** Ensure a locally-cached thumbnail is also on shared Cloud Storage. This closes the legacy gap: a
+ *  thumbnail captured before sync existed lives only in this machine's L1, and the L1-hit fast path
+ *  returns before ever touching L2 — so it would never reach other machines. Runs at most once per
+ *  key per machine (memoised). Content-addressed keys make the upload a safe union merge across
+ *  machines, so we upload only if L2 doesn't already have it. Fully background and best-effort — the
+ *  caller has already shown the image; on failure we leave the key unmarked so a later view retries. */
+async function backfillThumbToL2(key: string, dataUrl: string): Promise<void> {
+  if (!firebaseConfigured() || l2Present.has(key)) return;
+  try {
+    if (await getThumbDownloadUrl(key)) {
+      markL2Present(key); // already shared by another machine — nothing to push
+      return;
+    }
+    await uploadThumb(key, dataUrl);
+    markL2Present(key);
+  } catch {
+    /* offline / transient → stay unmarked so the next view of this card retries */
+  }
+}
+
 // --- manual captures: user-picked thumbnails from the live preview --------------------
 // A user can frame a skeleton in the preview modal and "capture" it as the thumbnail. The captured
 // image is keyed by the same `thumbKey`, so it overrides the auto-render everywhere. We keep it in a
@@ -99,7 +144,10 @@ export async function setCapturedThumbnail(entry: LibraryEntry, dataUrl: string)
   overrides.set(key, dataUrl);
   notifyThumb(key);
   await invoke('thumb_cache_put', { key, data: dataUrl });
-  if (firebaseConfigured()) void uploadThumb(key, dataUrl).catch(() => undefined);
+  if (firebaseConfigured())
+    void uploadThumb(key, dataUrl)
+      .then(() => markL2Present(key))
+      .catch(() => undefined);
 }
 
 // --- single-slot render queue: one live WebGL context at a time ------------------
@@ -287,6 +335,9 @@ export function useSpineThumbnail(entry: LibraryEntry | null, enabled: boolean) 
         if (cancelled) return;
         if (cached) {
           done(cached);
+          // Legacy backfill: this thumbnail is on our disk but may predate sync and never reached
+          // L2. Push it up (once per key) so other machines share it. Background, best-effort.
+          void backfillThumbToL2(key, cached);
           return;
         }
       } catch {
@@ -301,6 +352,7 @@ export function useSpineThumbnail(entry: LibraryEntry | null, enabled: boolean) 
         const remoteUrl = await getThumbDownloadUrl(key);
         if (cancelled) return;
         if (remoteUrl) {
+          markL2Present(key); // confirmed on L2 → skip the backfill existence-check next time
           try {
             const localized = await invoke<string>('thumb_cache_fetch', { key, url: remoteUrl });
             if (cancelled) return;
@@ -334,7 +386,10 @@ export function useSpineThumbnail(entry: LibraryEntry | null, enabled: boolean) 
         // Persist to the local disk cache for next time; non-fatal (we already showed the image).
         void invoke('thumb_cache_put', { key, data: url }).catch(() => undefined);
         // Share with the team so other machines skip the render. Best-effort (offline → skipped).
-        if (firebaseConfigured()) void uploadThumb(key, url).catch(() => undefined);
+        if (firebaseConfigured())
+          void uploadThumb(key, url)
+            .then(() => markL2Present(key))
+            .catch(() => undefined);
       } catch {
         fail();
       }
@@ -408,13 +463,20 @@ export function useThumbnailWarm(entries: LibraryEntry[], enabled: boolean) {
       const key = thumbKey(entry);
       try {
         const cached = await invoke<string | null>('thumb_cache_get', { key });
-        if (cancelled || cached) return; // already local → nothing to pull
+        if (cancelled) return;
+        if (cached) {
+          // Already local, but may be a legacy thumb that never reached L2 → backfill (once per key)
+          // so it's shared. Bounded by the warm pool's concurrency; nothing to pull down.
+          void backfillThumbToL2(key, cached);
+          return;
+        }
       } catch {
         /* treat as miss */
       }
       if (cancelled) return;
       const url = await getThumbDownloadUrl(key);
       if (cancelled || !url) return; // not on L2 yet → leave it to the lazy render path
+      markL2Present(key); // confirmed on L2 (and about to be in L1 too)
       await invoke('thumb_cache_fetch', { key, url });
     };
 
