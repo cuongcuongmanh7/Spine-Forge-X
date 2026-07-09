@@ -10,11 +10,13 @@ Source-of-truth tiến độ toàn dự án.
 
 _Không có mục nào đang chờ (chỉ còn backlog dài hạn rải rác bên dưới: multi-root mapping, per-project settings 4.3.x, Unity, macOS)._
 
-## v0.4.45 — Backfill thumbnail legacy L1→L2 ✅ Done
+## v0.4.47 — Backfill thumbnail legacy L1→L2 ✅ Done
 
-> Bump `0.4.44 → 0.4.45`; tag `v0.4.45`.
+> Bump `0.4.46 → 0.4.47`; tag `v0.4.47`. Gộp trên nền v0.4.46 (capture-registry đồng bộ ảnh chụp tay).
 
-- [x] **`backfillThumbToL2` + memo `l2Present`** ([useSpineThumbnail.ts](../src/useSpineThumbnail.ts)) — luồng cũ "trúng L1 là `return`" khiến thumb chụp trước khi có sync (chỉ nằm ở L1 mỗi máy) không bao giờ lên L2; 2 máy chung account không thấy thumb của nhau. Nay tại nhánh L1-hit (cả lazy path lẫn `useThumbnailWarm`), key chưa có trên L2 → tự upload (nền, best-effort). Content-addressed → union merge an toàn, không xung đột. Memo `localStorage` `spineforge.thumbL2Present` đảm bảo mỗi key chỉ đối soát 1 lần/máy (không truy vấn mạng lặp). Cũng tự vá thumb render/chụp lúc offline/chưa đăng nhập. Không cần cờ tắt: sau khi di trú xong feature tự im (check in-memory), phần safety-net chạy mãi cho case offline. Verify: `tsc` + `npm test` (134) + file-size guard xanh.
+- [x] **`backfillThumbToL2` + memo `l2Present`** ([useSpineThumbnail.ts](../src/useSpineThumbnail.ts)) — luồng cũ "trúng L1 là `return`" khiến thumb auto-render có trước khi có sync (chỉ nằm ở L1 mỗi máy) không bao giờ lên L2; 2 máy chung account không thấy thumb của nhau. Nay tại nhánh L1-hit (cả lazy path lẫn `useThumbnailWarm`), key chưa có trên L2 → tự upload (nền, best-effort). Content-addressed → union merge an toàn, không xung đột. Memo `localStorage` `spineforge.thumbL2Present` đảm bảo mỗi key chỉ đối soát 1 lần/máy (không truy vấn mạng lặp). Cũng tự vá thumb render lúc offline/chưa đăng nhập. Không cần cờ tắt: sau khi di trú xong feature tự im (check in-memory), phần safety-net chạy mãi cho case offline.
+- [x] **Phối hợp với capture-registry (v0.4.46)** — backfill có guard `!captureRegistry.has(key)`: chỉ đẩy ảnh auto-render, tránh đè ảnh chụp tay mà luồng capture đang quản (khớp chốt `!captureRegistry.has(key)` remote đặt ở đường upload sau render). Đường capture cũng `markL2Present` sau upload để hai memo nhất quán.
+- [x] Verify: `tsc` + `npm test` + file-size guard xanh sau khi resolve merge.
 
 ## v0.4.43 — FS watcher tự rescan khi export xong ✅ Done
 

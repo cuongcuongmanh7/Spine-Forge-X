@@ -1,7 +1,13 @@
 import { useEffect, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import type { ExportAssets, LibraryEntry } from './config';
-import { firebaseConfigured, getThumbDownloadUrl, uploadThumb } from './firebase';
+import {
+  firebaseConfigured,
+  getThumbDownloadUrl,
+  publishThumbCapture,
+  subscribeThumbCaptures,
+  uploadThumb
+} from './firebase';
 import {
   type DisposablePlayer,
   type PreferredSetupPlayer,
@@ -120,6 +126,73 @@ function notifyThumb(key: string) {
   for (const cb of overrideSubs) cb(key);
 }
 
+// --- shared capture registry: make a capture reach every machine, not just the one that made it ----
+// A capture reuses the asset's content-addressed `thumbKey`, so a machine that already rendered+cached
+// the auto thumbnail under that key would stay pinned to it forever — the L1 disk hit returns before
+// L2 is ever consulted, and the key never changes (only a re-export/renderer bump changes it). The
+// registry (Firestore, mirrored here) maps `thumbKey → captureId`; when it names a captureId this
+// machine hasn't pulled yet, we bypass L1 and re-fetch the capture from Cloud Storage (L2). A
+// per-machine `synced` record (localStorage) tracks the captureId whose bytes currently sit in L1, so
+// we only re-pull when it actually changed — not on every registry emit.
+
+const captureRegistry = new Map<string, string>();
+type RegistrySub = (changed: Set<string>) => void;
+const registrySubs = new Set<RegistrySub>();
+let registryStarted = false;
+
+/** Start the single live subscription to the capture registry (idempotent; kept for the app's
+ *  lifetime — one Firestore listener is cheap and lets a teammate's capture propagate live). */
+function ensureCaptureRegistry(): void {
+  if (registryStarted || !firebaseConfigured()) return;
+  registryStarted = true;
+  subscribeThumbCaptures((map) => {
+    const changed = new Set<string>();
+    for (const [k, v] of Object.entries(map)) if (captureRegistry.get(k) !== v) changed.add(k);
+    for (const k of captureRegistry.keys()) if (!(k in map)) changed.add(k);
+    captureRegistry.clear();
+    for (const [k, v] of Object.entries(map)) captureRegistry.set(k, v);
+    for (const cb of registrySubs) cb(changed);
+  });
+}
+
+// Per-machine record of which captureId's bytes are in L1, mirrored to localStorage so it survives a
+// reload. Cached in-memory to avoid re-parsing JSON on every card.
+const SYNCED_STORE_KEY = 'sfx.thumbCaptures.synced';
+let syncedCache: Record<string, string> | null = null;
+function syncedCaptures(): Record<string, string> {
+  if (!syncedCache) {
+    try {
+      syncedCache = JSON.parse(localStorage.getItem(SYNCED_STORE_KEY) ?? '{}') as Record<string, string>;
+    } catch {
+      syncedCache = {};
+    }
+  }
+  return syncedCache;
+}
+function markCaptureSynced(key: string, captureId: string): void {
+  const store = syncedCaptures();
+  store[key] = captureId;
+  try {
+    localStorage.setItem(SYNCED_STORE_KEY, JSON.stringify(store));
+  } catch {
+    /* storage quota — the in-memory copy still prevents redundant re-pulls this session */
+  }
+}
+/** True when the registry names a capture for `key` that this machine hasn't pulled into L1 yet — i.e.
+ *  the L1 image (if any) is stale and must be re-fetched from L2. */
+function captureIsStale(key: string): boolean {
+  const want = captureRegistry.get(key);
+  return want != null && syncedCaptures()[key] !== want;
+}
+
+function newCaptureId(): string {
+  try {
+    return crypto.randomUUID();
+  } catch {
+    return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+  }
+}
+
 /** Re-render an entry's thumbnail off-screen (the proven capture pipeline) framed to `viewport` —
  *  used by the preview modal's "capture" button. Reading the on-screen preview canvas back is
  *  unreliable in WebView2 (the drawing buffer isn't preserved for reads outside the render loop, so
@@ -144,10 +217,24 @@ export async function setCapturedThumbnail(entry: LibraryEntry, dataUrl: string)
   overrides.set(key, dataUrl);
   notifyThumb(key);
   await invoke('thumb_cache_put', { key, data: dataUrl });
-  if (firebaseConfigured())
-    void uploadThumb(key, dataUrl)
-      .then(() => markL2Present(key))
-      .catch(() => undefined);
+  if (firebaseConfigured()) {
+    // This machine holds these exact bytes in L1, so record them as synced up-front — even if the
+    // upload below fails offline, we must not later re-pull our own capture over the top of itself.
+    const captureId = newCaptureId();
+    markCaptureSynced(key, captureId);
+    // Best-effort, fire-and-forget so the capture toast stays instant. Upload the PNG to L2 FIRST,
+    // then announce it in the registry — so by the time a teammate sees the captureId, the object it
+    // points at already exists (otherwise their download misses and they'd fall back to auto-render).
+    void (async () => {
+      try {
+        await uploadThumb(key, dataUrl);
+        markL2Present(key); // now on L2 → the legacy backfill never needs to touch this key
+        await publishThumbCapture(key, captureId);
+      } catch {
+        /* offline / signed out → capture stays local; re-announced on the next capture or reconnect */
+      }
+    })();
+  }
 }
 
 // --- single-slot render queue: one live WebGL context at a time ------------------
@@ -299,6 +386,21 @@ async function renderThumbnail(
 export function useSpineThumbnail(entry: LibraryEntry | null, enabled: boolean) {
   const [status, setStatus] = useState<ThumbStatus>('idle');
   const [dataUrl, setDataUrl] = useState<string | null>(null);
+  // Bumps when a capture for THIS entry's key appears/changes in the shared registry, re-running the
+  // loader below so a teammate's capture reaches this already-open card (not just on next Library open).
+  const [registryTick, setRegistryTick] = useState(0);
+
+  useEffect(() => {
+    ensureCaptureRegistry();
+    const onReg: RegistrySub = (changed) => {
+      if (entry && changed.has(thumbKey(entry))) setRegistryTick((n) => n + 1);
+    };
+    registrySubs.add(onReg);
+    return () => {
+      registrySubs.delete(onReg);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [entry?.relPath, entry?.spineBytes, entry?.version]);
 
   useEffect(() => {
     if (!enabled || !entry || !entry.exported) {
@@ -329,19 +431,29 @@ export function useSpineThumbnail(entry: LibraryEntry | null, enabled: boolean) 
         return;
       }
 
-      // L1 — per-machine LOCAL disk cache (OS app-cache dir; no Drive mount, no network). Check first.
-      try {
-        const cached = await invoke<string | null>('thumb_cache_get', { key });
-        if (cancelled) return;
-        if (cached) {
-          done(cached);
-          // Legacy backfill: this thumbnail is on our disk but may predate sync and never reached
-          // L2. Push it up (once per key) so other machines share it. Background, best-effort.
-          void backfillThumbToL2(key, cached);
-          return;
+      // Does the shared registry name a capture this machine hasn't pulled yet? If so the L1 image is
+      // stale (an older auto-render or capture) and we skip straight to L2 to fetch the current one.
+      const wantCapture = captureRegistry.get(key);
+      const staleL1 = captureIsStale(key);
+
+      // L1 — per-machine LOCAL disk cache (OS app-cache dir; no Drive mount, no network). Check first,
+      // unless a newer capture is announced (then L1 is known-stale and we must re-pull from L2).
+      if (!staleL1) {
+        try {
+          const cached = await invoke<string | null>('thumb_cache_get', { key });
+          if (cancelled) return;
+          if (cached) {
+            done(cached);
+            // Legacy backfill: this thumbnail sits on our disk but may predate sync (or was rendered
+            // offline/logged out) and never reached L2. Push it up (once per key) so other machines
+            // share it — but only for a plain auto thumbnail; when the registry owns this key the
+            // capture flow handles L2, so we leave it alone.
+            if (!captureRegistry.has(key)) void backfillThumbToL2(key, cached);
+            return;
+          }
+        } catch {
+          /* cache miss path below */
         }
-      } catch {
-        /* cache miss path below */
       }
       if (cancelled) return;
 
@@ -356,6 +468,8 @@ export function useSpineThumbnail(entry: LibraryEntry | null, enabled: boolean) 
           try {
             const localized = await invoke<string>('thumb_cache_fetch', { key, url: remoteUrl });
             if (cancelled) return;
+            // The bytes we just pulled ARE the announced capture — record it so we don't re-pull it.
+            if (wantCapture != null) markCaptureSynced(key, wantCapture);
             done(localized);
           } catch {
             if (cancelled) return;
@@ -386,7 +500,9 @@ export function useSpineThumbnail(entry: LibraryEntry | null, enabled: boolean) 
         // Persist to the local disk cache for next time; non-fatal (we already showed the image).
         void invoke('thumb_cache_put', { key, data: url }).catch(() => undefined);
         // Share with the team so other machines skip the render. Best-effort (offline → skipped).
-        if (firebaseConfigured())
+        // Skip when the registry says this key carries a user capture whose PNG just hasn't reached
+        // L2 yet (a brief announce-before-upload race) — else we'd overwrite the capture with an auto.
+        if (firebaseConfigured() && !captureRegistry.has(key))
           void uploadThumb(key, url)
             .then(() => markL2Present(key))
             .catch(() => undefined);
@@ -399,7 +515,7 @@ export function useSpineThumbnail(entry: LibraryEntry | null, enabled: boolean) 
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [entry?.relPath, entry?.spineBytes, entry?.version, entry?.exported, enabled]);
+  }, [entry?.relPath, entry?.spineBytes, entry?.version, entry?.exported, enabled, registryTick]);
 
   // Swap to a freshly captured thumbnail the instant it's set (same-session), without re-fetching.
   useEffect(() => {
@@ -452,6 +568,19 @@ export function useThumbnailWarm(entries: LibraryEntry[], enabled: boolean) {
   // Re-warm only when the actual set changes (not on every render / unrelated state churn). Keys
   // fold in size+version, so a re-export (new key) re-warms; a pure re-render does not.
   const signature = enabled ? entries.filter((e) => e.exported).map(thumbKey).join('|') : '';
+  // Re-run the warm pass when the shared capture registry changes so a teammate's new capture is
+  // pulled proactively (visible cards also react via useSpineThumbnail; this covers the rest).
+  const [registryVersion, setRegistryVersion] = useState(0);
+  useEffect(() => {
+    if (!enabled) return;
+    ensureCaptureRegistry();
+    const onReg: RegistrySub = () => setRegistryVersion((n) => n + 1);
+    registrySubs.add(onReg);
+    return () => {
+      registrySubs.delete(onReg);
+    };
+  }, [enabled]);
+
   useEffect(() => {
     if (!enabled || !firebaseConfigured()) return;
     const targets = entries.filter((e) => e.exported);
@@ -461,23 +590,29 @@ export function useThumbnailWarm(entries: LibraryEntry[], enabled: boolean) {
     const warmOne = async (entry: LibraryEntry) => {
       if (cancelled) return;
       const key = thumbKey(entry);
-      try {
-        const cached = await invoke<string | null>('thumb_cache_get', { key });
-        if (cancelled) return;
-        if (cached) {
-          // Already local, but may be a legacy thumb that never reached L2 → backfill (once per key)
-          // so it's shared. Bounded by the warm pool's concurrency; nothing to pull down.
-          void backfillThumbToL2(key, cached);
-          return;
+      const wantCapture = captureRegistry.get(key);
+      // Skip the L1 short-circuit when a newer capture is announced — that image is stale and must be
+      // re-pulled from L2 even though a (stale) copy is already on disk.
+      if (!captureIsStale(key)) {
+        try {
+          const cached = await invoke<string | null>('thumb_cache_get', { key });
+          if (cancelled) return;
+          if (cached) {
+            // Already local & current. May be a legacy/offline auto thumb that never reached L2 →
+            // backfill (once per key) so it's shared; registry-owned keys are handled by capture flow.
+            if (!captureRegistry.has(key)) void backfillThumbToL2(key, cached);
+            return; // nothing to pull down
+          }
+        } catch {
+          /* treat as miss */
         }
-      } catch {
-        /* treat as miss */
       }
       if (cancelled) return;
       const url = await getThumbDownloadUrl(key);
       if (cancelled || !url) return; // not on L2 yet → leave it to the lazy render path
       markL2Present(key); // confirmed on L2 (and about to be in L1 too)
       await invoke('thumb_cache_fetch', { key, url });
+      if (wantCapture != null) markCaptureSynced(key, wantCapture);
     };
 
     void runPool(targets, PREFETCH_CONCURRENCY, warmOne, () => cancelled);
@@ -485,5 +620,5 @@ export function useThumbnailWarm(entries: LibraryEntry[], enabled: boolean) {
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [signature, enabled]);
+  }, [signature, enabled, registryVersion]);
 }

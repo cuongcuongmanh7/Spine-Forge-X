@@ -496,22 +496,24 @@ export function LibraryInventory({
 
   // Flat list of every active filter as a removable chip — drives the collapsed-card preview and its
   // overflow popover. Each chip's `remove` toggles exactly the selection it represents back off.
-  const activeChips: { id: string; label: string; remove: () => void }[] = [
+  const activeChips: { id: string; label: string; color?: string; remove: () => void }[] = [
     ...[...selectedCats].map((key) => ({
       id: `cat:${key}`,
       label: facet === 'status' ? statusLabel(key) : key,
+      color: chipColor(key, facet === 'status' ? key : undefined),
       remove: () => filter.toggleCat(key)
     })),
     ...[...selectedVersions].map((key) => ({
       id: `ver:${key}`,
       label: key || t.libraryUnknownVersion,
+      color: chipColor(key || 'unknown'),
       remove: () => filter.toggleVersion(key)
     })),
     ...(facet !== 'status'
-      ? [...selectedStatuses].map((key) => ({ id: `st:${key}`, label: statusLabel(key), remove: () => toggleSet(setSelectedStatuses, key) }))
+      ? [...selectedStatuses].map((key) => ({ id: `st:${key}`, label: statusLabel(key), color: chipColor(key, key), remove: () => toggleSet(setSelectedStatuses, key) }))
       : []),
-    ...[...selectedUsers].map((name) => ({ id: `usr:${name}`, label: name, remove: () => toggleSet(setSelectedUsers, name) })),
-    ...[...selectedTags].map((tag) => ({ id: `tag:${tag}`, label: tag, remove: () => toggleSet(setSelectedTags, tag) })),
+    ...[...selectedUsers].map((name) => ({ id: `usr:${name}`, label: name, color: chipColor(name), remove: () => toggleSet(setSelectedUsers, name) })),
+    ...[...selectedTags].map((tag) => ({ id: `tag:${tag}`, label: tag, color: chipColor(tag), remove: () => toggleSet(setSelectedTags, tag) })),
     ...(unusedOnly ? [{ id: 'unused', label: t.libraryUnusedOnly, remove: () => setUnusedOnly(false) }] : []),
     ...(divergingOnly ? [{ id: 'diverging', label: t.libraryVersionOnlyDiverging, remove: () => setDivergingOnly(false) }] : []),
     ...(showResolved ? [{ id: 'resolved', label: t.notesShowResolved, remove: () => setShowResolved(false) }] : []),
@@ -529,7 +531,14 @@ export function LibraryInventory({
       {activeChips.length > 0 && (
         <span className="library-preview-chips">
           {previewChips.map((c) => (
-            <button key={c.id} type="button" className="library-preview-chip" onClick={(e) => { e.stopPropagation(); c.remove(); }} title={c.label}>
+            <button
+              key={c.id}
+              type="button"
+              className={`library-preview-chip ${c.color ? 'tinted' : ''}`}
+              style={c.color ? ({ '--chip-c': c.color } as CSSProperties) : undefined}
+              onClick={(e) => { e.stopPropagation(); c.remove(); }}
+              title={c.label}
+            >
               {c.label} <span className="library-preview-chip-x">×</span>
             </button>
           ))}

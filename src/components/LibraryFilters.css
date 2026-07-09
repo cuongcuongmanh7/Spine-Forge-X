@@ -143,18 +143,25 @@
   color: var(--primary-text);
 }
 /* Per-value accent color: status chips take a semantic color, other chips a stable hashed hue
-   (see chipColor.ts). Only chips carrying a `--chip-c` custom property opt in via `.tinted`. */
+   (see chipColor.ts). Only chips carrying a `--chip-c` custom property opt in via `.tinted`.
+   Idle chips stay neutral (calm, uniform) so color reads as a "selected" signal, not decoration.
+   Hover reveals a faint hint of the chip's color; the active state below turns it on fully. */
 .library-chip.tinted {
-  border-color: color-mix(in srgb, var(--chip-c), transparent 55%);
-  color: color-mix(in srgb, var(--chip-c), var(--text) 30%);
+  background: var(--surface);
+  border-color: color-mix(in srgb, var(--border), transparent 20%);
+  color: var(--text);
 }
 .library-chip.tinted:hover {
-  border-color: var(--chip-c);
+  background: color-mix(in srgb, var(--chip-c), transparent 90%);
+  border-color: color-mix(in srgb, var(--chip-c), transparent 60%);
 }
+/* Active reads clearly as "selected" against the neutral idle chips: a stronger tint + a solid colored
+   border, without going back to a flat saturated fill. */
 .library-chip.tinted.active {
-  background: var(--chip-c);
+  background: color-mix(in srgb, var(--chip-c), transparent 58%);
   border-color: var(--chip-c);
-  color: #fff;
+  color: color-mix(in srgb, var(--chip-c), var(--text) 55%);
+  font-weight: 700;
 }
 .library-chip.mixed {
   border-color: color-mix(in srgb, var(--warning), transparent 45%);
@@ -201,6 +208,15 @@
 .library-preview-chip:hover {
   border-color: var(--primary);
 }
+/* Same tinted treatment as the expanded chips, so a filter keeps its color when Filters is collapsed. */
+.library-preview-chip.tinted {
+  background: color-mix(in srgb, var(--chip-c), transparent 88%);
+  border-color: color-mix(in srgb, var(--chip-c), transparent 62%);
+  color: color-mix(in srgb, var(--chip-c), var(--text) 30%);
+}
+.library-preview-chip.tinted:hover {
+  border-color: color-mix(in srgb, var(--chip-c), transparent 30%);
+}
 .library-preview-chip.more {
   background: var(--surface);
   border-color: var(--border-strong);
@@ -214,6 +230,13 @@
 .library-chip-overflow {
   min-width: 160px;
   max-width: 280px;
+}
+/* Small color swatch in the overflow menu, matching each filter's chip color. */
+.library-chip-dot {
+  flex: 0 0 auto;
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
 }
 
 /* --- Library trash modal ---------------------------------------------------------------------- */
