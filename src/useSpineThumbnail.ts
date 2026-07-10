@@ -8,6 +8,7 @@ import {
   subscribeThumbCaptures,
   uploadThumb
 } from './firebase';
+import { reportL2Failure } from './l2log';
 import {
   type DisposablePlayer,
   type PreferredSetupPlayer,
@@ -110,8 +111,10 @@ async function backfillThumbToL2(key: string, dataUrl: string): Promise<void> {
     }
     await uploadThumb(key, dataUrl);
     markL2Present(key);
-  } catch {
-    /* offline / transient → stay unmarked so the next view of this card retries */
+  } catch (e) {
+    /* offline / transient → stay unmarked so the next view of this card retries; surface a real
+       outage (auth/rules/billing) to the Log panel instead of leaving it silent */
+    reportL2Failure('backfill', e);
   }
 }
 
@@ -230,8 +233,9 @@ export async function setCapturedThumbnail(entry: LibraryEntry, dataUrl: string)
         await uploadThumb(key, dataUrl);
         markL2Present(key); // now on L2 → the legacy backfill never needs to touch this key
         await publishThumbCapture(key, captureId);
-      } catch {
+      } catch (e) {
         /* offline / signed out → capture stays local; re-announced on the next capture or reconnect */
+        reportL2Failure('upload', e);
       }
     })();
   }
@@ -505,7 +509,7 @@ export function useSpineThumbnail(entry: LibraryEntry | null, enabled: boolean) 
         if (firebaseConfigured() && !captureRegistry.has(key))
           void uploadThumb(key, url)
             .then(() => markL2Present(key))
-            .catch(() => undefined);
+            .catch((e) => reportL2Failure('upload', e));
       } catch {
         fail();
       }

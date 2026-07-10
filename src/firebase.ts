@@ -31,6 +31,7 @@ import {
   type Firestore
 } from 'firebase/firestore';
 import { getDownloadURL, getStorage, ref as storageRef, uploadString, type FirebaseStorage } from 'firebase/storage';
+import { reportL2Failure } from './l2log';
 
 const config = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
@@ -133,12 +134,17 @@ function thumbStorageRef(key: string) {
 }
 
 /** Download URL for a cached thumbnail, or null if it hasn't been uploaded yet. The URL is used
- *  directly as an `<img>` src (no pixel readback → no bucket CORS needed). */
+ *  directly as an `<img>` src (no pixel readback → no bucket CORS needed). A genuine miss
+ *  (`object-not-found`) is normal and stays silent; any other failure (auth expired, storage-rule
+ *  denial, HTTP 403 from a closed/delinquent billing account) is a real L2 outage and is reported so
+ *  it reaches the Log panel instead of masquerading as "not uploaded yet". */
 export async function getThumbDownloadUrl(key: string): Promise<string | null> {
   try {
     return await getDownloadURL(thumbStorageRef(key));
-  } catch {
-    return null; // object-not-found (or offline) → caller renders it
+  } catch (e) {
+    const code = (e as { code?: string })?.code;
+    if (code !== 'storage/object-not-found') reportL2Failure('download', e);
+    return null; // not uploaded yet / offline / outage → caller renders it
   }
 }
 

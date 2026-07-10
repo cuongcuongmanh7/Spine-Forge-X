@@ -531,6 +531,7 @@ export const en: Translations = {
   stopFailed: 'Stop failed',
   openOutputEmpty: 'No output folder is available yet.',
   openOutputFailed: 'Open output failed',
+  thumbCloudSyncFailed: 'Thumbnail cloud (L2) sync failed',
   pendingSave: 'Save log is pending native file integration.',
   language: 'Language',
   theme: 'Theme',

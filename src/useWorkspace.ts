@@ -12,6 +12,7 @@ import {
 import type { Translations } from './i18n';
 import type { Language } from './types';
 import { normalizePathKey, snapshotRuntime, stamp } from './controllerHelpers';
+import { onL2Log } from './l2log';
 import {
   basename,
   cloneSession,
@@ -120,6 +121,15 @@ export function useWorkspace({
   function appendLog(text: string) {
     setLogs((items) => [...items, stamp(text)]);
   }
+
+  // Surface otherwise-silent shared-thumbnail-cache (L2) outages — a failed upload/download is
+  // swallowed by the thumbnail pipeline (it just falls back to a local render), so a real problem
+  // (auth expired, storage-rule denial, a closed/delinquent billing account → 403) would never be
+  // seen. Route those failures into the visible Log panel; release builds ship without devtools.
+  useEffect(() => {
+    return onL2Log(({ op, reason }) => appendLog(`${t.thumbCloudSyncFailed} [${op}]: ${reason}`));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [t]);
 
   // Route async run output to the originating session even if the user switched away.
   function recordRunLog(line: string) {

@@ -529,6 +529,7 @@ export const vi = {
   stopFailed: 'Dừng thất bại',
   openOutputEmpty: 'Chưa có output folder để mở.',
   openOutputFailed: 'Mở output thất bại',
+  thumbCloudSyncFailed: 'Đồng bộ thumbnail lên cloud (L2) lỗi',
   pendingSave: 'Save log sẽ nối native file dialog ở bước sau.',
   language: 'Ngôn ngữ',
   theme: 'Theme',
