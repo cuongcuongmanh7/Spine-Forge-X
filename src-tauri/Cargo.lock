@@ -3742,7 +3742,7 @@ dependencies = [
 
 [[package]]
 name = "spineforge-x"
-version = "0.4.48"
+version = "0.4.49"
 dependencies = [
  "base64 0.22.1",
  "chrono",

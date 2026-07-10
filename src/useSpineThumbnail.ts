@@ -4,6 +4,8 @@ import type { ExportAssets, LibraryEntry } from './config';
 import {
   firebaseConfigured,
   getThumbDownloadUrl,
+  getThumbSize,
+  onFirebaseAuth,
   publishThumbCapture,
   subscribeThumbCaptures,
   uploadThumb
@@ -96,21 +98,42 @@ function markL2Present(key: string) {
   }
 }
 
-/** Ensure a locally-cached thumbnail is also on shared Cloud Storage. This closes the legacy gap: a
- *  thumbnail captured before sync existed lives only in this machine's L1, and the L1-hit fast path
- *  returns before ever touching L2 — so it would never reach other machines. Runs at most once per
- *  key per machine (memoised). Content-addressed keys make the upload a safe union merge across
- *  machines, so we upload only if L2 doesn't already have it. Fully background and best-effort — the
- *  caller has already shown the image; on failure we leave the key unmarked so a later view retries. */
+/** Decoded byte length of a `data:…;base64,…` URL, without allocating the bytes. */
+function base64ByteLength(dataUrl: string): number {
+  const b64 = dataUrl.split(',')[1] ?? '';
+  if (!b64) return 0;
+  const pad = b64.endsWith('==') ? 2 : b64.endsWith('=') ? 1 : 0;
+  return Math.floor((b64.length * 3) / 4) - pad;
+}
+
+/** Reconcile a locally-cached thumbnail with shared Cloud Storage (both directions). Runs at most once
+ *  per key per machine (memoised) from the L1-hit fast path, which otherwise returns before ever
+ *  touching L2. Two cases:
+ *   • L2 has nothing → PUSH our copy up (legacy/offline thumbnails that predate sync get shared).
+ *   • L2 has a DIFFERENT image (different byte size ⇒ a human capture — including a legacy one with no
+ *     registry entry — or a divergent render) → PULL it down and adopt it as the shared source of
+ *     truth, swapping the on-screen card. Same size ⇒ treat as identical (deterministic auto-render),
+ *     leave L1 as-is.
+ *  Fully background and best-effort; on failure we leave the key unmarked so a later view retries. */
 async function backfillThumbToL2(key: string, dataUrl: string): Promise<void> {
   if (!firebaseConfigured() || l2Present.has(key)) return;
   try {
-    if (await getThumbDownloadUrl(key)) {
-      markL2Present(key); // already shared by another machine — nothing to push
+    const remoteSize = await getThumbSize(key);
+    if (remoteSize == null) {
+      await uploadThumb(key, dataUrl); // not on L2 yet → share ours
+      markL2Present(key);
       return;
     }
-    await uploadThumb(key, dataUrl);
-    markL2Present(key);
+    if (remoteSize !== base64ByteLength(dataUrl)) {
+      // The shared copy differs from ours → adopt it (overwrites L1) and swap the visible card.
+      const url = await getThumbDownloadUrl(key);
+      if (url) {
+        const localized = await invoke<string>('thumb_cache_fetch', { key, url });
+        overrides.set(key, localized);
+        notifyThumb(key);
+      }
+    }
+    markL2Present(key); // reconciled — don't check again this machine
   } catch (e) {
     /* offline / transient → stay unmarked so the next view of this card retries; surface a real
        outage (auth/rules/billing) to the Log panel instead of leaving it silent */
@@ -141,20 +164,37 @@ function notifyThumb(key: string) {
 const captureRegistry = new Map<string, string>();
 type RegistrySub = (changed: Set<string>) => void;
 const registrySubs = new Set<RegistrySub>();
-let registryStarted = false;
+let authWatchStarted = false;
+let registryUnsub: (() => void) | null = null;
 
-/** Start the single live subscription to the capture registry (idempotent; kept for the app's
- *  lifetime — one Firestore listener is cheap and lets a teammate's capture propagate live). */
+/** Replace the in-memory registry with a fresh snapshot, then notify subscribers with the set of keys
+ *  whose captureId changed (added / removed / different) so only affected cards re-pull. */
+function applyRegistrySnapshot(map: Record<string, string>): void {
+  const changed = new Set<string>();
+  for (const [k, v] of Object.entries(map)) if (captureRegistry.get(k) !== v) changed.add(k);
+  for (const k of captureRegistry.keys()) if (!(k in map)) changed.add(k);
+  captureRegistry.clear();
+  for (const [k, v] of Object.entries(map)) captureRegistry.set(k, v);
+  for (const cb of registrySubs) cb(changed);
+}
+
+/** Watch the capture registry (idempotent). The registry is `onSnapshot`-backed, and Firestore
+ *  TERMINATES a listener that hits `permission-denied` — e.g. one attached before the Firebase session
+ *  is ready on a cold launch — and NEVER retries it. Subscribing once on mount therefore dies silently
+ *  for the whole session, so no capture is ever pulled and every machine stays pinned to its cached
+ *  auto-render. Instead we watch auth and (re)attach the listener each time a session appears, dropping
+ *  it on sign-out — mirroring how `subscribeLeaderEmails` re-subscribes on uid. */
 function ensureCaptureRegistry(): void {
-  if (registryStarted || !firebaseConfigured()) return;
-  registryStarted = true;
-  subscribeThumbCaptures((map) => {
-    const changed = new Set<string>();
-    for (const [k, v] of Object.entries(map)) if (captureRegistry.get(k) !== v) changed.add(k);
-    for (const k of captureRegistry.keys()) if (!(k in map)) changed.add(k);
-    captureRegistry.clear();
-    for (const [k, v] of Object.entries(map)) captureRegistry.set(k, v);
-    for (const cb of registrySubs) cb(changed);
+  if (authWatchStarted || !firebaseConfigured()) return;
+  authWatchStarted = true;
+  onFirebaseAuth((user) => {
+    if (user && !registryUnsub) {
+      registryUnsub = subscribeThumbCaptures(applyRegistrySnapshot);
+    } else if (!user && registryUnsub) {
+      registryUnsub();
+      registryUnsub = null;
+      applyRegistrySnapshot({}); // signed out → can't read L2 anyway; drop stale entries
+    }
   });
 }
 

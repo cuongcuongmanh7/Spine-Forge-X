@@ -30,7 +30,14 @@ import {
   type DocumentReference,
   type Firestore
 } from 'firebase/firestore';
-import { getDownloadURL, getStorage, ref as storageRef, uploadString, type FirebaseStorage } from 'firebase/storage';
+import {
+  getDownloadURL,
+  getMetadata,
+  getStorage,
+  ref as storageRef,
+  uploadString,
+  type FirebaseStorage
+} from 'firebase/storage';
 import { reportL2Failure } from './l2log';
 
 const config = {
@@ -145,6 +152,21 @@ export async function getThumbDownloadUrl(key: string): Promise<string | null> {
     const code = (e as { code?: string })?.code;
     if (code !== 'storage/object-not-found') reportL2Failure('download', e);
     return null; // not uploaded yet / offline / outage → caller renders it
+  }
+}
+
+/** Size (bytes) of the L2 object for `key`, or null if it isn't uploaded yet. Lets the two-way
+ *  backfill tell whether the shared copy differs from the local one WITHOUT downloading it — a
+ *  different byte size means a different image (a human capture, incl. legacy ones with no registry
+ *  entry, or a divergent render), so the shared copy should be adopted. A genuine miss stays silent;
+ *  any other failure is a real L2 outage and is reported (same policy as `getThumbDownloadUrl`). */
+export async function getThumbSize(key: string): Promise<number | null> {
+  try {
+    return (await getMetadata(thumbStorageRef(key))).size;
+  } catch (e) {
+    const code = (e as { code?: string })?.code;
+    if (code !== 'storage/object-not-found') reportL2Failure('download', e);
+    return null;
   }
 }
 

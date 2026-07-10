@@ -1,5 +1,8 @@
 # Changelog
 
+## v0.4.49
+- **Sửa thumbnail chụp tay không hiện đủ trên các máy khác** — bộ nhận diện capture kết nối hụt lúc khởi động (chưa kịp đăng nhập) nên máy hay kẹt ở bản cũ; nay tự kết nối lại sau khi đăng nhập, và đối chiếu với bản trên Cloud để lấy đúng ảnh mới nhất (kể cả ảnh chụp tay từ đời trước).
+
 ## v0.4.48
 - **Báo lỗi khi thumbnail không đồng bộ được lên Cloud** — trước đây nếu việc đẩy/tải thumbnail lên kho chung (L2 — Firebase Storage) gặp sự cố (hết phiên đăng nhập, bị chặn quyền, hoặc **tài khoản thanh toán bị đóng → lỗi 403**), app **nuốt lỗi hoàn toàn** rồi tự render lại bản cục bộ, nên nhìn y hệt "không có gì để đồng bộ" — sự cố có thể kéo dài nhiều ngày mà không ai biết (đúng đợt billing vừa rồi chặn toàn bộ upload/tải thumbnail ~2 ngày trong im lặng). Nay các lỗi L2 này **hiện ở bảng Log** kèm thao tác + lý do, gộp trùng để không spam. (Bản release không kèm devtools nên log vào thẳng bảng Log trong app.)
 
