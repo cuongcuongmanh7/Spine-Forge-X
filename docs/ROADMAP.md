@@ -10,6 +10,14 @@ Source-of-truth tiến độ toàn dự án.
 
 _Không có mục nào đang chờ (chỉ còn backlog dài hạn rải rác bên dưới: multi-root mapping, per-project settings 4.3.x, Unity, macOS)._
 
+## v0.4.48 — Surface lỗi thumbnail L2 ra bảng Log ✅ Done
+
+> Bump `0.4.47 → 0.4.48`; tag `v0.4.48`.
+
+- [x] **`l2log.ts` bus + wire vào bảng Log** ([l2log.ts](../src/l2log.ts)) — thumbnail pipeline nuốt mọi lỗi L2 (upload/download fail → fallback render cục bộ), nên outage thật (auth hết hạn, storage-rule chặn, billing account đóng → HTTP 403) trông y như "chưa có gì để sync". `reportL2Failure/onL2Log` dedup theo (op, reason)/phiên + `console.warn`; [firebase.ts](../src/firebase.ts) `getThumbDownloadUrl` phân biệt `object-not-found` (im) với lỗi thật (báo `download`); [useSpineThumbnail.ts](../src/useSpineThumbnail.ts) báo từ các catch upload/backfill; [useWorkspace.ts](../src/useWorkspace.ts) subscribe → `appendLog` (release không kèm devtools nên vào thẳng bảng Log). i18n `thumbCloudSyncFailed` (vi+en).
+- [x] **Bối cảnh** — billing account project `spineforge-x` bị đóng (delinquent) ~07-08→07-09 chặn toàn bộ L2 I/O trong im lặng; đã mở lại billing + thêm observability này để lần sau hiện lỗi ngay.
+- [x] Verify: `tsc` + test sync/firebase (20) + file-size guard xanh.
+
 ## v0.4.47 — Backfill thumbnail legacy L1→L2 ✅ Done
 
 > Bump `0.4.46 → 0.4.47`; tag `v0.4.47`. Gộp trên nền v0.4.46 (capture-registry đồng bộ ảnh chụp tay).

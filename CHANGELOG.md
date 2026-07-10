@@ -1,5 +1,8 @@
 # Changelog
 
+## v0.4.48
+- **Báo lỗi khi thumbnail không đồng bộ được lên Cloud** — trước đây nếu việc đẩy/tải thumbnail lên kho chung (L2 — Firebase Storage) gặp sự cố (hết phiên đăng nhập, bị chặn quyền, hoặc **tài khoản thanh toán bị đóng → lỗi 403**), app **nuốt lỗi hoàn toàn** rồi tự render lại bản cục bộ, nên nhìn y hệt "không có gì để đồng bộ" — sự cố có thể kéo dài nhiều ngày mà không ai biết (đúng đợt billing vừa rồi chặn toàn bộ upload/tải thumbnail ~2 ngày trong im lặng). Nay các lỗi L2 này **hiện ở bảng Log** kèm thao tác + lý do, gộp trùng để không spam. (Bản release không kèm devtools nên log vào thẳng bảng Log trong app.)
+
 ## v0.4.47
 - **Thumbnail cũ trên các máy tự gộp chung lên Cloud** — trước khi có tính năng đồng bộ thumbnail, mỗi máy đã tự chụp/render một bộ thumbnail riêng nằm trong cache cục bộ (L1); vì luồng cũ "trúng L1 là dừng, không đụng tới kho chung (L2)", nên các bộ này bị **kẹt trong từng máy**, máy khác không thấy và máy mới phải render lại từ đầu. Nay khi mở Thư viện, mỗi thumbnail có sẵn ở máy mà **chưa có trên L2 sẽ tự được đẩy lên** (nền, không chặn giao diện) để cả nhóm dùng chung — kết quả là hợp của tất cả các máy. Vì key thumbnail băm theo nội dung nên đây là phép gộp an toàn, không có xung đột; mỗi key chỉ đối soát **một lần/máy** (ghi nhớ trong `localStorage`) nên không tốn thêm truy vấn mạng ở lần xem sau. Cơ chế này cũng tự vá luôn các thumbnail được tạo lúc **offline / chưa đăng nhập** (trước đây cũng bị kẹt lại y hệt). Không đụng tới ảnh chụp tay đã đồng bộ ở v0.4.46 (chỉ đẩy khi key chưa có capture của user).
 
