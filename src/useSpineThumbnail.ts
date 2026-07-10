@@ -106,18 +106,32 @@ function base64ByteLength(dataUrl: string): number {
   return Math.floor((b64.length * 3) / 4) - pad;
 }
 
-/** Reconcile a locally-cached thumbnail with shared Cloud Storage (both directions). Runs at most once
- *  per key per machine (memoised) from the L1-hit fast path, which otherwise returns before ever
- *  touching L2. Two cases:
+/** Reconcile a locally-cached thumbnail with shared Cloud Storage. Runs from the L1-hit fast path
+ *  (which otherwise returns before ever touching L2) and only when the registry doesn't already own
+ *  this key. Three cases, in order:
+ *   • WE hold a capture the registry doesn't know about (its upload/publish failed at capture time —
+ *     offline / signed out / the billing outage — leaving a `syncedCaptures` marker but nothing on the
+ *     cloud). FLUSH it up and announce it, and never let the auto-render reconciliation clobber it.
+ *     This is authoritative: a local capture must win over whatever stale auto sits on L2.
  *   • L2 has nothing → PUSH our copy up (legacy/offline thumbnails that predate sync get shared).
- *   • L2 has a DIFFERENT image (different byte size ⇒ a human capture — including a legacy one with no
- *     registry entry — or a divergent render) → PULL it down and adopt it as the shared source of
- *     truth, swapping the on-screen card. Same size ⇒ treat as identical (deterministic auto-render),
- *     leave L1 as-is.
+ *   • L2 has a DIFFERENT image (different byte size ⇒ a divergent render, or a legacy capture with no
+ *     registry entry made on ANOTHER machine) → PULL it down and adopt it, swapping the on-screen card.
+ *     Same size ⇒ identical deterministic auto-render, leave L1 as-is.
  *  Fully background and best-effort; on failure we leave the key unmarked so a later view retries. */
 async function backfillThumbToL2(key: string, dataUrl: string): Promise<void> {
-  if (!firebaseConfigured() || l2Present.has(key)) return;
+  if (!firebaseConfigured()) return;
   try {
+    // (1) A stranded local capture. `backfillThumbToL2` is only called when the registry lacks this
+    // key, so a `syncedCaptures` marker here means WE captured it locally and it never reached the
+    // cloud — flush it now (bypassing the l2Present memo, which a pre-capture auto view may have set).
+    const myCapture = syncedCaptures()[key];
+    if (myCapture != null) {
+      await uploadThumb(key, dataUrl);
+      await publishThumbCapture(key, myCapture);
+      markL2Present(key);
+      return;
+    }
+    if (l2Present.has(key)) return; // auto-render already reconciled with L2 on this machine
     const remoteSize = await getThumbSize(key);
     if (remoteSize == null) {
       await uploadThumb(key, dataUrl); // not on L2 yet → share ours

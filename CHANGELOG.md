@@ -1,5 +1,8 @@
 # Changelog
 
+## v0.4.50
+- **Thumbnail chụp tay bị kẹt nay tự đẩy lên cloud** — ảnh chụp tay lúc mất mạng / chưa đăng nhập / trúng lúc kho chung trục trặc trước đây kẹt luôn ở máy đã chụp; nay mở lại app (đã đăng nhập) là tự đồng bộ cho cả nhóm, và không còn bị bản auto ghi đè nhầm.
+
 ## v0.4.49
 - **Sửa thumbnail chụp tay không hiện đủ trên các máy khác** — bộ nhận diện capture kết nối hụt lúc khởi động (chưa kịp đăng nhập) nên máy hay kẹt ở bản cũ; nay tự kết nối lại sau khi đăng nhập, và đối chiếu với bản trên Cloud để lấy đúng ảnh mới nhất (kể cả ảnh chụp tay từ đời trước).
 
