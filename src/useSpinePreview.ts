@@ -333,7 +333,7 @@ export function useSpinePreview(entry: LibraryEntry | null, containerRef: React.
     (async () => {
       let resolved: ExportAssets;
       try {
-        resolved = await invoke<ExportAssets>('list_export_assets', { folder: entry.folder });
+        resolved = await invoke<ExportAssets>('list_export_assets', { folder: entry.folder, spineFile: entry.spineFile });
       } catch (e) {
         fail(String(e));
         return;

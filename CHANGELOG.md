@@ -1,5 +1,8 @@
 # Changelog
 
+## v0.4.51
+- **Preview đúng từng file Spine khi dùng chung folder export** — folder có nhiều file cùng ID (ví dụ `30028`, `30028_skill_2_stack`, `30028_tower`) giờ mỗi file lấy đúng skeleton + atlas theo tên riêng, không còn cùng phát nhầm data của file chính; thumbnail cũ sai cũng tự được tạo lại.
+
 ## v0.4.50
 - **Thumbnail chụp tay bị kẹt nay tự đẩy lên cloud** — ảnh chụp tay lúc mất mạng / chưa đăng nhập / trúng lúc kho chung trục trặc trước đây kẹt luôn ở máy đã chụp; nay mở lại app (đã đăng nhập) là tự đồng bộ cho cả nhóm, và không còn bị bản auto ghi đè nhầm.
 

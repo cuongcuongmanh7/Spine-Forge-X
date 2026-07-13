@@ -8,7 +8,7 @@ use std::path::PathBuf;
 
 use serde_json::Value;
 
-use crate::library::{atlas_page_names, folder_stem_of, json_skeleton_version, pick_export_pair};
+use crate::library::{atlas_page_names, json_skeleton_version, pick_export_pair};
 use crate::model::{HealthPage, HealthReport};
 use crate::paths::{parse_quoted_path, path_to_string};
 use crate::skel_binary;
@@ -92,8 +92,11 @@ pub(crate) fn health_check_entry(
     }
 
     // Pick the skeleton + atlas that belong together (paired by base name — see pick_export_pair).
-    let folder_stem = folder_stem_of(&unit_folder);
-    let pair = export_dirs.iter().find_map(|d| pick_export_pair(d, &folder_stem));
+    let requested_stem = parse_quoted_path(&report.spine_file)
+        .file_stem()
+        .map(|n| n.to_string_lossy().to_ascii_lowercase())
+        .unwrap_or_default();
+    let pair = export_dirs.iter().find_map(|d| pick_export_pair(d, &requested_stem));
     if let Some((skel_path, format, atlas_path)) = &pair {
         report.skeleton_path = Some(path_to_string(skel_path));
         report.skeleton_format = Some(format.clone());

@@ -333,10 +333,10 @@ fn export_stem(file_name: &str) -> String {
 /// Choose the skeleton + atlas that actually belong together in an export dir. A folder can hold
 /// more than one set (a main rig + a separate "Portal"/effect atlas); picking the first skeleton
 /// and the first atlas independently can cross them (main skeleton + effect atlas → "region not
-/// found in atlas" → blank preview). So pair by base-name stem, preferring: the set matching the
-/// unit folder name, then JSON over binary, then the largest skeleton (the main rig). Falls back to
-/// preferred-skeleton + first-atlas when names genuinely differ and only one set exists.
-pub(crate) fn pick_export_pair(dir: &Path, folder_stem: &str) -> Option<(PathBuf, String, PathBuf)> {
+/// found in atlas" → blank preview). Pair by base-name stem, preferring the requested `.spine`
+/// filename, then JSON over binary, then size. With multiple unrelated sets, return no match;
+/// only a directory containing one distinct set may safely fall back to it.
+pub(crate) fn pick_export_pair(dir: &Path, requested_stem: &str) -> Option<(PathBuf, String, PathBuf)> {
     let mut skels: Vec<(PathBuf, String, String, u64)> = Vec::new(); // path, format, stem, size
     let mut atlases: Vec<(PathBuf, String)> = Vec::new(); // path, stem
     for file in std::fs::read_dir(dir).ok()?.filter_map(Result::ok) {
@@ -374,21 +374,25 @@ pub(crate) fn pick_export_pair(dir: &Path, folder_stem: &str) -> Option<(PathBuf
         let (sp, fmt, _, _) = skels.iter().find(|(_, f, _, _)| f == "json").or_else(|| skels.first())?;
         return Some((sp.clone(), fmt.clone(), atlases.first()?.0.clone()));
     }
-    // Rank: how well the set name matches the folder/id (exact > contains > none), then JSON over
-    // skel, then largest skeleton. The folder id is often only a substring of the set name
-    // (folder `9912` → set `Splash_9912`), so a plain equality check isn't enough — and a folder
-    // can carry a leftover copy-pasted set (`Splash_9911`) we must rank below the real one.
+    // Rank against the requested source filename (exact > contains > none), then JSON and size.
+    // An id may only be a substring (`9912.spine` → `Splash_9912`), so equality is not enough;
+    // unrelated copy-pasted sets must not become another source file's preview.
     let name_score = |stem: &str| -> u8 {
-        if folder_stem.is_empty() {
+        if requested_stem.is_empty() {
             0
-        } else if stem == folder_stem {
+        } else if stem == requested_stem {
             2
-        } else if stem.contains(folder_stem) {
+        } else if stem.contains(requested_stem) || requested_stem.contains(stem) {
             1
         } else {
             0
         }
     };
+    let has_related_pair = pairs.iter().any(|pair| name_score(pair.2) > 0);
+    let distinct_pair_stems: BTreeSet<&str> = pairs.iter().map(|pair| pair.2).collect();
+    if !has_related_pair && distinct_pair_stems.len() > 1 {
+        return None;
+    }
     pairs.sort_by(|a, b| {
         let aj = (a.1 == "json") as u8;
         let bj = (b.1 == "json") as u8;
@@ -413,7 +417,7 @@ pub(crate) fn folder_stem_of(unit_folder: &Path) -> String {
 // `(async)`: reads the export folder + skeleton bytes (often over the Drive mount); called in bursts
 // by the thumbnail warm-up and 4.x name enrichment, so keep it off the main thread.
 #[tauri::command(async)]
-pub(crate) fn list_export_assets(folder: String) -> Result<ExportAssets, String> {
+pub(crate) fn list_export_assets(folder: String, spine_file: Option<String>) -> Result<ExportAssets, String> {
     let unit_folder = parse_quoted_path(&folder);
     if !unit_folder.exists() {
         return Err("Folder không tồn tại.".to_string());
@@ -436,9 +440,15 @@ pub(crate) fn list_export_assets(folder: String) -> Result<ExportAssets, String>
         return Err("Chưa export — không có thư mục export/.".to_string());
     }
 
-    let folder_stem = folder_stem_of(&unit_folder);
+    let requested_stem = spine_file
+        .as_deref()
+        .map(parse_quoted_path)
+        .as_deref()
+        .and_then(Path::file_stem)
+        .map(|n| n.to_string_lossy().to_ascii_lowercase())
+        .unwrap_or_else(|| folder_stem_of(&unit_folder));
     for dir in export_dirs {
-        let Some((skel_path, format, atlas_path)) = pick_export_pair(&dir, &folder_stem) else {
+        let Some((skel_path, format, atlas_path)) = pick_export_pair(&dir, &requested_stem) else {
             continue;
         };
 
@@ -699,7 +709,7 @@ mod tests {
         .unwrap();
         std::fs::write(export.join("hero.export.json"), r#"{"ignored":true}"#).unwrap();
 
-        let assets = list_export_assets(unit.to_string_lossy().to_string()).unwrap();
+        let assets = list_export_assets(unit.to_string_lossy().to_string(), None).unwrap();
         assert_eq!(assets.skeleton_format, "json");
         assert!(assets.skeleton_path.ends_with("hero.json"));
         // Version family is the precise 4.x minor now, so the matching runtime is picked.
@@ -721,7 +731,7 @@ mod tests {
         std::fs::write(export.join("mob.skel.bytes"), b"\x00not-a-real-skel").unwrap();
         std::fs::write(export.join("mob.atlas.txt"), "mob.png\nsize: 64,64\npart\n  xy: 1,1\n").unwrap();
 
-        let assets = list_export_assets(unit.to_string_lossy().to_string()).unwrap();
+        let assets = list_export_assets(unit.to_string_lossy().to_string(), None).unwrap();
         assert_eq!(assets.skeleton_format, "skel");
         // No "3.8" version string in the header ⇒ treated as 4.x.
         assert_eq!(assets.version.as_deref(), Some("4.x"));
@@ -731,9 +741,41 @@ mod tests {
     }
 
     #[test]
+    fn list_export_assets_uses_the_requested_spine_in_a_shared_folder() {
+        let unit = temp_dir("shared-export");
+        let export = unit.join("export");
+        std::fs::create_dir_all(&export).unwrap();
+        for name in ["30028", "30028_skill_2_stack", "30028_tower"] {
+            std::fs::write(export.join(format!("{name}.skel.bytes")), format!("binary-{name}"))
+                .unwrap();
+            std::fs::write(
+                export.join(format!("{name}.atlas.txt")),
+                format!("{name}.png\nsize: 64,64\npart\n  xy: 1,1\n"),
+            )
+            .unwrap();
+        }
+
+        let requested = unit.join("30028_skill_2_stack.spine");
+        let assets = list_export_assets(
+            unit.to_string_lossy().to_string(),
+            Some(requested.to_string_lossy().to_string()),
+        ).unwrap();
+        assert!(assets.skeleton_path.ends_with("30028_skill_2_stack.skel.bytes"));
+        assert!(assets.atlas_path.ends_with("30028_skill_2_stack.atlas.txt"));
+
+        let unrelated = unit.join("missing.spine");
+        assert!(list_export_assets(
+            unit.to_string_lossy().to_string(),
+            Some(unrelated.to_string_lossy().to_string()),
+        ).is_err());
+
+        let _ = std::fs::remove_dir_all(&unit);
+    }
+
+    #[test]
     fn list_export_assets_errors_without_export() {
         let unit = temp_dir("exassets-none");
-        assert!(list_export_assets(unit.to_string_lossy().to_string()).is_err());
+        assert!(list_export_assets(unit.to_string_lossy().to_string(), None).is_err());
         let _ = std::fs::remove_dir_all(&unit);
     }
 

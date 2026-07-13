@@ -127,7 +127,10 @@ export function useLibrary({ t, pushToast }: Options) {
       const worker = async () => {
         for (let entry = queue.shift(); entry; entry = queue.shift()) {
           try {
-            const assets = await invoke<ExportAssets>('list_export_assets', { folder: entry.folder });
+            const assets = await invoke<ExportAssets>('list_export_assets', {
+              folder: entry.folder,
+              spineFile: entry.spineFile
+            });
             const names = await readSkeletonNames(assets);
             if (names.animations.length || names.skins.length) patch.set(entry.spineFile, names);
           } catch {

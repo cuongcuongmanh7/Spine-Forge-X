@@ -51,8 +51,9 @@ const RENDER_TIMEOUT_MS = 8000;
  *  v6: detect straight-alpha (non-PMA) 3.8 exports so they don't render with bright fringes;
  *      also fixes 3.8 binary skeletons with non-ASCII names (signed-byte UTF-8 decode in the player).
  *  v7: pass the same straight-alpha hint to the 4.x player too — it defaults premultipliedAlpha=true
- *      and ignores the atlas `pma` flag for blending, so 4.x straight-alpha exports had bright fringes. */
-const THUMB_RENDER_VERSION = 7;
+ *      and ignores the atlas `pma` flag for blending, so 4.x straight-alpha exports had bright fringes.
+ *  v8: resolve shared-folder exports from the source `.spine` name instead of the folder name. */
+const THUMB_RENDER_VERSION = 8;
 
 /** Filesystem-safe cache key: a stable hash of the asset's identity. Uses the library-relative
  *  path (NOT the absolute path) so the key matches across machines sharing the same Drive folder.
@@ -480,6 +481,7 @@ export function useSpineThumbnail(entry: LibraryEntry | null, enabled: boolean) 
     };
 
     const folder = entry.folder;
+    const spineFile = entry.spineFile;
 
     (async () => {
       // A user-captured thumbnail (this session) wins over everything — show it without any IPC.
@@ -547,7 +549,7 @@ export function useSpineThumbnail(entry: LibraryEntry | null, enabled: boolean) 
           if (cancelled) return null;
           await idle();
           if (cancelled) return null;
-          const assets = await invoke<ExportAssets>('list_export_assets', { folder });
+          const assets = await invoke<ExportAssets>('list_export_assets', { folder, spineFile });
           if (cancelled) return null;
           const raw = await buildRawDataURIs(assets);
           if (cancelled) return null;
